@@ -1,0 +1,9 @@
+# VS Code Settings
+.vscode/
+
+# macOS system files
+.DS_Store
+
+# Other files
+cat layout.odt
+deploy.sh

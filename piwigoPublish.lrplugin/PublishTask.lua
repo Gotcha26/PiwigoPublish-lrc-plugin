@@ -130,58 +130,12 @@ end
 
 -- ************************************************
 function PublishTask.getCommentsFromPublishedCollection(publishSettings, arrayOfPhotoInfo, commentCallback)
-    --[[
-    local immich = ImmichAPI:new(publishSettings.url, publishSettings.apiKey)
-    if not immich:checkConnectivity() then
-        util.handleError('Immich connection not working, probably due to wrong url and/or apiKey. Export stopped.', 
-            'Immich connection not working, probably due to wrong url and/or apiKey. Export stopped.')
-        return nil
-    end
-
-    for i, photoInfo in ipairs(arrayOfPhotoInfo) do
-        -- Get all published Collections where the photo is included.
-        local publishedCollections = photoInfo.photo:getContainedPublishedCollections()
-
-        local comments = {}
-        for j, publishedCollection in ipairs(publishedCollections) do
-            local activities = ImmichAPI:getActivities(publishedCollection:getRemoteId(),
-                photoInfo.publishedPhoto:getRemoteId())
-            if activities ~= nil  then
-                for k, activity in ipairs(activities) do
-                    local comment = {}
-
-                    local year, month, day, hour, minute = string.sub(activity.createdAt, 1, 15):match(
-                    "(%d+)%-(%d+)%-(%d+)%a(%d+)%:(%d+)")
-
-                    -- Convert from date string to EPOC to COCOA
-                    comment.dateCreated = os.time { year = year, month = month, day = day, hour = hour, min = minute } -
-                    978307200
-                    comment.commentId = activity.id
-                    comment.username = activity.user.email
-                    comment.realname = activity.user.name
-
-                    if activity.type == 'comment' then
-                        comment.commentText = activity.comment
-                        table.insert(comments, comment)
-                    elseif activity.type == 'like' then
-                        comment.commentText = 'Like'
-                        table.insert(comments, comment)
-                    end
-
-                    -- log:trace(util.dumpTable(comment))
-                end
-            end
-        end
-
-        -- Call Lightroom's callback function to register comments.
-        commentCallback { publishedPhoto = photoInfo, comments = comments }
-    end
-    ]]
+    log:trace('PublishTask.shouldDeletePublishService')
 end
 
 -- ************************************************
 function PublishTask.shouldDeletePublishService( publishSettings, info )
-    log:trace('PublishTask.shouldDeletePublishService')
+    log:trace('PublishTask.getCommentsFromPublishedCollection')
 
 end
 
