@@ -5,8 +5,7 @@ return {
     LrSdkMinimumVersion = 6.0,
     LrPluginName = "Piwigo Publisher",
     LrToolkitIdentifier = "fiona.boston.PwigoPublish",
-    --LrMetadataProvider  = "CustomMetadata.lua",
-    --LrMetadataTagsetFactory = 'Tagset.lua',
+
     LrInitPlugin = "Init.lua",
 
 	LrExportServiceProvider = {
