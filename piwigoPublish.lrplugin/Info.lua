@@ -1,8 +1,8 @@
 -- Info.lua
 
 return {
-    LrSdkVersion = 10.0,
-    LrSdkMinimumVersion = 6.0, -- Adjust depending on your Lightroom version
+    LrSdkVersion = 14.3,
+    LrSdkMinimumVersion = 6.0,
     LrPluginName = "Piwigo Publisher",
     LrToolkitIdentifier = "fiona.boston.PwigoPublish",
     --LrMetadataProvider  = "CustomMetadata.lua",
