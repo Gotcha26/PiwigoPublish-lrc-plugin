@@ -1,5 +1,26 @@
--- PublishDialogSections.lua
--- Publish Dialog Sections for Piwigo Publisher plugin
+--[[
+
+	PublishDialogSections.lua
+
+	Publish Dialog Sections for Piwigo Publisher plugin
+
+    Copyright (C) 2024 Fiona Boston <fiona@fbphotography.uk>.
+
+    This file is part of PiwigoPublish
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+]]
 
 PublishDialogSections = {}
 
@@ -10,9 +31,9 @@ PublishDialogSections = {}
 -- *************************************************
 function PublishDialogSections.startDialog(propertyTable)
 
-  	log:trace('PublishDialogSections.startDialog')
+  	log.debug('PublishDialogSections.startDialog')
 
-	-- log:trace('propertyTable contents: ' .. utils.serialiseVar(propertyTable))
+	-- log.debug('propertyTable contents: ' .. utils.serialiseVar(propertyTable))
 	propertyTable:addObserver('host', PiwigoAPI.ConnectionChange)
 	propertyTable:addObserver('userName', PiwigoAPI.ConnectionChange)
 	propertyTable:addObserver('userPW', PiwigoAPI.ConnectionChange)
@@ -36,7 +57,7 @@ end
 
 -- *************************************************
 function PublishDialogSections.endDialog(propertyTable, why)
-  	log:trace('PublishDialogSections.endDialog - ' .. why)
+  	log.debug('PublishDialogSections.endDialog - ' .. why)
 	-- 
 
 end
@@ -45,7 +66,7 @@ end
 local function connectionDialog (f, propertyTable, pwInstance)
 	local bind = LrView.bind
 	local share = LrView.share
-	local debug = false
+
 	return {
 
 		title = "Piwigo Host Settings",
@@ -78,7 +99,7 @@ local function connectionDialog (f, propertyTable, pwInstance)
 				enabled = bind('ConCheck', propertyTable),
 				action = function(button)
 					LrTasks.startAsyncTask(function()
-						if not(PiwigoAPI.login(propertyTable,debug)) then
+						if not(PiwigoAPI.login(propertyTable)) then
 							LrDialogs.message('Connection NOT successful')
 						end
 					end)
@@ -133,7 +154,6 @@ end
 local function prefsDialog (f, propertyTable)
 	local bind = LrView.bind
 	local share = LrView.share
-	local debug = false
 
 	-- get reference to this 
 
@@ -148,24 +168,27 @@ local function prefsDialog (f, propertyTable)
 				fill_horizontal = 1,
 			},		
 		},
+		
+		f:spacer { height = 10 },
 		f:row {
 			f:static_text {
 				title = "Import existing albums from Piwigo",
-				alignment = 'left',
+				alignment = 'right',
+            	width = share 'labelWidth',
+				tooltip = "Click to fetch the current album structure from the Piwigo Host above. Only albums the user has permission to see will be included",
 
 			},
 			f:push_button {
 				title = 'Import Albums',
 				enabled = bind('Connected', propertyTable),
-
+				tooltip = "Click to fetch the current album structure from the Piwigo Host above. Only albums the user has permission to see will be included",
 				action = function(button)
 					local result = LrDialogs.confirm("Import Piwigo Albums","Are you sure you want to import the album structure from Piwigo?\nThis may overwrite or recreate existing collections.","Import","Cancel")
 					if result == 'ok' then
 						LrTasks.startAsyncTask(function()
-							PiwigoAPI.importAlbums(propertyTable, debug)
+							PiwigoAPI.importAlbums(propertyTable)
 						end)
 					end
-
 				end,
 			},
 			f:static_text {
@@ -175,11 +198,29 @@ local function prefsDialog (f, propertyTable)
 			},
 		},
 
+		f:spacer { height = 5 },
+		f:row {
+        	f:static_text {
+				title = "Include Publish Collections for Sets:",
+				alignment = 'right',
+				width = share 'labelWidth',
+				tooltip = "Create special collections to allow images to be published to albums with sub-albums on Piwigo"
+        	},
+        	f:checkbox {
+				value = bind 'createCollectionsForSets',
+				title = '',
+				alignment = 'left',
+				tooltip = "Create special collections to allow images to be published to albums with sub-albums on Piwigo"
+        	},
+   		},
+		--[[
+		f:spacer { height = 10 },
 		f:row {
 			f:static_text {
 				title = "Root Keyword Tag for Published Photos:",
 				alignment = 'left',
 				width = share 'labelWidth',
+				tooltip = "If set, keywords for Piwigo Host and Album Name will be added to published photos under this root. Use | to delimit a hierarchy"
 			},	
 			f:edit_field {
 				value = bind 'tagRoot',
@@ -187,15 +228,17 @@ local function prefsDialog (f, propertyTable)
 				truncation = 'middle',
 				immediate = true,
 				fill_horizontal = 1,
+				tooltip = "If set, keywords for Piwigo Host and Album Name will be added to published photos under this root. Use | to delimit a hierarchy"
 			},	
 		},
+		]]
 	}
 end
 --
 -- *************************************************
 function PublishDialogSections.sectionsForTopOfDialog(f, propertyTable )
 
-  	log:trace('PublishDialogSections.sectionsForTopOfDialog')
+  	log.debug('PublishDialogSections.sectionsForTopOfDialog')
 
 
 	local conDlg = connectionDialog(f, propertyTable)
@@ -211,7 +254,7 @@ function PublishDialogSections.sectionsForTopOfDialog(f, propertyTable )
 				propertyTable.Connected = true
 				propertyTable.ConCheck = false
 				propertyTable.ConStatus = "Connected to Piwigo Gallery at " .. propertyTable.host
-				log:trace('Token is ' .. propertyTable.token)
+				log.debug('Token is ' .. propertyTable.token)
 
 			else
 				LrDialogs.message('Connection NOT successful')
@@ -247,7 +290,7 @@ end
 -- *************************************************
 function PublishDialogSections.sectionsForBottomOfDialog(f, propertyTable)
 
-	log:trace('PublishDialogSections.sectionsForBottomOfDialog')
+	log.debug('PublishDialogSections.sectionsForBottomOfDialog')
 	
 	return {}
 

@@ -1,7 +1,30 @@
-local LrCUtils = {}
+--[[
+
+    utils.lua
+
+    Copyright (C) 2024 Fiona Boston <fiona@fbphotography.uk>.
+
+    This file is part of PiwigoPublish
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+]]
+
+
+local utils = {}
 
 -- *************************************************
-function LrCUtils.serialiseVar(value, indent)
+function utils.serialiseVar(value, indent)
     -- serialises an unknown variable
     indent = indent or ""
     local t = type(value)
@@ -17,7 +40,7 @@ function LrCUtils.serialiseVar(value, indent)
             else
                 key = tostring(k)
             end
-            table.insert(parts, nextIndent .. "[" .. key .. "] = " .. LrCUtils.serialiseVar(v, nextIndent) .. ",\n")
+            table.insert(parts, nextIndent .. "[" .. key .. "] = " .. utils.serialiseVar(v, nextIndent) .. ",\n")
         end
         table.insert(parts, indent .. "}")
         return table.concat(parts)
@@ -28,9 +51,8 @@ function LrCUtils.serialiseVar(value, indent)
     end
 end
 
-
 -- *************************************************
-function LrCUtils.uuid()
+function utils.uuid()
     local template ='xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'
     return string.gsub(template, '[xy]', function (c)
         local v = (c == 'x') and math.random(0, 0xf) or math.random(8, 0xb)
@@ -39,7 +61,7 @@ function LrCUtils.uuid()
 end
 
 -- *************************************************
-function LrCUtils.extractNumber(inStr)
+function utils.extractNumber(inStr)
 -- Extract first number (integer or decimal, optional sign) from a string
 
     local num = string.match(inStr, "[-+]?%d+%.?%d*")
@@ -47,12 +69,10 @@ function LrCUtils.extractNumber(inStr)
         return tonumber(num)
     end
     return nil -- no number found
-
-
 end
 
 -- *************************************************
-function LrCUtils.dmsToDecimal(deg, min, sec, hemi)
+function utils.dmsToDecimal(deg, min, sec, hemi)
     -- convert DMS (degrees, minutes, seconds + direction) to decimal degrees
     local decimal = tonumber(deg) + tonumber(min) / 60
     if sec and sec ~= "" then
@@ -65,25 +85,23 @@ function LrCUtils.dmsToDecimal(deg, min, sec, hemi)
 end
 
 -- *************************************************
-function LrCUtils.parseSingleGPS(coordStr)
+function utils.parseSingleGPS(coordStr)
 -- Try parsing a single coordinate (works for DMS or DM)
-    -- Try DMS first: 51°13'31.9379" N
     local deg, min, sec, hemi = string.match(coordStr, "(%d+)°(%d+)'([%d%.]+)\"%s*([NSEW])")
     if deg then
-        return LrCUtils.dmsToDecimal(deg, min, sec, hemi)
+        return utils.dmsToDecimal(deg, min, sec, hemi)
     end
 
-    -- Try DM: 51°13.5316' N
     local deg2, min2, hemi2 = string.match(coordStr, "(%d+)°([%d%.]+)'%s*([NSEW])")
     if deg2 then
-        return LrCUtils.dmsToDecimal(deg2, min2, nil, hemi2)
+        return utils.dmsToDecimal(deg2, min2, nil, hemi2)
     end
 
     return nil -- not matched
 end
 
 -- *************************************************
-function LrCUtils.parseGPS(coordStr)
+function utils.parseGPS(coordStr)
     -- parse a coordinate string like: 51°13'31.9379" N 3°38'5.0159" W
     -- Split into two parts (latitude + longitude)
     local latStr, lonStr = string.match(coordStr, "^(.-)%s+([%d°'\"%sNSEW%.]+)$")
@@ -91,15 +109,15 @@ function LrCUtils.parseGPS(coordStr)
         return nil, nil, "Invalid coordinate format"
     end
 
-    local lat = LrCUtils.parseSingleGPS(latStr)
-    local lon = LrCUtils.parseSingleGPS(lonStr)
+    local lat = utils.parseSingleGPS(latStr)
+    local lon = utils.parseSingleGPS(lonStr)
 
     return lat, lon
 
 end
 
 -- *************************************************
-function LrCUtils.findNode(xmlNode,  nodeName )
+function utils.findNode(xmlNode,  nodeName )
     -- iteratively find nodeName in xmlNode
 
     if xmlNode:name() == nodeName then
@@ -109,7 +127,7 @@ function LrCUtils.findNode(xmlNode,  nodeName )
     for i = 1, xmlNode:childCount() do
         local child = xmlNode:childAtIndex(i)
         if child:type() == "element" then
-            local found = LrCUtils.findNode(child, nodeName)
+            local found = utils.findNode(child, nodeName)
             if found then return found end
         end
     end
@@ -118,7 +136,7 @@ end
 
 
 -- *************************************************
-function LrCUtils.fileExists(fName)
+function utils.fileExists(fName)
 
     local f = io.open(fName,"r")
     if f then 
@@ -129,7 +147,7 @@ function LrCUtils.fileExists(fName)
 end
 
 -- *************************************************
-function LrCUtils.stringtoTable(inString, delim)
+function utils.stringtoTable(inString, delim)
     -- create table based on passed in delimited string 
     local rtnTable = {}
 
@@ -143,7 +161,7 @@ function LrCUtils.stringtoTable(inString, delim)
 end
 
 -- *************************************************
-function LrCUtils.tabletoString(inTable, delim)
+function utils.tabletoString(inTable, delim)
     local rtnString = ""
     for ss,value in pairs(inTable) do
         if rtnString == "" then
@@ -158,8 +176,8 @@ end
 
 
 -- *************************************************
-function LrCUtils.tagParse(tag)
-  -- parse hierarchical tag structure into table of individual elements
+function utils.tagParse(tag)
+  -- parse hierarchical tag structure (delimted by |) into table of individual elements
   local tag_table = {}
   for line in (tag .. "|"):gmatch("([^|]*)|") do
     table.insert(tag_table,line)
@@ -168,35 +186,36 @@ function LrCUtils.tagParse(tag)
 end
 
 -- *************************************************
-function LrCUtils.handleError(logMsg, userErrorMsg)
+function utils.handleError(logMsg, userErrorMsg)
     -- function to log errors and throw user errors
     log:error(logMsg)
     LrDialogs.showError(userErrorMsg)
 end
 
 -- *************************************************
-function LrCUtils.cutApiKey(key)
+function utils.cutApiKey(key)
+    -- replace characters of private string with elipsis
     return string.sub(key, 1, 20) .. '...'
 end
 
 ---- *************************************************
-function LrCUtils.GetKWHierarchy(kwHierarchy,thisKeyword,pos)
+function utils.GetKWHierarchy(kwHierarchy,thisKeyword,pos)
     -- build hierarchical list of parent keywords 
     kwHierarchy[pos] = thisKeyword
     if thisKeyword:getParent() == nil then
         return kwHierarchy
     end
     pos = pos + 1
-    return(LrCUtils.GetKWHierarchy(kwHierarchy,thisKeyword:getParent(),pos))
+    return(utils.GetKWHierarchy(kwHierarchy,thisKeyword:getParent(),pos))
 
 end
 
 ---- *************************************************
-function LrCUtils.GetKWfromHeirarchy(LrKeywords,kwStructure,logger)
+function utils.GetKWfromHeirarchy(LrKeywords,kwStructure,logger)
     -- returns keyword from lowest element of hierarchical kwStructure (in form level1|level2|level3 ...)
 
     -- spilt kwStructure into individual elements
-    local kwTable = LrCUtils.tagParse(kwStructure)
+    local kwTable = utils.tagParse(kwStructure)
     local thisKW = nil
     local lastKWName = kwTable[#kwTable]
     if kwTable then
@@ -205,10 +224,10 @@ function LrCUtils.GetKWfromHeirarchy(LrKeywords,kwStructure,logger)
                 if thisKW:getName() == lastKWName then
                     return thisKW
                 else
-                    thisKW = LrCUtils.GetLrKeyword(thisKW:getChildren(),kwName)
+                    thisKW = utils.GetLrKeyword(thisKW:getChildren(),kwName)
                 end
             else
-                thisKW = LrCUtils.GetLrKeyword(LrKeywords,kwName)
+                thisKW = utils.GetLrKeyword(LrKeywords,kwName)
             end
 
         end
@@ -217,14 +236,14 @@ function LrCUtils.GetKWfromHeirarchy(LrKeywords,kwStructure,logger)
 end
 
 -- *************************************************
-function LrCUtils.GetLrKeyword(LrKeywords,keywordName)
-    -- return keyword with name matching keywordName
+function utils.GetLrKeyword(LrKeywords,keywordName)
+    -- recursive function to return keyword with name matching keywordName
     for _, thisKeyword in ipairs(LrKeywords) do
         if thisKeyword:getName() == keywordName then
             return thisKeyword
         end
         -- Recursively search children
-        local childMatch = LrCUtils.GetLrKeyword(thisKeyword:getChildren(), keywordName)
+        local childMatch = utils.GetLrKeyword(thisKeyword:getChildren(), keywordName)
         if childMatch then
             return childMatch
         end
@@ -235,18 +254,17 @@ end
 
 
 -- *************************************************
-function LrCUtils.checkKw(thisPhoto, searchKw)
+function utils.checkKw(thisPhoto, searchKw)
     -- does image contain keyword - returns keyword  or nil
     -- searchKw is string containing keyword to search for
-    -- need to iterate through keyword and all parent keywords 
 
     local kwHierarchy = {}
     local thisKwName = ""
 
     -- searchKw may be hierarchical - so split into each level
-    local searchKwTable = LrCUtils.tagParse(searchKw)
+    local searchKwTable = utils.tagParse(searchKw)
     local searchKwLevels = #searchKwTable
-    --log:info("Looking for " .. searchKw .. " - " .. searchKwLevels .. " levels - " .. LrCUtils.serialiseVar(searchKwTable))
+    --log.debug("Looking for " .. searchKw .. " - " .. searchKwLevels .. " levels - " .. utils.serialiseVar(searchKwTable))
 
     local foundKW = nil -- return the keyword we find in this variable
     local stopSearch = false
@@ -255,35 +273,35 @@ function LrCUtils.checkKw(thisPhoto, searchKw)
         -- thisKeyword is leaf node
         -- now need to build full hierarchical structure for thiskeyword
         kwHierarchy = {}
-        kwHierarchy = LrCUtils.GetKWHierarchy(kwHierarchy,thisKeyword,1)
+        kwHierarchy = utils.GetKWHierarchy(kwHierarchy,thisKeyword,1)
         local thisKwLevels = #kwHierarchy
-        --log:info("Checking image kw " .. thisKeyword:getName() .. " - " ..  thisKwLevels.. " levels ")
+        --log.debug("Checking image kw " .. thisKeyword:getName() .. " - " ..  thisKwLevels.. " levels ")
    
         for kk,kwLevel in ipairs(kwHierarchy) do
             local kwLevelName = kwLevel:getName()
-            --log:info("Level " .. kk .. " is " .. kwLevelName)
+            --log.debug("Level " .. kk .. " is " .. kwLevelName)
             if not stopSearch then
                 if kwLevelName == searchKwTable[1] then
                     -- if we're looking for hierarchical kw need to check other levels for match aswell
                     if searchKwLevels > 1 then
-                        --log:info("Multi level kw search - " .. kwLevelName )
+                        --log.debug("Multi level kw search - " .. kwLevelName )
                         if thisKwLevels >= searchKwLevels then
                             local foundHKW = true
                             for hh = 2, searchKwLevels do
-                                --log:info("Multi level kw search at level - " .. hh .. ", " .. searchKwTable[hh] .. ", " .. kwHierarchy[kk-hh+1]:getName())
+                                --log.debug("Multi level kw search at level - " .. hh .. ", " .. searchKwTable[hh] .. ", " .. kwHierarchy[kk-hh+1]:getName())
                                 if searchKwTable[hh] ~= kwHierarchy[kk-hh+1]:getName() then
                                     foundHKW = false
                                 end
                             end
                             if foundHKW then
                                 foundKW = thisKeyword
-                                --log:info("Multilevel - Found " .. foundKW:getName())
+                                --log.debug("Multilevel - Found " .. foundKW:getName())
                                 stopSearch = true
                             end
                         end
                     else
                         foundKW = thisKeyword
-                        --log:info("Single Level - Found " .. foundKW:getName())
+                        --log.debug("Single Level - Found " .. foundKW:getName())
                         stopSearch = true
                     end
                 end
@@ -301,24 +319,23 @@ local function normaliseId(id)
 end
 
 -- *************************************************
-function LrCUtils.recursiveSearch(collNode, findName)
-
--- Recursively search for a collection or collection set
+function utils.recursiveSearch(collNode, findName)
+-- Recursively search for a published collection or published collection set
 -- matching a given remoteId (string or number)
-    log:trace("recursiveSearch - collNode: " .. collNode:getName() .. " for name: " .. findName)
-    log:trace("recursiveSearch - collNode type is " .. tostring(collNode:type()))
+
+    --log.debug("recursiveSearch - collNode: " .. collNode:getName() .. " for name: " .. findName)
+    --log.debug("recursiveSearch - collNode type is " .. tostring(collNode:type()))
 
     -- Check this collNode if it has a remote ID (only if collNode is a collection or set)
     if collNode:type() == 'LrPublishService' or collNode:type() == 'LrPublishedCollectionSet' then
-        log:trace("recursiveSearch 1 - " .. collNode:type(), collNode:getName())
+        --log.debug("recursiveSearch 1 - " .. collNode:type(), collNode:getName())
         local thisName = collNode:getName()
         if thisName == findName then
             -- this collection or set matches
-            log:trace("recursiveSearch - ** MATCH ** collNode is matching node: " .. collNode:getName())
+            --log.debug("recursiveSearch - ** MATCH ** collNode is matching node: " .. collNode:getName())
             return collNode
         end
     end
-
     -- Search immediate child collections
     if collNode.getChildCollections then
         local children = collNode:getChildCollections()
@@ -326,13 +343,10 @@ function LrCUtils.recursiveSearch(collNode, findName)
             for _, coll in ipairs(children) do
                 local type = coll:type()
                 local thisName = coll:getName()
-
-
-                log:trace("recursiveSearch 2 - " .. type,thisName)
-
+             --  log.debug("recursiveSearch 2 - " .. type,thisName)
                 if thisName == findName then
                     -- this collection matches
-                    log:trace("recursiveSearch - ** MATCH ** Found matching collection: " .. coll:getName())
+                    --log.debug("recursiveSearch - ** MATCH ** Found matching collection: " .. coll:getName())
                     return coll
                 end
             end
@@ -344,30 +358,29 @@ function LrCUtils.recursiveSearch(collNode, findName)
         local collSets = collNode:getChildCollectionSets()
         if  collSets then
             for _, set in ipairs(collSets) do
-                local foundSet = LrCUtils.recursiveSearch(set, findName)
+                local foundSet = utils.recursiveSearch(set, findName)
                 if foundSet then 
                     -- this set matches
-                    log:trace("recursiveSearch - ** MATCH ** Found matching collection set: " .. foundSet:getName())
+                    --log.debug("recursiveSearch - ** MATCH ** Found matching collection set: " .. foundSet:getName())
                     return foundSet
                 end
             end
         end
     end
-
     -- nothing found
     return nil
 end
 
 -- *************************************************
-function LrCUtils.findPublishNodeByName(service, name)
+function utils.findPublishNodeByName(service, name)
     if not service or not name then 
         return nil 
     end
-    return LrCUtils.recursiveSearch(service, normaliseId(name))
+    return utils.recursiveSearch(service, normaliseId(name))
 end
 
 -- *************************************************
-function LrCUtils.clean_spaces(text)
+function utils.clean_spaces(text)
   --removes spaces from the front and back of passed in text
   text = string.gsub(text,"^%s*","")
   text = string.gsub(text,"%s*$","")
@@ -382,19 +395,28 @@ local function trim(s)
 end
 
 -- *************************************************
-function LrCUtils.nilOrEmpty(val)
-    -- Taken from https://github.com/midzelis/mi.Immich.Publisher/blob/main/utils.lua
-    if type(val) == 'string' then
-        return val == nil or trim(val) == ''
-    else
-        return val == nil
+function utils.nilOrEmpty(val)
+
+    if val == nil then
+        return true
     end
+    if type(val) == "string" and val == "" then
+        return true
+    end
+    if type(val) == "table" then
+        -- Check if table has any elements (non-empty)
+        for _ in pairs(val) do
+            return false
+        end
+        return true
+    end
+    return false
 end
 
 -- *************************************************
 -- http utiils
 -- *************************************************
-function LrCUtils.urlEncode(str)
+function utils.urlEncode(str)
     if str then
         str = string.gsub(str, "\n", "\r\n")
         str = string.gsub(str, "([^%w _%%%-%.~])",
@@ -405,37 +427,53 @@ function LrCUtils.urlEncode(str)
 end
 
 -- *************************************************
-function LrCUtils.buildGet(url,params)
+function utils.buildGet(url,params)
   -- Helper to build GET URL with params
     local encoded = {}
     for k, param in pairs(params) do
-        local name = LrCUtils.urlEncode(param.name)
-        local value = LrCUtils.urlEncode(param.value)
+        local name = utils.urlEncode(param.name) or ""
+        local value = utils.urlEncode(param.value) or ""
         table.insert(encoded, name .. "=" ..value)
     end
     return url .. "&" .. table.concat(encoded, "&")
 end
 
 -- *************************************************
-function LrCUtils.buildPost(params)
+function utils.buildPost(params)
   -- Helper to build urlencoded POST params
     local post = {}
     for k, v in pairs(params) do
-      table.insert(post, k .. "=" .. LrCUtils.urlEncode(v))
+      table.insert(post, k .. "=" .. utils.urlEncode(v))
     end
     return table.concat(post, "&")
 
 end
 
 -- *************************************************
-function LrCUtils.buildHeader(params)
+function utils.buildPostBodyFromParams(params)
+  -- Helper to build urlencoded POST params
+  -- take param table with name value pairs and return urlencoded string
+
+    local parts = {}
+    for _, pair in ipairs(params) do
+        local name  = utils.urlEncode(pair.name or "")
+        local value = utils.urlEncode(pair.value or "")
+        table.insert(parts, string.format("%s=%s", name, value))
+    end
+    return table.concat(parts, "&")
+
+
+end
+
+-- *************************************************
+function utils.buildHeader(params)
   -- Helper to build GET URL with params
    
     --[[
     local header = {}
     for k, param in pairs(params) do
         local name = param.name
-        local value = param.value
+able.concat(post, "&")        local value = param.value
         table.insert(header, name .. "=" ..value)
     end
     return table.concat(header, "&")
@@ -444,7 +482,31 @@ function LrCUtils.buildHeader(params)
 end
 
 -- *************************************************
-function LrCUtils.extract_cookies(raw)
+function utils.mergeSplitCookies(headers)
+    -- fix issue where LrHttp splits headers on commas, breaking some date values in cookies
+
+    local merged = {}
+    local lastWasCookie = false
+
+    for _, h in ipairs(headers or {}) do
+        if h.field:lower() == "set-cookie" then
+            if lastWasCookie and h.value:match("^%s*%d%d%s") then
+                -- This looks like a continuation of an Expires date (e.g. "Thu, 01 Jan 1970...")
+                merged[#merged].value = merged[#merged].value .. ", " .. h.value
+            else
+                table.insert(merged, { field = h.field, value = h.value })
+            end
+            lastWasCookie = true
+        else
+            lastWasCookie = false
+        end
+    end
+
+    return merged
+end
+
+-- *************************************************
+function utils.extract_cookies(raw)
   -- Helper function to parse Set-Cookie headers into "key=value" pairs
 
   local cookies = {}
@@ -464,7 +526,7 @@ function LrCUtils.extract_cookies(raw)
 end
 
 -- *************************************************
-function LrCUtils.build_url(base, params)
+function utils.build_url(base, params)
   -- Helper to build GET URL with params
     local query = {}
     for k, v in pairs(params) do
@@ -474,7 +536,7 @@ function LrCUtils.build_url(base, params)
 end
 
 -- *************************************************
-function LrCUtils.cURL_parse(result)
+function utils.cURL_parse(result)
   local parse_table = {}
   local thisline = 1
 
@@ -488,7 +550,7 @@ function LrCUtils.cURL_parse(result)
 end
 
 -- *************************************************
-function LrCUtils.cURLcall(url)
+function utils.cURLcall(url)
   local restCMD = "curl --silent -i " .. url
   local result
   local payload = ""
@@ -506,7 +568,7 @@ function LrCUtils.cURLcall(url)
     return cURLOutput
   end
 
-  local cURL_Parsed = LrCUtils.cURL_parse(result)
+  local cURL_Parsed = utils.cURL_parse(result)
   -- http_code is second field (space delimited) of first element of cURL_Parsed
   local http_resp = utils.stringtoTable(cURL_Parsed[1]," ")
   local http_code = http_resp[2]
@@ -530,7 +592,7 @@ function LrCUtils.cURLcall(url)
 end
 
 -- *************************************************
-function LrCUtils.httpGet(url,debug)
+function utils.httpGet(url)
   local payload = ""
 
   local cURLOutput = {} -- used to return status, errors and http results
@@ -538,12 +600,12 @@ function LrCUtils.httpGet(url,debug)
   local respParsed
 
   local httpResponse, httpHeaders = LrHttp.get(url)
-  if debug then
-    log:info("httpget - calling " .. url)
-    log:info("headers are " .. utils.serialiseVar(httpHeaders))
-  end
+
+    log.debug("httpget - calling " .. url)
+    log.debug("headers are " .. utils.serialiseVar(httpHeaders))
+
   if httpResponse then
-    respParsed = LrCUtils.cURL_parse(httpResponse)
+    respParsed = utils.cURL_parse(httpResponse)
     payload = respParsed[1]
     cURLOutput[1] = true
     cURLOutput[2] = httpHeaders.statusDes
@@ -563,18 +625,18 @@ function LrCUtils.httpGet(url,debug)
 end
 
 -- *************************************************
-function LrCUtils.CallAPIGet(url,debug)
-  local cURLOutput = LrCUtils.httpGet(url, debug)
+function utils.CallAPIGet(url)
+  local cURLOutput = utils.httpGet(url)
   local status = cURLOutput[1]
   local statusMsg = cURLOutput[2]
   local http_code = cURLOutput[3]
   local payload = cURLOutput[4]
   local parsePayload
-  if debug then
-    log:info("Url is " .. url)
-    log:info("cURLOutput is " .. utils.serialiseVar(cURLOutput))
-    log:info("payload is " .. type(payload) .. " - "  .. utils.serialiseVar(payload))
-  end
+
+    log.debug("Url is " .. url)
+    log.debug("cURLOutput is " .. utils.serialiseVar(cURLOutput))
+    log.debug("payload is " .. type(payload) .. " - "  .. utils.serialiseVar(payload))
+
   if not status then
     local err = "Call to " .. url .. " failed - " .. http_code .. ", " .. statusMsg
     LrDialogs.message("APIGet Failed", err, "critical")
@@ -587,12 +649,12 @@ function LrCUtils.CallAPIGet(url,debug)
     parsePayload = JSON:decode(payload)
   end
 
-  --log:info("parsepayload is " .. type(parsePayload) .. " - "  .. utils.serialiseVar(parsePayload))
+  --log.debug("parsepayload is " .. type(parsePayload) .. " - "  .. utils.serialiseVar(parsePayload))
   return parsePayload
 end
 
 -- *************************************************
-function LrCUtils.httpPost(url, params, debug)
+function utils.httpPost(url, params)
   local cURLOutput = {} -- used to return status, errors and http results
   cURLOutput[1] = false
   local jsonBody = JSON:encode(params)
@@ -600,15 +662,15 @@ function LrCUtils.httpPost(url, params, debug)
   local headers = {
     { field = 'Content-Type', value = 'application/json' }
   }
-  if debug then 
-    log:info("Http Post " .. url)
-    log:info("params " .. utils.serialiseVar(params))
-  end
+
+    log.debug("Http Post " .. url)
+    log.debug("params " .. utils.serialiseVar(params))
+
   local result, httpHeaders = LrHttp.post(url, jsonBody, headers)
-  if debug then 
-    log:info("Result is " .. utils.serialiseVar(result))
-    log:info("Headers are " .. utils.serialiseVar(httpHeaders))
-  end
+
+    log.debug("Result is " .. utils.serialiseVar(result))
+    log.debug("Headers are " .. utils.serialiseVar(httpHeaders))
+
 
 
   if httpHeaders.status == 201 then
@@ -630,8 +692,8 @@ function LrCUtils.httpPost(url, params, debug)
 end
 
 -- *************************************************
-function LrCUtils.CallAPIPost(url, urlParams, table, debug)
-  local cURLOutput = LrCUtils.httpPost(url, urlParams, debug)
+function utils.CallAPIPost(url, urlParams, table)
+  local cURLOutput = utils.httpPost(url, urlParams)
   local status = cURLOutput[1]
   local statusMsg = cURLOutput[2]
   local http_code = cURLOutput[3]
@@ -642,23 +704,23 @@ function LrCUtils.CallAPIPost(url, urlParams, table, debug)
     LrDialogs.message("API Post for " .. table .. " Failed", err, "critical")
     return nil
   end
-  if debug then
-    log:info("Url is " .. url)
-    log:info("cURLOutput is " .. utils.serialiseVar(cURLOutput))
-    log:info("payload is " .. type(payload) .. " - "  .. utils.serialiseVar(payload))
-  end
+
+    log.debug("Url is " .. url)
+    log.debug("cURLOutput is " .. utils.serialiseVar(cURLOutput))
+    log.debug("payload is " .. type(payload) .. " - "  .. utils.serialiseVar(payload))
+
   if type(payload) == "string" and (payload == "[]" or payload == "{}") then
     parsePayload = ""
   else
     parsePayload = JSON:decode(payload)
   end
-  --log:info("parsePayload is " .. utils.serialiseVar(parsePayload))
+  --log.debug("parsePayload is " .. utils.serialiseVar(parsePayload))
   return parsePayload
 end
 
 -- *************************************************
-function LrCUtils.httpPostWithSink(url, body, headers, onDone, onError)
-  log:info("In httpPostWithSink function")
+function utils.httpPostWithSink(url, body, headers, onDone, onError)
+  log.debug("In httpPostWithSink function")
   local chunks, rawCookies = {}, {}
 
   local sink = {
@@ -679,7 +741,7 @@ function LrCUtils.httpPostWithSink(url, body, headers, onDone, onError)
 
       onComplete = function()
           local response = table.concat(chunks)
-          local parsedCookies = LrCUtils.extract_cookies(rawCookies)
+          local parsedCookies = utils.extract_cookies(rawCookies)
           if onDone then
               onDone(response, parsedCookies, rawCookies)
           end
@@ -701,4 +763,4 @@ end
 
 
 -- *************************************************
-return LrCUtils
+return utils

@@ -1,15 +1,34 @@
--- *************************************************
--- Piwigo API
--- *************************************************
--- see https://github.com/Piwigo/Piwigo/wiki/Piwigo-Web-API
+--[[
 
+    PiwigoAPI.lua
+
+    lua functions to accss the Piwigo Web API
+    see https://github.com/Piwigo/Piwigo/wiki/Piwigo-Web-API
+
+    Copyright (C) 2024 Fiona Boston <fiona@fbphotography.uk>.
+
+    This file is part of PiwigoPublish
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+]]
 
 local PiwigoAPI = {}
 
 
 -- *************************************************
 function PiwigoAPI.ConnectionChange(propertyTable)
-	log:trace('PublishDialogSections.ConnectionChange')
+	log.debug('PublishDialogSections.ConnectionChange')
 	propertyTable.ConStatus = "Not Connected"
 	propertyTable.Connected = false
 	propertyTable.ConCheck = true
@@ -21,7 +40,7 @@ end
 
 
 -- *************************************************
-function PiwigoAPI.getPublishService(propertyTable, debug)
+function PiwigoAPI.getPublishService(propertyTable)
     -- get reference to publish service matching host and userName in propertyTable
     local catalog = LrApplication.activeCatalog()
 
@@ -36,9 +55,9 @@ function PiwigoAPI.getPublishService(propertyTable, debug)
         local pluginSettings = s:getPublishSettings()
         local pluginID = s:getPluginId()
         local pluginName = s:getName()  
-        if debug then
-            log:info("Checking service " .. pluginName .. ", ID " .. pluginID .. ", settings " .. utils.serialiseVar(pluginSettings))
-        end
+
+        log.debug("Checking service " .. pluginName .. ", ID " .. pluginID .. ", settings " .. utils.serialiseVar(pluginSettings))
+
         if pluginSettings.host == propertyTable.host and
            pluginSettings.userName == propertyTable.userName then
             thisService = s
@@ -65,10 +84,10 @@ function PiwigoAPI.sanityCheckAndFixURL(url)
     local sanitizedURL = string.match(url, "^https?://[%w%.%-]+[:%d]*")
     if sanitizedURL then
         if string.len(sanitizedURL) == string.len(url) then
-            log:trace('sanityCheckAndFixURL: URL is completely sane.')
+            log.debug('sanityCheckAndFixURL: URL is completely sane.')
             url = sanitizedURL
         else
-            log:trace('sanityCheckAndFixURL: Fixed URL: removed trailing paths.')
+            log.debug('sanityCheckAndFixURL: Fixed URL: removed trailing paths.')
             url = sanitizedURL
         end
     elseif not string.match(url, "^https?://") then
@@ -81,40 +100,37 @@ function PiwigoAPI.sanityCheckAndFixURL(url)
 end
 
 -- *************************************************
-function PiwigoAPI.login(propertyTable, debug)
+function PiwigoAPI.login(propertyTable)
     if utils.nilOrEmpty(propertyTable.host) or utils.nilOrEmpty(propertyTable.userName) or utils.nilOrEmpty(propertyTable.userPW) then 
         utils.handleError('PiwigoAPI:login - missing host, username or password', "Error: Piwigo server URL, username or password is empty.")
         return false
     end
 
-    return PiwigoAPI.pwConnect(propertyTable, debug)
+    return PiwigoAPI.pwConnect(propertyTable)
 
 end
 
 -- *************************************************
-local function pwGetSessionStatus( propertyTable,debug )
+local function pwGetSessionStatus( propertyTable)
 -- successful connection, now get user role and token via pwg.session.getStatus
-
+    local status, statusDes
     local urlParams = {
         { name = "method", value = "pwg.session.getStatus"},
     }
-    -- build headers to include cookies from pwConnect call
-    local headers = {
-        Cookie = propertyTable.SessionCookie
-    }
     local getUrl = utils.buildGet(propertyTable.pwurl, urlParams)
+    
+    -- build headers to include cookies from pwConnect call
+    local headers = { ["Cookie"] = propertyTable.cookieHeader }
 
-    if debug then
-        log:info("PiwigoAPI.pwGetSessionStatus 3 - calling " .. getUrl)
-        log:info("PiwigoAPI.pwGetSessionStatus 4 - headers are " .. utils.serialiseVar(headers))
-    end
+    log.debug("PiwigoAPI.pwGetSessionStatus 3 - calling " .. getUrl)
+    log.debug("PiwigoAPI.pwGetSessionStatus 4 - headers are " .. utils.serialiseVar(headers))
+
 
     local httpResponse, httpHeaders = LrHttp.get(getUrl,headers)
     
-    if debug then
-        log:info("PiwigoAPI.pwGetSessionStatus 5 - httpResponse " .. utils.serialiseVar(httpResponse))
-        log:info("PiwigoAPI.pwGetSessionStatus 6 - httpHeaders " .. utils.serialiseVar(httpHeaders))
-    end    
+    log.debug("PiwigoAPI.pwGetSessionStatus 5 - httpResponse " .. utils.serialiseVar(httpResponse))
+    log.debug("PiwigoAPI.pwGetSessionStatus 6 - httpHeaders " .. utils.serialiseVar(httpHeaders))
+  
     
     if httpHeaders.status == 200 then
         -- got response from Piwigo
@@ -146,7 +162,7 @@ local function pwGetSessionStatus( propertyTable,debug )
 end 
 
 -- *************************************************
-function PiwigoAPI.pwConnect(propertyTable, debug)
+function PiwigoAPI.pwConnect(propertyTable)
     -- set up connection to piwigo database
     local status, statusDes
     propertyTable.pwurl = propertyTable.host .. "/ws.php?format=json"
@@ -154,7 +170,7 @@ function PiwigoAPI.pwConnect(propertyTable, debug)
     propertyTable.ConCheck = true
     propertyTable.ConStatus = "Not Connected"
     propertyTable.userStatus = ""
-
+--[[
     local urlParams = {
         method = "pwg.session.login",
         username = propertyTable.userName,
@@ -162,34 +178,33 @@ function PiwigoAPI.pwConnect(propertyTable, debug)
         format = "json"
     }
     local body = utils.buildPost(urlParams)
---[[
+]]
     local urlParams = {
         { name  = "method", value = "pwg.session.login" },
         { name  = "username", value = propertyTable.userName },
         { name  = "password", value = propertyTable.userPW},
         { name  = "format", value = "json" },
     }
-    local body = urlParams
-    ]]
+    local body = utils.buildPostBodyFromParams(urlParams)
+
     local headers = {
         { field = "Content-Type", value = "application/x-www-form-urlencoded" },
         { field = "Accept-Encoding", value = "identity" },
     }
 
-    if debug then
-        log:info("PiwigoAPI.pwConnect 1 - Piwigo URL is " .. propertyTable.pwurl)
-        log:info("PiwigoAPI.pwConnect 2 - Piwigo user is " .. propertyTable.userName)
-        log:info("PiwigoAPI.pwConnect 3 - Piwigo password is " .. propertyTable.userPW)
-        log:info("PiwigoAPI.pwConnect 5 - body is \n" .. utils.serialiseVar(body))
-        log:info("PiwigoAPI.pwConnect 6 - headers are \n" .. utils.serialiseVar(headers))
-    end
+
+    log.debug("PiwigoAPI.pwConnect 1 - Piwigo URL is " .. propertyTable.pwurl)
+    log.debug("PiwigoAPI.pwConnect 2 - Piwigo user is " .. propertyTable.userName)
+    log.debug("PiwigoAPI.pwConnect 3 - Piwigo password is " .. propertyTable.userPW)
+    log.debug("PiwigoAPI.pwConnect 5 - body is \n" .. utils.serialiseVar(body))
+    log.debug("PiwigoAPI.pwConnect 6 - headers are \n" .. utils.serialiseVar(headers))
+
 
     local httpResponse, httpHeaders = LrHttp.post(propertyTable.pwurl, body, headers)
 
-    if debug then 
-        log:info("PiwigoAPI.pwConnect 7 - httpBody is \n" .. utils.serialiseVar(httpResponse))
-        log:info("PiwigoAPI.pwConnect 8 - httpHeaders are \n" .. utils.serialiseVar(httpHeaders))
-    end
+    log.debug("PiwigoAPI.pwConnect 7 - httpBody is \n" .. utils.serialiseVar(httpResponse))
+    log.debug("PiwigoAPI.pwConnect 8 - httpHeaders are \n" .. utils.serialiseVar(httpHeaders))
+
     
     if (httpHeaders.status == 201) or (httpHeaders.status == 200) then
         -- successful connection to Piwigo
@@ -199,19 +214,24 @@ function PiwigoAPI.pwConnect(propertyTable, debug)
             -- login ok - store session cookies
             local cookies = {}
             local SessionCookie = ""
-            for _, h in ipairs(httpHeaders or {}) do
+            local allCookies = {}
+            local fixedHeaders = utils.mergeSplitCookies(httpHeaders)
+            for _, h in ipairs(fixedHeaders or {}) do
                 if h.field:lower() == "set-cookie" then
-                    table.insert(cookies, h.value)
-                    -- table.insert(cookies, LrHttp.parseCookie(h.value))
-                    -- look for session cookie
-                    local session = h.value:match("(pwg_id=[^;]+)")
-                    if session then
-                        SessionCookie = session
+                    table.insert(allCookies, h.value)
+                    local nameValue = h.value:match("^([^;]+)")
+                    log.debug("namevalue is " .. utils.serialiseVar(nameValue))
+                    if nameValue and string.sub(nameValue,1,3) == "pwg" then
+                        table.insert(cookies, nameValue)
+                        if nameValue:match("^pwg_id=") then
+                            SessionCookie = nameValue
+                        end
                     end
                 end
             end
             propertyTable.SessionCookie = SessionCookie
             propertyTable.cookies  = cookies
+            propertyTable.cookieHeader = table.concat(propertyTable.cookies,"; ")
             propertyTable.Connected = true
         else
             LrDialogs.message("Cannot log in to Piwigo - ", rtnBody.err .. ", " .. rtnBody.message)
@@ -228,12 +248,12 @@ function PiwigoAPI.pwConnect(propertyTable, debug)
         LrDialogs.message("Cannot log in to Piwigo - ", status .. ", " .. statusDes)
         return false
     end
-    if debug then
-        log:info("PiwigoAPI.pwConnect 9 - Cookies \n" .. utils.serialiseVar(propertyTable.cookies))
-        log:info("PiwigoAPI.pwConnect 10 - Session Cookie \n" .. utils.serialiseVar(propertyTable.SessionCookie))
-    end
+
+    log.debug("PiwigoAPI.pwConnect 9 - Cookies \n" .. utils.serialiseVar(propertyTable.cookies))
+    log.debug("PiwigoAPI.pwConnect 10 - Session Cookie \n" .. utils.serialiseVar(propertyTable.SessionCookie))
+
     -- successful connection, now get user role and token via pwg.session.getStatus
-    local rv = pwGetSessionStatus(propertyTable, debug)
+    local rv = pwGetSessionStatus(propertyTable)
 
     return rv
 end
@@ -344,14 +364,14 @@ local function createCollection(propertyTable, node, parentNode, isLeafNode, sta
         parentColl = utils.findPublishNodeByName(publishService, parentNode.name)
     end
     existingColl = utils.findPublishNodeByName(publishService, node.name)
-    log:trace("createCollection - got parentColl " .. parentColl:getName(), parentColl:type())
+    log.debug("createCollection - got parentColl " .. parentColl:getName())
+
     if not(utils.nilOrEmpty(existingColl)) then
-        log:trace("createCollection - got existingColl " .. existingColl:getName(), existingColl:type())
+        log.debug("createCollection - got existingColl " .. existingColl:getName())
     end
 
-    
-    if utils.nilOrEmpty(parentColl) then
-       LrErrors.throwUserError("Error in createCollection: No parent collection for " .. node.name)
+    if utils.nilOrEmpty(parentColl:getName()) then
+        LrErrors.throwUserError("Error in createCollection: No parent collection for " .. node.name)
         stat.errors = stat.errors + 1
     else
         if not(existingColl) then
@@ -377,7 +397,7 @@ local function createCollection(propertyTable, node, parentNode, isLeafNode, sta
                 end
                 -- now add remoteids and urls to collections and collection sets
                 catalog:withWriteAccessDo("Add Piwigo details to collections", function() 
-                     newColl:setRemoteId( node.id )
+                    newColl:setRemoteId( node.id )
                     newColl:setRemoteUrl( propertyTable.host .. "/index.php?/category/" .. node.id )
                     newColl:setName( node.name )
                 end)
@@ -401,7 +421,7 @@ local function traverseChildren(node, parentNode, propertyTable, statusData, dep
 
     local stat = statusData
     depth = depth or 0
-    -- log:info("Traversing " .. node.name .. " statusData is \n" .. utils.serialiseVar(stat))
+    -- log.debug("Traversing " .. node.name .. " statusData is \n" .. utils.serialiseVar(stat))
     if type(node) == 'table' and node.id then
         -- create collection or collectionSet
         local isLeafNode = false
@@ -422,7 +442,7 @@ local function traverseChildren(node, parentNode, propertyTable, statusData, dep
 end
 
 -- *************************************************
-function PiwigoAPI.importAlbums(propertyTable, debug)
+function PiwigoAPI.importAlbums(propertyTable)
 
     -- Import albums from piwigo and build local album structure based on piwigo categories
     -- will use remoteId in collections and collection sets to track piwigo category ids
@@ -434,21 +454,21 @@ function PiwigoAPI.importAlbums(propertyTable, debug)
 
     -- check connection to piwigo
     if not propertyTable.Connected then
-        if debug then
-            log:info("PiwigoAPI.importAlbums 1 - connecting to Piwigo")
-        end
-        rv = PiwigoAPI.login(propertyTable, debug)
+
+        log.debug("PiwigoAPI.importAlbums 1 - connecting to Piwigo")
+
+        rv = PiwigoAPI.login(propertyTable)
         if not rv then
             utils.handleError('PiwigoAPI:importAlbums - cannot connect to piwigo', "Error: Cannot connect to Piwigo server.")
             return false   
         end
     end
 
-    log:trace('importing albums from ' ..propertyTable.pwurl)
+    log.debug('importing albums from ' ..propertyTable.pwurl)
 
     -- get categories from piwigo
     local allCats
-    rv, allCats  = PiwigoAPI.pwCategories(propertyTable, "", debug)
+    rv, allCats  = PiwigoAPI.pwCategoriesGet(propertyTable, "")
     if not rv then
         utils.handleError('PiwigoAPI:importAlbums - cannot get categories from piwigo', "Error: Cannot get categories from Piwigo server.")
         return false   
@@ -457,9 +477,9 @@ function PiwigoAPI.importAlbums(propertyTable, debug)
         utils.handleError('PiwigoAPI:importAlbums - no categories found in piwigo', "Error: No categories found in Piwigo server.")
         return false   
     end     
-    if debug then
-        log:trace("PiwigoAPI:importAlbums - allCats is \n" .. utils.serialiseVar(allCats))
-    end
+
+    log.debug("PiwigoAPI:importAlbums - allCats is \n" .. utils.serialiseVar(allCats))
+
 
     -- getPublishService to get reference to this publish service - returned in propertyTable._service
     rv = PiwigoAPI.getPublishService(propertyTable, false)
@@ -487,7 +507,7 @@ function PiwigoAPI.importAlbums(propertyTable, debug)
         errors = 0
     }
     for cc, thisNode in pairs(catHierarchy) do
-        log:info("Top Level item " .. cc .. " is " .. thisNode.id, thisNode.name)
+        log.debug("Top Level item " .. cc .. " is " .. thisNode.id, thisNode.name)
         traverseChildren(thisNode, "", propertyTable, statusData)
     end
     LrDialogs.message("Import Piwigo Albums", string.format("%s collections, %s collection sets, %s existing, %s errors",statusData.collections,statusData.collectionSets,statusData.existing,statusData.errors ))
@@ -495,14 +515,14 @@ function PiwigoAPI.importAlbums(propertyTable, debug)
 end
 
 -- *************************************************
-function PiwigoAPI.pwCategories(propertyTable, thisCat, debug)
+function PiwigoAPI.pwCategoriesGet(propertyTable, thisCat)
 
     -- get list of categories from Piwigo
     -- if thisCat is set then return this category and children, otherwise all categories
+    local status, statusDes
 
-    if debug then
-        log:info("PiwigoAPI.pwCategories 1 - thiscat " .. thisCat)
-    end
+    log.debug("PiwigoAPI.pwCategories 1 - thiscat " .. thisCat)
+
 
     local urlParams = {
         { name = "method", value = "pwg.categories.getList"},
@@ -515,14 +535,13 @@ function PiwigoAPI.pwCategories(propertyTable, thisCat, debug)
     end
 
     -- build headers to include cookies from pwConnect call
-    local headers = {["Cookie"] =  propertyTable.cookies}
+    local headers = { ["Cookie"] = propertyTable.cookieHeader }
 
     local getUrl = utils.buildGet(propertyTable.pwurl, urlParams)
 
-    if debug then
-        log:info("PiwigoAPI.pwCategories 2 - calling " .. getUrl)
-        log:info("PiwigoAPI.pwCategories 3 - headers are " .. utils.serialiseVar(headers))
-    end
+
+    log.debug("PiwigoAPI.pwCategories 2 - calling " .. getUrl)
+    log.debug("PiwigoAPI.pwCategories 3 - headers are " .. utils.serialiseVar(headers))
 
     local httpResponse, httpHeaders = LrHttp.get(getUrl,headers)
 
@@ -555,8 +574,8 @@ function PiwigoAPI.pwCategories(propertyTable, thisCat, debug)
 end
 
 -- *************************************************
-function PiwigoAPI.pwCategoriesMove(propertyTable, info, thisCat, newCat, callStatus, debug)
-    -- move piwigo categeory using pwg.categories.move
+function PiwigoAPI.pwCategoriesMove(propertyTable, info, thisCat, newCat, callStatus)
+    -- move piwigo categeory to a different parent using pwg.categories.move
     
     callStatus.status = false
     callStatus.statusMsg = ""
@@ -564,7 +583,6 @@ function PiwigoAPI.pwCategoriesMove(propertyTable, info, thisCat, newCat, callSt
 
     -- check connection to piwigo
     if not (propertyTable.Connected) then
-        log:info("PiwigoAPI.pwCategoriesMove 2 - logging in")
         rv = PiwigoAPI.login(propertyTable, false)
         if not rv then
             callStatus.statusMsg =  'PiwigoAPI:pwCategoriesMove - cannot connect to piwigo'
@@ -578,31 +596,272 @@ function PiwigoAPI.pwCategoriesMove(propertyTable, info, thisCat, newCat, callSt
         return callStatus
     end
 
-    -- check parent category exists
-    
-    local checkCats
-    rv, checkCats  = PiwigoAPI.pwCategories(propertyTable, tostring(newCat), debug)
-    if utils.nilOrEmpty(checkCats) then
-        callStatus.statusMsg = "PiwigoAPI:pwCategoriesMove - Cannot find parent category " .. newCat .. " in Piwigo"
-        return callStatus
+    -- check parent category exists 
+    -- newCat of 0 means move to root so no parent album
+    if newCat ~= 0 then
+        local checkCats
+        rv, checkCats  = PiwigoAPI.pwCategoriesGet(propertyTable, tostring(newCat))
+        if utils.nilOrEmpty(checkCats) then
+            callStatus.statusMsg = "PiwigoAPI:pwCategoriesMove - Cannot find parent category " .. newCat .. " in Piwigo"
+            return callStatus
+        end
     end
-
     -- move album on piwigo
     -- parameters for POST
     local params = {
         { name = "method", value = "pwg.categories.move"},
         { name = "category_id", value = tostring(thisCat)} ,
-        { name = "parent", value = tostring(newCat)} ,
+        { name = "parent", value = newCat} ,
         { name = "pwg_token", value = propertyTable.token},
     }
 
-    local httpResponse, httpHeaders = LrHttp.post(
+    local httpResponse, httpHeaders = LrHttp.postMultipart(
         propertyTable.pwurl,
         params,
         {
             headers = { field = "Cookie", value = propertyTable.cookies }
         }
     )
+
+
+    log.debug("PiwigoAPI:pwCategoriesMove - httpResponse\n" .. utils.serialiseVar(httpResponse))
+    log.debug("PiwigoAPI:pwCategoriesMove - httpHeaders\n" .. utils.serialiseVar(httpHeaders))
+
+    local parseResp
+    if httpResponse then 
+        parseResp = JSON:decode(httpResponse)
+    end
+    if httpHeaders.status == 201 or httpHeaders.status == 200 then
+        if parseResp.stat == "ok" then
+            callStatus.status = true
+            callStatus.statusMsg = ""
+        else
+            callStatus.status = false
+            callStatus.statusMsg = parseResp.message or ""
+        end
+    else
+        callStatus.status = false
+        callStatus.statusMsg = parseResp.message or ""
+    end
+
+    return callStatus
+
+end
+
+
+-- *************************************************
+function PiwigoAPI.pwCategoriesAdd(propertyTable, info, metaData, callStatus)
+    -- create new pwigo category
+    callStatus.status = false
+    local status, statusDes
+    local rv
+    -- get parent collection for publishedCollection
+    -- if root then create new category with no parent otherwise use remote id for pareent
+    
+    -- use pwg.categories.add
+    -- check connection to piwigo
+    if not (propertyTable.Connected) then
+        rv = PiwigoAPI.login(propertyTable, false)
+        if not rv then
+            callStatus.statusMsg =  'PiwigoAPI:pwCategoriesMove - cannot connect to piwigo'
+            return callStatus
+        end
+    end
+  
+    -- check role is admin level
+    if propertyTable.userStatus ~= "webmaster" then
+        callStatus.statusMsg = "PiwigoAPI:pwCategoriesMove - User needs webmaster role on piwigo gallery at " .. propertyTable.host .. " to reorder albums"
+        return callStatus
+    end
+
+    local urlParams = {
+        { name = "method", value = "pwg.categories.add"},
+        { name = "name", value = metaData.name},
+        { name = "pwg_token", value = propertyTable.token}
+    }
+    if metaData.parentCat ~= "" then
+        table.insert( urlParams, { name = "parent", value = metaData.parentCat } )
+    end
+
+    -- build headers to include cookies from pwConnect call
+    local headers = { ["Cookie"] = propertyTable.cookieHeader }
+
+    local getUrl = utils.buildGet(propertyTable.pwurl, urlParams)
+
+
+    log.debug("PiwigoAPI.pwCategoriesAdd 2 - calling " .. getUrl)
+    log.debug("PiwigoAPI.pwCategoriesAdd 3 - headers are " .. utils.serialiseVar(headers))
+
+    local httpResponse, httpHeaders = LrHttp.get(getUrl,headers)
+
+    log.debug("PiwigoAPI.pwCategoriesAdd 2 - httpResponse\n " .. utils.serialiseVar(httpResponse))
+    log.debug("PiwigoAPI.pwCategoriesAdd 3 - httpHeaders\n" .. utils.serialiseVar(httpHeaders))
+
+    if httpHeaders.status == 200 then
+        -- got response from Piwigo
+        local rtnBody = JSON:decode(httpResponse)
+        if rtnBody.stat == "ok" then
+            -- get catid of new category and return 
+            callStatus.newCatId = rtnBody.result.id
+            callStatus.status = true
+        else
+            LrDialogs.message("Cannot add new category to Piwigo - ", rtnBody.err .. ", " .. rtnBody.message)
+            callStatus.status = false
+        end
+    else
+        if httpHeaders.error then
+            statusDes = httpHeaders.error.name
+            status = httpHeaders.error.errorCode
+        else
+            statusDes = httpHeaders.statusDes
+            status = httpHeaders.status
+        end
+        LrDialogs.message("Cannot add new category to Piwigo- " .. status, statusDes)
+        callStatus.status = false
+    end
+    return callStatus
+end
+
+-- *************************************************
+function PiwigoAPI.pwCategoriesDelete( propertyTable, info, metaData, callStatus)
+    -- delete category on Piwigo using pwg.categories.delete
+
+    callStatus.status = false
+    local status, statusDes
+    local rv
+    -- Check if remoteID exists on Piwigo
+    local checkCats
+
+    -- check connection to piwigo
+    if not (propertyTable.Connected) then
+        rv = PiwigoAPI.login(propertyTable, false)
+        if not rv then
+            callStatus.statusMsg =  'PiwigoAPI:pwCategoriesDelete - cannot connect to piwigo'
+            return callStatus
+        end
+    end
+  
+    -- check role is admin level
+    if propertyTable.userStatus ~= "webmaster" then
+        callStatus.statusMsg = "PiwigoAPI:pwCategoriesDelete - User needs webmaster role on piwigo gallery at " .. propertyTable.host .. " to reorder albums"
+        return callStatus
+    end
+
+    -- Check that collection exists as an album on Piwigo and create if not
+    rv, checkCats = PiwigoAPI.pwCategoriesGet(propertyTable, metaData.catToDelete)
+    if not rv then
+        callStatus.statusMsg = 'Delete Album - cannot check album exists on piwigo at ' .. propertyTable.host
+        return callStatus
+    end
+
+    log.debug('PiwigoAPI.pwCategoriesDelete - checkcats:\n' .. utils.serialiseVar(checkCats))
+
+    if utils.nilOrEmpty(checkCats) then
+        -- if album is missing from Piwigo we can still go ahead and delete collection on LrC
+        -- so set callStatus.status to true
+        callStatus.status = true
+        callStatus.statusMsg = 'Delete Album - Album does not exist on piwigo at ' .. propertyTable.host
+        return callStatus
+
+    end
+    -- delete album on piwigo
+    -- parameters for POST
+    -- photo_deletion_mode can be:
+    --      "no_delete" (may create orphan photos),
+    --      "delete_orphans" (default mode, only deletes photos linked to no other album)
+    --      "force_delete" (delete all photos, even those linked to other albums)
+    -- 
+    local params = {
+        { name = "method", value = "pwg.categories.delete"},
+        { name = "category_id", value = metaData.catToDelete},
+        { name = "photo_delete_mode", value ="delete_orphans"},
+        { name = "pwg_token", value = propertyTable.token},
+    }
+
+    local httpResponse, httpHeaders = LrHttp.postMultipart(
+        propertyTable.pwurl,
+        params,
+        {
+            headers = { field = "Cookie", value = propertyTable.cookies }
+        }
+    )
+
+
+    log.debug("PiwigoAPI:pwCategoriesMove - httpResponse\n" .. utils.serialiseVar(httpResponse))
+    log.debug("PiwigoAPI:pwCategoriesMove - httpHeaders\n" .. utils.serialiseVar(httpHeaders))
+
+
+    local parseResp
+    if httpResponse then 
+        parseResp = JSON:decode(httpResponse)
+    end
+    if httpHeaders.status == 201 or httpHeaders.status == 200 then
+        if parseResp.stat == "ok" then
+            callStatus.status = true
+            callStatus.statusMsg = ""
+        else
+            callStatus.status = false
+            callStatus.statusMsg = parseResp.message or ""
+        end
+    else
+        callStatus.status = false
+        callStatus.statusMsg = parseResp.message or ""
+    end
+
+    return callStatus
+
+
+
+end
+
+
+-- *************************************************
+function PiwigoAPI.pwCategoriesSetinfo(propertyTable, info, callStatus)
+    -- Set info on category - change name etc
+    callStatus.status = false
+    callStatus.statusMsg = ""
+    local rv
+
+    -- check connection to piwigo
+    if not (propertyTable.Connected) then
+        log.debug("PiwigoAPI.pwCategoriesSetinfo - logging in")
+        rv = PiwigoAPI.login(propertyTable, false)
+        if not rv then
+            callStatus.statusMsg =  'PiwigoAPI.pwCategoriesSetinfo - cannot connect to piwigo'
+            return callStatus
+        end
+    end
+
+    -- check role is admin level
+    if propertyTable.userStatus ~= "webmaster" then
+        callStatus.statusMsg = "PiwigoAPI:pwCategoriesMove - User needs webmaster role on piwigo gallery at " .. propertyTable.host .. " to reorder albums"
+        return callStatus
+    end
+
+    local remoteId = info.remoteId
+    local newName = info.name
+
+    local params = {
+        { name = "method", value = "pwg.categories.setInfo" },
+        { name = "category_id", value = tostring(remoteId) },
+        { name = "name", value = newName },
+        { name = "pwg_token", value = propertyTable.token}
+    }
+
+ 
+    log.debug('PiwigoAPI.pwCategoriesSetinfo - params\n' .. utils.serialiseVar(params))
+
+    local httpResponse, httpHeaders = LrHttp.postMultipart(
+        propertyTable.pwurl,
+        params,
+        {
+            headers = { field = "Cookie", value = propertyTable.cookies }
+        }
+    )
+
+    log.debug('PiwigoAPI.pwCategoriesSetinfo - httpResponse\n' .. utils.serialiseVar(httpResponse))
+    log.debug('PiwigoAPI.pwCategoriesSetinfo - httpHeaders\n' .. utils.serialiseVar(httpHeaders))
+
     local body
     if httpResponse then 
         body = JSON:decode(httpResponse)
@@ -624,22 +883,105 @@ function PiwigoAPI.pwCategoriesMove(propertyTable, info, thisCat, newCat, callSt
 
 end
 
-
 -- *************************************************
-function PiwigoAPI.createCat(propertyTable, publishedCollection, metaData, callStatus, debug )
-    -- create new pwigo category
+function PiwigoAPI.updateGallery(propertyTable, exportFilename, metaData, callStatus)
+    -- update gallery with image via pwg.images.addSimple
+
     callStatus.status = false
 
-    -- get parent collection for publishedCollection
-    -- if root then create new category with no parent otherwise use remote id for pareent
-    
+    local params = {
+        { name  = "method", value = "pwg.images.addSimple" },
+        { name  = "category",value = metaData.Albumid },
+        { name  = "author", value = metaData.Creator},
+        { name  = "name", value = metaData.Title },
+        { name  = "comment", value = metaData.Caption}
+    }
+    if metaData.Remoteid ~= "" then
+        -- TODO - check if remote image exists - don't set this parameter if not
+
+        table.insert(params, { name = "image_id", value = tostring(metaData.Remoteid)})
+    end
+
+    table.insert(params, {
+                name        = "image",
+                filePath    = exportFilename,                       
+                fileName    = LrPathUtils.leafName(exportFilename), 
+                contentType = "image/jpeg",})
 
 
+    log.debug("PiwigoAPI.updateGallery - Params for addsimple are \n" .. utils.serialiseVar(params))
+
+    local uploadSuccess = false
+-- Build multipart POST request to pwg.images.addSimple
+    local status, statusDes
+    local httpResponse, httpHeaders = LrHttp.postMultipart(
+        propertyTable.pwurl,
+        params,
+        {
+            headers = { field = "Cookie", value = propertyTable.cookies }
+        }
+    )
+
+    log.debug("PiwigoAPI.updateGallery - response from addsimple \n" .. utils.serialiseVar(httpResponse))
+
+    if httpHeaders.status == 201 or httpHeaders.status == 200 then
+        local response = JSON:decode(httpResponse)
+        if response.stat == "ok" then
+            callStatus.remoteid = response.result.image_id
+            callStatus.remoteurl = response.result.url
+            callStatus.status = true
+            callStatus.statusMsg = ""
+
+            log.debug("PiwigoAPI.updateGallery - callstatus is \n" .. utils.serialiseVar(callStatus))
+ 
+        -- finalise upload via pwg.images.uploadCompleted
+            params = {
+                { name = "method", value = "pwg.images.uploadCompleted" },
+                { name = "image_id", value = tostring(callStatus.remoteid) },
+                { name = "pwg_token", value = propertyTable.token},
+                { name  = "category_id",value = metaData.Albumid }
+            }
+
+            log.debug("PiwigoAPI.updateGallery - params for uploadcompleted are " .. utils.serialiseVar(params))
+
+            local headers = { ["Cookie"] = propertyTable.cookieHeader }
+            local getUrl = utils.buildGet(propertyTable.pwurl, params)
+
+            log.debug("PiwigoAPI.pwCategories 2 - calling " .. getUrl)
+            log.debug("PiwigoAPI.pwCategories 3 - headers are " .. utils.serialiseVar(headers))
+
+
+            local finaliseResult, finaliseHeaders = LrHttp.get(getUrl,headers)
+            if finaliseHeaders.status == 200 then
+
+                local parseResult = JSON:decode(finaliseResult)
+                if parseResult.stat == "ok" then
+                    callStatus.status = true
+                    uploadSuccess = true
+                end
+
+                log.debug("updated imaage id " .. callStatus.remoteid)
+                log.debug("finaliseResult is \n" .. utils.serialiseVar(parseResult))
+
+            end
+        end
+    end
+    if not(uploadSuccess) then
+        if httpHeaders.error then
+            statusDes = httpHeaders.error.name
+            status = httpHeaders.error.errorCode
+        else
+            statusDes = httpHeaders.statusDes
+            status = httpHeaders.status
+        end
+        LrDialogs.message("Cannot upload - " .. metaData.fileName .. " to Piwigo - " .. status, statusDes)
+        return callStatus
+    end
     return callStatus
 end
 
 -- *************************************************
-function PiwigoAPI.deletePhoto(propertyTable, pwCatID, pwImageID, callStatus , debug)
+function PiwigoAPI.deletePhoto(propertyTable, pwCatID, pwImageID, callStatus)
 
 -- delete image from piwigo via pwg.images.delete
     callStatus.status = false
@@ -663,23 +1005,22 @@ function PiwigoAPI.deletePhoto(propertyTable, pwCatID, pwImageID, callStatus , d
         { field = "Cookie", value = propertyTable.SessionCookie }
     }
 ]]
-    if debug then
-        log:info("PiwigoAPI.deletePhoto - propertyTable \n " .. utils.serialiseVar(propertyTable))
-        log:info("PiwigoAPI.deletePhoto - params \n" .. utils.serialiseVar(Params))
-        --log:info("PiwigoAPI.deletePhoto - headrs \n" .. utils.serialiseVar(headers))
-    end
+  
+    log.debug("PiwigoAPI.deletePhoto - propertyTable \n " .. utils.serialiseVar(propertyTable))
+    log.debug("PiwigoAPI.deletePhoto - params \n" .. utils.serialiseVar(params))
+        --log.debug("PiwigoAPI.deletePhoto - headrs \n" .. utils.serialiseVar(headers))
+
     local httpResponse, httpHeaders = LrHttp.postMultipart(
         propertyTable.pwurl, 
         params,
         {
             headers = { field = "Cookie", value = propertyTable.cookies } 
         }
-    
     )
-    if debug then
-        log:info("PiwigoAPI.deletePhoto - httpResponse \n" .. utils.serialiseVar(httpResponse))
-        log:info("PiwigoAPI.deletePhoto - httpHeaders \n" .. utils.serialiseVar(httpHeaders))
-    end
+
+    log.debug("PiwigoAPI.deletePhoto - httpResponse \n" .. utils.serialiseVar(httpResponse))
+    log.debug("PiwigoAPI.deletePhoto - httpHeaders \n" .. utils.serialiseVar(httpHeaders))
+ 
 
     local body
     if httpResponse then 
@@ -702,111 +1043,26 @@ function PiwigoAPI.deletePhoto(propertyTable, pwCatID, pwImageID, callStatus , d
 end
 
 -- *************************************************
-function PiwigoAPI.updateGallery(propertyTable, exportFilename, metaData, callStatus, debug)
-    -- update gallery with image via pwg.images.addSimple
+local function httpPost(propertyTable, params)
+-- generic function to call LrHttp.Post
+    -- LrHttp.post( url, postBody, headers, method, timeout, totalSize )
 
-    callStatus.status = false
+    -- convert table of name, value pairs to a urlencoded string
+    local body = utils.buildBodyFromParams(params)
 
-    local params = {
-        { name  = "method", value = "pwg.images.addSimple" },
-        { name  = "category",value = metaData.Albumid },
-        { name  = "author", value = metaData.Creator},
-        { name  = "name", value = metaData.Title },
-        { name  = "comment", value = metaData.Caption}
-    }
-    if metaData.Remoteid ~= "" then
-        table.insert(params, { name = "image_id", value = tostring(metaData.Remoteid)})
-    end
+end
 
-    table.insert(params, {
-                name        = "image",
-                filePath    = exportFilename,                       
-                fileName    = LrPathUtils.leafName(exportFilename), 
-                contentType = "image/jpeg",})
+-- *************************************************
+local function httpPostMultiPart()
+-- generic function to call LrHttp.PostMultiPart 
+    -- LrHttp.postMultipart( url, content, headers, timeout, callbackFn, suppressFormData )
+end
 
-    if debug then
-        log:info("PiwigoAPI.updateGallery - Params for addsimple are \n" .. utils.serialiseVar(params))
-    end
-    local uploadSuccess = false
--- Build multipart POST request to pwg.images.addSimple
-    local statusDes
-    local status
-    local httpResponse, httpHeaders = LrHttp.postMultipart(
-        propertyTable.pwurl,
-        params,
-        {
-            headers = { field = "Cookie", value = propertyTable.cookies }
-        }
-    )
+-- *************************************************
+local function httpGet()
+-- generic function to call LrHttp.Get
+    -- LrHttp.get( url, headers, timeout )  
 
-    if debug then
-        log:info("PiwigoAPI.updateGallery - response from addsimple \n" .. utils.serialiseVar(httpResponse))
-    end
-
-    if httpHeaders.status == 201 or httpHeaders.status == 200 then
-        local response = JSON:decode(httpResponse)
-        if response.stat == "ok" then
-            callStatus.remoteid = response.result.image_id
-            callStatus.remoteurl = response.result.url
-            callStatus.status = true
-            callStatus.statusMsg = ""
-            if debug then
-                log:info("PiwigoAPI.updateGallery - callstatus is \n" .. utils.serialiseVar(callStatus))
-            end
-        -- finalise upload via pwg.images.uploadCompleted
-            params = {
-                { name = "method", value = "pwg.images.uploadCompleted" },
-                { name = "image_id", value = tostring(callStatus.remoteid) },
-                { name = "pwg_token", value = propertyTable.token},
-                { name  = "category_id",value = metaData.Albumid }
-            }
-            if debug then
-                log:info("PiwigoAPI.updateGallery - params for uploadcompleted are " .. utils.serialiseVar(params))
-            end
-
-            local headers = {["Cookie"] =  propertyTable.cookies}
-            local getUrl = utils.buildGet(propertyTable.pwurl, params)
-
-            if debug then
-                log:info("PiwigoAPI.pwCategories 2 - calling " .. getUrl)
-                log:info("PiwigoAPI.pwCategories 3 - headers are " .. utils.serialiseVar(headers))
-            end
-
-            local finaliseResult, finaliseHeaders = LrHttp.get(getUrl,headers)
-            if finaliseHeaders.status == 200 then
-
-                local parseResult = JSON:decode(finaliseResult)
-                if parseResult.stat == "ok" then
-                    callStatus.status = true
-                    uploadSuccess = true
-                end
-
-                if debug then
-                    log:info("updated imaage id " .. callStatus.remoteid)
-                    log:info("parsedata is \n" .. utils.serialiseVar(parseData))
-                    log:info("finalizeResult is \n" .. utils.serialiseVar(parseResult))
-                end
-            end
-
-
-        end
-    end
-    if not(uploadSuccess) then
-        if httpHeaders.error then
-            statusDes = httpHeaders.error.name
-            status = httpHeaders.error.errorCode
-        else
-            statusDes = httpHeaders.statusDes
-            status = httpHeaders.status
-        end
-        LrDialogs.message("Cannot upload - " .. metaData.fileName .. " to Piwigo - " .. status, statusDes)
-        return callStatus
-    end
-
-
-
-    return callStatus
-    
 end
 
 -- *************************************************
