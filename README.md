@@ -68,11 +68,11 @@ You should have received a copy of the GNU General Public License along with thi
 This plugin has been developed on an macOS platform with Apple silicon. I don't have a windows platform capable of running Lightroom Classic available so no testing at all has been carried out on a windows platform.
 
 The environment is:
-Apple macOS Tahoe 26.1
-Lightroom Classic 15.0.1 release
-Piwigo 15.7.0 on Ubuntu 22.04.5 LTS
+- Apple macOS Tahoe 26.1
+- Lightroom Classic 15.0.1 release
+- Piwigo 15.7.0 on Ubuntu 22.04.5 LTS
 
-The released version is currently at beta 0.9.4. As a beta release the code is still full of debugging messages as I've grappled with the complexities of accessing the Piwigo web srevice API via the LrHttp namespace with it's idiosyncrasies. These will be tidied up, and a more consistent pattern for the various LrHttp calls id planned to be implemented.
+The released version is currently at beta 0.9.4. As a beta release the code is still full of debugging messages as I've grappled with the complexities of accessing the Piwigo web srevice API via the LrHttp namespace with it's idiosyncrasies. These will be tidied up, and a more consistent pattern for the various LrHttp calls is planned to be implemented.
 
 However, in the meantime this plugin does what I need and hasn't corrupted either my Lightroom catalog or my Piwigo installation. If others want to try it pending a more official plugin being avaiable again I sugguest the following:
 
