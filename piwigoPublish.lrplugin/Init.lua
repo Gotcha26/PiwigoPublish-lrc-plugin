@@ -58,6 +58,6 @@ _G.log = require("logger")
 
 -- Global initializations
 _G.prefs = _G.LrPrefs.prefsForPlugin()
-_G.debugEnabled = false
+_G.debugEnabled = true
 
 

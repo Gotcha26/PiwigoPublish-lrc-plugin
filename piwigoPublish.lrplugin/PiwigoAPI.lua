@@ -521,8 +521,6 @@ function PiwigoAPI.pwCategoriesGet(propertyTable, thisCat)
     -- if thisCat is set then return this category and children, otherwise all categories
     local status, statusDes
 
-    log.debug("PiwigoAPI.pwCategories 1 - thiscat " .. thisCat)
-
 
     local urlParams = {
         { name = "method", value = "pwg.categories.getList"},
@@ -1040,6 +1038,46 @@ function PiwigoAPI.deletePhoto(propertyTable, pwCatID, pwImageID, callStatus)
         callStatus.statusMsg = body.message or ""
     end
     return callStatus
+end
+
+
+
+-- *************************************************
+function PiwigoAPI.associateImages(propertyTable)
+end
+
+-- *************************************************
+function PiwigoAPI.specialCollections(propertyTable)
+end
+
+-- *************************************************
+function PiwigoAPI.setAlbumCover(propertyTable)
+    log.debug("PiwigoAPI.setAlbumCover")
+    log.debug("propertyTable\n" .. utils.serialiseVar(propertyTable))
+    local catalog = LrApplication.activeCatalog()
+    local selPhotos =  catalog:getMultipleSelectedOrAllPhotos()
+    if utils.nilOrEmpty(selPhotos) then
+        LrDialogs.message("Please select a photo to set as album cover","","warning")
+        return false
+    end
+    if #selPhotos > 1 then
+        LrDialogs.message("Please select a single photo to set as album cover","","warning")
+        return false
+    end
+    local Photo = selPhotos[1]
+-- we now have a single photo.
+
+-- need to find which collection is active to find correct Piwigo album and if it has been published
+
+
+-- check if photo exists in this piwigo album
+
+-- set as the representative photo for an album. 
+-- the Piwigo web service doesn't require that the photo belongs to the album but this function does  
+
+-- use pwg.categories.setRepresentative, POST only, Admin only 
+
+
 end
 
 -- *************************************************

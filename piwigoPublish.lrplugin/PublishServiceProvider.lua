@@ -48,7 +48,6 @@ return {
 		{ key = 'host', default = '' },
 		{ key = "userName", default = '' },
 		{ key = "userPW", default = '' },
-		-- { key = "tagRoot", default = "~Metadata|Publishing|Piwigo" },
 	},
 
 	-- metadataThatTriggersRepublish = {},
