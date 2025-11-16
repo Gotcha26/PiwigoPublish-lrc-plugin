@@ -75,7 +75,7 @@ return {
             f:picture {
 				alignment = 'left',
                 --value = _PLUGIN:resourceId("icons/icon_med.png"),
-				value = _PLUGIN:resourceId("icons/piwigoPublish.png"),
+				value = _PLUGIN:resourceId("icons/piwigoPublish_9_4.png"),
             },
 		},
 		-- PW Host
