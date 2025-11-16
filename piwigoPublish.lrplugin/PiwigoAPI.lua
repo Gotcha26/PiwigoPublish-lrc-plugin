@@ -521,9 +521,6 @@ function PiwigoAPI.pwCategoriesGet(propertyTable, thisCat)
     -- if thisCat is set then return this category and children, otherwise all categories
     local status, statusDes
 
-    log.debug("PiwigoAPI.pwCategories 1 - thiscat " .. thisCat)
-
-
     local urlParams = {
         { name = "method", value = "pwg.categories.getList"},
         { name = "recursive", value = "true"},
