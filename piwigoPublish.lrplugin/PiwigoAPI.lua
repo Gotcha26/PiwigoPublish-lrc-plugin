@@ -178,15 +178,7 @@ function PiwigoAPI.pwConnect(propertyTable)
     propertyTable.ConCheck = true
     propertyTable.ConStatus = "Not Connected"
     propertyTable.userStatus = ""
---[[
-    local urlParams = {
-        method = "pwg.session.login",
-        username = propertyTable.userName,
-        password = propertyTable.userPW,
-        format = "json"
-    }
-    local body = utils.buildPost(urlParams)
-]]
+
     local urlParams = {
         { name  = "method", value = "pwg.session.login" },
         { name  = "username", value = propertyTable.userName },

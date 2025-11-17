@@ -33,31 +33,13 @@ function PublishDialogSections.startDialog(propertyTable)
 	propertyTable:addObserver('host', PiwigoAPI.ConnectionChange)
 	propertyTable:addObserver('userName', PiwigoAPI.ConnectionChange)
 	propertyTable:addObserver('userPW', PiwigoAPI.ConnectionChange)
-	propertyTable:addObserver('tagRoot', PiwigoAPI.ConnectionChange)
 
---[[
-	local doInit = false
-	if (utils.nilOrEmpty(propertyTable.Connected)) then
-		doInit = true
-	else
-		if not(propertyTable.Connected) then
-			doInit = true
-		end
-	end
-	if doInit then
-		PiwigoAPI.ConnectionChange(propertyTable)
-	end
-]]
-	if propertyTable.host and propertyTable.userName and propertyTable.userPW then
+	if propertyTable.host and propertyTable.userName and propertyTable.userPW and not propertyTable.Connected then
 		-- try to login 
 		LrTasks.startAsyncTask(function()
-			if not PiwigoAPI.login(propertyTable) then
-				-- LrDialogs.message('Connection NOT successful')
-			end
+			local rv = PiwigoAPI.login(propertyTable)
 		end)
 	end
-	
-
 
 end
 
@@ -81,7 +63,7 @@ return {
             f:picture {
 				alignment = 'left',
                 value = iconPath,
-				--value = _PLUGIN:resourceId("icons/piwigoPublish_9_5.png"),
+				--value = _PLUGIN:resourceId("icons/icon_med.png"),
             },
 		},
 		-- PW Host
@@ -200,7 +182,7 @@ local function prefsDialog (f, propertyTable)
 				enabled = bind('Connected', propertyTable),
 				tooltip = "Click to fetch the current album structure from the Piwigo Host above. Only albums the user has permission to see will be included",
 				action = function(button)
-					local result = LrDialogs.confirm("Import Piwigo Albums","Are you sure you want to import the album structure from Piwigo?\nThis may overwrite or recreate existing collections.","Import","Cancel")
+					local result = LrDialogs.confirm("Import Piwigo Albums","Are you sure you want to import the album structure from Piwigo?\nExisting collections will be unaffected.","Import","Cancel")
 					if result == 'ok' then
 						LrTasks.startAsyncTask(function()
 							PiwigoAPI.importAlbums(propertyTable)

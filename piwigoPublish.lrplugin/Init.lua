@@ -51,7 +51,7 @@ _G.LrExportSettings = import "LrExportSettings"
 _G.JSON = require "JSON"
 _G.utils = require "utils"
 -- _G.defs = require "PWDefinitions"
-_G.PWUtils = require "PiwigoAPI"
+
 _G.PWSession = require "PWSession"
 _G.PiwigoAPI = require "PiwigoAPI"
 _G.log = require("logger")
@@ -60,5 +60,5 @@ _G.log = require("logger")
 _G.prefs = _G.LrPrefs.prefsForPlugin()
 _G.debugEnabled = true
 
-_G.iconPath = _PLUGIN:resourceId("icons/piwigoPublish_1_5-assets/piwigoPublish_1_5.png")
+_G.iconPath = _PLUGIN:resourceId("icons/icon_med.png")
 
