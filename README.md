@@ -18,6 +18,10 @@ Currently at beta 0.9.4 version
 * When Published Collection is deleted in LrCD the associated Piwigo album is also deleted. Photos in the Piwigo album are also deleted if they would become orphans, but if they are associated with other albums they will be left.
 * Multiple Publish Services connecting to different Piwigo hosts can be created.
 
+## CAUTION
+
+The plugin does not currently support concurrent operations - so please do not attempt to carry out an operation in the plugin if another is running. This is most likely if in the middle of a large publishing operation you which to say create/change/delete an album. The plugin is likely to crash with un-predicatable consequences if this is attempted.
+
 ## The following functionality is under development:
 
 * Set Piwigo album cover from an image in the Published Collection
