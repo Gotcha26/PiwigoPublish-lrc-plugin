@@ -893,12 +893,22 @@ function PiwigoAPI.updateGallery(propertyTable, exportFilename, metaData, callSt
             table.insert(params, { name = "image_id", value = tostring(metaData.Remoteid)})
         end
     end
-
+    local fileType = LrPathUtils.extension(exportFilename):lower()
+    local contentType = ""
+    if fileType == "png" then
+        contentType = "image/png"
+    elseif  fileType == "jpg" or fileType == "jpeg"  then
+        contentType = "image/jpeg"
+    else
+        callStatus.statusMsg = "Upload failed - forbidden file type"
+        LrDialogs.message("Cannot upload " .. LrPathUtils.leafName(exportFilename) .. " to Piwigo - forbidden file type. Check file settings in Publishing Manager.")
+        return callStatus
+    end
     table.insert(params, {
                 name        = "image",
                 filePath    = exportFilename,                       
                 fileName    = LrPathUtils.leafName(exportFilename), 
-                contentType = "image/jpeg",})
+                contentType = contentType,})
 
     local uploadSuccess = false
 -- Build multipart POST request to pwg.images.addSimple
@@ -911,8 +921,14 @@ function PiwigoAPI.updateGallery(propertyTable, exportFilename, metaData, callSt
         }
     )
 
+
+    if httpResponse and httpResponse == "forbidden file type" then 
+        callStatus.statusMsg = "Upload failed - forbidden file type"
+        LrDialogs.message("Cannot upload " .. LrPathUtils.leafName(exportFilename) .. " to Piwigo - forbidden file type. Check file settings in Publishing Manager.")
+        return callStatus
+    end
     if httpHeaders.status == 201 or httpHeaders.status == 200 then
-        local response = JSON:decode(httpResponse)
+        local response =  JSON:decode(httpResponse)
         if response.stat == "ok" then
             callStatus.remoteid = response.result.image_id
             callStatus.remoteurl = response.result.url

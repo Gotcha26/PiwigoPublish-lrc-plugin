@@ -37,7 +37,7 @@ return {
 	
 
 -- Behavious Settings
-	allowFileFormats = nil,
+	allowFileFormats = { "JPEG" , "PNG"},
 	allowColorSpaces = nil,
 	canExportVideo = false,
 	supportsCustomSortOrder = false,
