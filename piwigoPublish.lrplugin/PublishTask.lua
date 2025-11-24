@@ -174,7 +174,7 @@ function PublishTask.deletePhotosFromPublishedCollection(publishSettings, arrayO
         else
             LrErrors.throwUserError('Failed to delete asset ' .. pwImageID .. ' from Piwigo - ' .. callStatus.statusMsg, 'Failed to delete photo')
         end
-
+        deletedCallback( pwImageID)
     end
     PiwigoBusy = false
 end
