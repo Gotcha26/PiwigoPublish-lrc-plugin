@@ -1,26 +1,23 @@
 # PiwigoPublish-lrc-plugin
 
-A Lightroom Classic plugin which uploads images to a Piwigo hosts via the Piwigo API.
+A Lightroom Classic plugin which uploads images to a Piwigo host via the Piwigo REST API.
 
-Currently at beta 0.9.4 version
+Current Version: 20251124.1
 
 ## The following fuctionality is available:
 
 * Connect to Piwigo Server and download existing album structure
     * Published Collection Sets and Published Collections are created in the LrC Publish Service corresponding to the albums and sub-albums in Piwigo (see features under development).
     * Images are not downloaded from Piwigo as part of this, nor are existing images in LrC automatically added to the newly created Published Collections.
-* Images added to LrC Publish Service are published to corresponding album on Piwigo.
-* Changes to images to trigger a re-publish will overwrite the previously published Piwigo image.
-* Images removed from LrC Publish Service are removed from corresponding album on Piwigo
+* Images added to the Publish Service are published to the corresponding album on Piwigo. Metadata and keywords are transferred, respecting rules configured in the Publishing Manager for this service.
+* Changes to images which trigger a re-publish will overwrite the previously published Piwigo image.
+* Images removed from the Publish Service are removed from corresponding album on Piwigo
 * Moving a Published Collection under a different Published Collection Set is reflected in the associated Piwigo albums
 * Adding new Published Collections will create a corresponding album on Piwigo, respecting the album structure
 * When a Published Collection name is changed in LrC the associated Piwigo album is also renamed
 * When Published Collection is deleted in LrCD the associated Piwigo album is also deleted. Photos in the Piwigo album are also deleted if they would become orphans, but if they are associated with other albums they will be left.
 * Multiple Publish Services connecting to different Piwigo hosts can be created.
-
-## CAUTION
-
-The plugin does not currently support concurrent operations - so please do not attempt to carry out an operation in the plugin if another is running. For example, if in the middle of a large publishing operation you wish to say create/change/delete an album - the plugin is likely to crash with un-predicatable consequences if this is attempted.
+* Deleting a Publish Service does not delete any images or albums on the Piwigo host it was associated with.
 
 ## The following functionality is under development:
 
@@ -39,6 +36,19 @@ The plugin does not currently support concurrent operations - so please do not a
 
 ## The following functionality is not currently planned:
 * Download images from Piwigo to local drive
+
+## Installation and Configuration
+* Install the plugin via the Lightroom Plugin Manager: 
+    * File -> Plug-in Manager -> Add -> locate piwigoPublish.lrplugin
+* Create a publish service:
+    * Publish Services -> + -> Go to Publishing Manager -> Add -> Via Service: Piwigo Publisher -> Name: -> Create
+* Complete the Piwigo Host Settings fields: Piwigo Host, User Name, Password and click 'Check Connection'
+    * If details are correct you will see a message 'Connected to Piwigo Gallery at yourhostname as role' at the bottom of the Piwigo Host Settings box. NOTE - the webmaster role is needed to create/move albums on Piwigo
+* Click SAVE at the bottom right of this screen. You will return to the Publish Service panel with this service now in the list.
+* Right-Click on the service and then Edit Settings...
+    * You can now click 'Import Albums' in the Piwigo Publish Service Configuration Extras panel to import the existing album structure from Piwigo
+    * NOTE an error will occur if the SAVE process is not completed before the Import Albums option is run
+
 
 ## CREDITS
 
