@@ -425,8 +425,17 @@ function PiwigoAPI.importAlbums(propertyTable)
     -- 
     local rv
 
-    -- debug = true -- force debug for now
-
+    -- getPublishService to get reference to this publish service - returned in propertyTable._service
+    rv = PiwigoAPI.getPublishService(propertyTable, false)
+    if not rv then
+        utils.handleError('PiwigoAPI:importAlbums - cannot find publish service - has it been saved?', "Error: Cannot find Piwigo publish service - has it been saved?")
+        return
+    end
+    local publishService = propertyTable._service
+    if not publishService then
+        utils.handleError('PiwigoAPI:importAlbums - publish service is nil', "Error: Piwigo publish service is nil.")
+        return
+    end
     -- check connection to piwigo
     if not propertyTable.Connected then
         rv = PiwigoAPI.login(propertyTable)
@@ -448,17 +457,7 @@ function PiwigoAPI.importAlbums(propertyTable)
         return
     end     
 
-    -- getPublishService to get reference to this publish service - returned in propertyTable._service
-    rv = PiwigoAPI.getPublishService(propertyTable, false)
-    if not rv then
-        utils.handleError('PiwigoAPI:importAlbums - cannot find publish service for host/user', "Error: Cannot find Piwigo publish service for host/user.")
-        return
-    end
-    local publishService = propertyTable._service
-    if not publishService then
-        utils.handleError('PiwigoAPI:importAlbums - publish service is nil', "Error: Piwigo publish service is nil.")
-        return
-    end
+
 
     -- hierarchical table of categories
     local catHierarchy = buildCatHierarchy(allCats)
