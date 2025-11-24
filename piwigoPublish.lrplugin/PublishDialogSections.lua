@@ -29,6 +29,14 @@ function PublishDialogSections.startDialog(propertyTable)
 
   	log.debug('PublishDialogSections.startDialog')
 	log.debug('propertyTable\n' .. utils.serialiseVar(propertyTable))
+	if not propertyTable.LR_editingExistingPublishConnection then
+		propertyTable.userName = nil
+		propertyTable.userPW = nil
+		propertyTable.host = nil
+		propertyTable.Connected = false
+		propertyTable.ConCheck = true
+		propertyTable.ConStatus = "Not Connected"
+	end
 
 	-- log.debug('propertyTable contents: ' .. utils.serialiseVar(propertyTable))
 	propertyTable:addObserver('host', PiwigoAPI.ConnectionChange)
