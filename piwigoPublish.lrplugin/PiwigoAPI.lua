@@ -842,13 +842,13 @@ function PiwigoAPI.checkPhoto(propertyTable, pwImageID)
 
     local httpResponse, httpHeaders = LrHttp.get(getUrl,headers)
 
-    log.debug("PiwigoAPI.checkPhoto - httpHeaders\n" .. utils.serialiseVar(httpheaders))
+    log.debug("PiwigoAPI.checkPhoto - httpHeaders\n" .. utils.serialiseVar(httpHeaders))
     log.debug("PiwigoAPI.checkPhoto - httpResponse\n" .. utils.serialiseVar(httpResponse))
 
     if httpHeaders.status == 200 then
         -- got response from Piwigo
         local rtnBody = JSON:decode(httpResponse)
-        if rtnBody.status == "ok" then
+        if rtnBody.stat == "ok" then
             local imageDets = rtnBody.result
             rtnStatus.status = true
             rtnStatus.httpStatus = rtnBody.status
@@ -888,9 +888,14 @@ function PiwigoAPI.updateGallery(propertyTable, exportFilename, metaData, callSt
     }
     if metaData.Remoteid ~= "" then
         -- check if remote photo exists and ignore parameter if not
+        log.debug("PiwigoAPI.updateGallery - checking for existing photo with remoteid " .. metaData.Remoteid)  
         local rtnStatus = PiwigoAPI.checkPhoto(propertyTable, metaData.Remoteid)
+        log.debug("PiwigoAPI.updateGallery - checkPhoto returned \n" .. utils.serialiseVar(rtnStatus))
         if rtnStatus.status then
+            log.debug("PiwigoAPI.updateGallery - existing photo found with remoteid " .. metaData.Remoteid .. " - will update")
             table.insert(params, { name = "image_id", value = tostring(metaData.Remoteid)})
+        else
+            log.debug("PiwigoAPI.updateGallery - no existing photo found with remoteid " .. metaData.Remoteid .. " - will upload new photo")
         end
     end
     local fileType = LrPathUtils.extension(exportFilename):lower()
@@ -912,6 +917,8 @@ function PiwigoAPI.updateGallery(propertyTable, exportFilename, metaData, callSt
 
     local uploadSuccess = false
 -- Build multipart POST request to pwg.images.addSimple
+    log.debug("PiwigoAPI.updateGallery - params \n" .. utils.serialiseVar(params))
+
     local status, statusDes
     local httpResponse, httpHeaders = LrHttp.postMultipart(
         propertyTable.pwurl,
