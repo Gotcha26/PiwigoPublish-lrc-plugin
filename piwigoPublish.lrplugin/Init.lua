@@ -20,8 +20,6 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ]]
 
-
-
 ---@diagnostic disable: undefined-global
 
 -- Global imports
@@ -51,7 +49,6 @@ _G.LrExportSettings = import "LrExportSettings"
 _G.JSON = require "JSON"
 _G.utils = require "utils"
 _G.PiwigoAPI = require "PiwigoAPI"
-_G.PWAPI = require "PWAPI"
 
 -- Global initializations 
 _G.prefs = _G.LrPrefs.prefsForPlugin()
@@ -75,5 +72,5 @@ end
 
 _G.PiwigoBusy = false
 _G.iconPath = _PLUGIN:resourceId("icons/icon_med.png")
-_G.pluginVersion = "20251125.2"
+_G.pluginVersion = "20251127.3"
 

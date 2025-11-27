@@ -45,8 +45,8 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
     if not (propertyTable.Connected) then
         rv = PiwigoAPI.login(propertyTable, false)
         if not rv then
-            LrErrors.throwUserError('Publish photos to Piwigo - cannot connect to piwigo at ' .. propertyTable.host)
             PiwigoBusy = false
+            LrErrors.throwUserError('Publish photos to Piwigo - cannot connect to piwigo at ' .. propertyTable.host)
             return nil
         end
     end
@@ -56,36 +56,43 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
     local publishedCollection = exportContext.publishedCollection
     local albumId = publishedCollection:getRemoteId()
     local albumName = publishedCollection:getName()
+    local parentCollSet = publishedCollection:getParent()
+    local parentID = ""
+    local requestRepub = false
+    if parentCollSet then
+        parentID = parentCollSet:getRemoteId()
+    end
     local checkCats
 
     -- Check that collection exists as an album on Piwigo and create if not
     rv, checkCats = PiwigoAPI.pwCategoriesGet(propertyTable, albumId)
     if not rv then
-        LrErrors.throwUserError('Publish photos to Piwigo - cannot check category exists on piwigo at ' .. propertyTable.host)
         PiwigoBusy = false
+        LrErrors.throwUserError('Publish photos to Piwigo - cannot check category exists on piwigo at ' .. propertyTable.host)
         return nil
     end
 
     if utils.nilOrEmpty(checkCats) then
-        -- todo - create album on piwigo if missing
+        -- create missing album on piwigo (may happen if album is deleted directly on Piwigo rather than via this plugin)
         -- but - album may exist and permissions may have changed so we now can't see it.
         local metaData = {}
         callStatus = {}
-        metaData.albumName = albumName
-        callStatus = PiwigoAPI.pwCategoriesCreate(propertyTable, publishedCollection, metaData, callStatus)
+        metaData.name = albumName
+        metaData.parentId = parentID
+        callStatus = PiwigoAPI.pwCategoriesAdd(propertyTable, publishedCollection, metaData, callStatus)
         if callStatus.status then
-            --exportSession:recordRemoteCollectionId(callStatus.albumId)
-            --exportSession:recordRemoteCollectionUrl(callStatus.albumURL))
+            -- reset album id to newly created one
+            albumId = callStatus.newCatId
+            exportSession:recordRemoteCollectionId(albumId)
+            exportSession:recordRemoteCollectionUrl(callStatus.albumURL)
+            LrDialogs.message("*** Missing Piwigo album ***",  albumName ..", Piwigo Cat ID " .. albumId .. " created")
+            requestRepub = true
+
         else
-            LrErrors.throwUserError('Publish photos to Piwigo - cannot create Piwigo album for  ' .. albumName)
             PiwigoBusy = false
+            LrErrors.throwUserError('Publish photos to Piwigo - cannot create Piwigo album for  ' .. albumName)
             return nil
         end
-        
-        -- this shouldn't happen as piwigo albums are created as part of the LrC create album / create publishedCollectionSet routines
-        LrErrors.throwUserError('Publish photos to Piwigo - missing Piwigo album for  ' .. albumName)
-        PiwigoBusy = false
-        return nil
     end
 
     -- now export photos and upload to Piwigo
@@ -116,7 +123,6 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
             metaData.Caption = lrPhoto:getFormattedMetadata("caption") or ""
             metaData.fileName = lrPhoto:getFormattedMetadata("fileName") or ""
             metaData.Remoteid = remoteId
-            -- TODO check if this remoteid still exists on Piwigo
 
             -- do the upload
             callStatus = PiwigoAPI.updateGallery(propertyTable, filePath ,metaData, callStatus)
@@ -136,6 +142,23 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
     end
     progressScope:done()
     PiwigoBusy = false
+    
+    -- Check if republishRequested
+
+    if requestRepub then
+        LrDialogs.message("*** Missing Piwigo album ***",  "Please rePublish all photos in " .. albumName)
+        --[[
+        ToDo
+        -- trigger republish of all photos in this album - missing Piwigo Album was created
+        local repub = LrDialogs.confirm("rePublish Required",  "Do you wish to republish all photos in " .. albumName, "Yes", "No" )
+        log:info("PublishTask.processRenderedPhotos - republish requested " .. repub)
+        if repub == "ok" then
+            -- mark each photo in collection as publishedPhoto:setEditedFlag( edited ) to trigger a republish
+            -- Must be called from within one of the catalog:with___WriteAccessDo gates (including withPrivateWriteAccessDo).
+        end
+        ]]
+    end
+    
 end
 
 -- ************************************************
@@ -154,8 +177,8 @@ function PublishTask.deletePhotosFromPublishedCollection(publishSettings, arrayO
     if not (publishSettings.Connected) then
          local rv = PiwigoAPI.login(publishSettings, false)
         if not rv then
-            LrErrors.throwUserError('Delete Photos from Collection - cannot connect to piwigo at ' .. publishSettings.url)
             PiwigoBusy = false
+            LrErrors.throwUserError('Delete Photos from Collection - cannot connect to piwigo at ' .. publishSettings.url)
             return nil
         end
     end
@@ -171,6 +194,7 @@ function PublishTask.deletePhotosFromPublishedCollection(publishSettings, arrayO
         if callStatus.status then
             deletedCallback(arrayOfPhotoIds[i])
         else
+            PiwigoBusy = false
             LrErrors.throwUserError('Failed to delete asset ' .. pwImageID .. ' from Piwigo - ' .. callStatus.statusMsg, 'Failed to delete photo')
         end
         deletedCallback( pwImageID)
@@ -249,8 +273,6 @@ function PublishTask.updateCollectionSettings( publishSettings, info )
         statusMsg = ""
     }
 
-
-    local parentCat
     local metaData = {}
     local newCollectionName = info.name
     local newCollection = info.publishedCollection
@@ -258,24 +280,20 @@ function PublishTask.updateCollectionSettings( publishSettings, info )
     -- check if remoteId is present on this collection and exit if so
     local remoteId = newCollection:getRemoteId()
     if not (utils.nilOrEmpty(remoteId)) then
+        -- album exists on Piwigo - ignore
         callStatus.status = true
-
         return callStatus
     end
+    -- create new album on Piwigo
     metaData.name = newCollectionName
     metaData.type = "collection"
     if utils.nilOrEmpty(info.parents) then
         -- creating album at root of publish service
-        parentCat = "root"
         metaData.parentCat = ""
     else
-        parentCat = info.parents[#info.parents].remoteCollectionId or ""
-        metaData.parentCat = parentCat
+        metaData.parentCat = info.parents[#info.parents].remoteCollectionId or ""
     end
 
-    if parentCat == "" then
-        -- no parent album on Piwigo - can't create sub album
-    end
     callStatus = PiwigoAPI.pwCategoriesAdd(publishSettings, info, metaData, callStatus)
     if callStatus.status then
         -- add remote id and url to collection
@@ -286,7 +304,7 @@ function PublishTask.updateCollectionSettings( publishSettings, info )
         end)
         LrDialogs.message(
             "New Piwigo Album",
-            "New Piwigo Album " .. metaData.name .." created with id " .. callStatus.newCatId,
+            "New Piwigo Album " .. metaData.name .." created with Piwigo Cat Id " .. callStatus.newCatId,
             "info"
         )
     end
@@ -313,8 +331,6 @@ function PublishTask.updateCollectionSetSettings( publishSettings, info )
         statusMsg = ""
     }
 
-
-    local parentCat
     local metaData = {}
     local newCollectionName = info.name
     local newCollection = info.publishedCollection
@@ -330,16 +346,11 @@ function PublishTask.updateCollectionSetSettings( publishSettings, info )
     metaData.type = "collectionset"
     if utils.nilOrEmpty(info.parents) then
         -- creating album at root of publish service
-        parentCat = "root"
         metaData.parentCat = ""
     else
-        parentCat = info.parents[#info.parents].remoteCollectionId or ""
-        metaData.parentCat = parentCat
+        metaData.parentCat = info.parents[#info.parents].remoteCollectionId or ""
     end
 
-    if parentCat == "" then
-        -- no parent album on Piwigo - can't create sub album
-    end
     callStatus = PiwigoAPI.pwCategoriesAdd(publishSettings, info, metaData, callStatus)
     if callStatus.status then
         -- add remote id and url to collection
@@ -404,10 +415,10 @@ function PublishTask.renamePublishedCollection(publishSettings, info)
     local oldName = collection:getName()
 
     if utils.nilOrEmpty(remoteId) then
-        callStatus.statusDesc = "no album found on Piwigo"
+        callStatus.statusMsg = "no album found on Piwigo"
     else
         if PiwigoBusy then
-            callStatus.statusDesc = "Piwigo is busy. Please try later."
+            callStatus.statusMsg = "Piwigo is busy. Please try later."
         else
             callStatus = PiwigoAPI.pwCategoriesSetinfo(publishSettings,info, callStatus)
         end
@@ -424,7 +435,7 @@ function PublishTask.renamePublishedCollection(publishSettings, info)
         end)
         LrDialogs.message(
             "Rename Failed",
-            "The Piwigo rename failed (" .. callStatus.statusDesc .. ").\nThe collection name has been reverted.",
+            "The Piwigo rename failed (" .. callStatus.statusMsg .. ").\nThe collection name has been reverted.",
             "warning"
         )
     end

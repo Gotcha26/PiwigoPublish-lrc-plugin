@@ -42,13 +42,10 @@ function PublishDialogSections.startDialog(propertyTable)
 	propertyTable:addObserver('userName', PiwigoAPI.ConnectionChange)
 	propertyTable:addObserver('userPW', PiwigoAPI.ConnectionChange)
 	
-
-	if propertyTable.host and propertyTable.userName and propertyTable.userPW and not propertyTable.Connected then
-		-- try to login 
-		LrTasks.startAsyncTask(function()
-			local rv = PiwigoAPI.login(propertyTable)
-		end)
-	end
+	-- try to login 
+	LrTasks.startAsyncTask(function()
+		local rv = PiwigoAPI.login(propertyTable)
+	end)
 
 end
 
