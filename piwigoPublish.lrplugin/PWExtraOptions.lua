@@ -115,4 +115,4 @@ end
 
 -- *************************************************
 -- Run main()
-LrTasks.startAsyncTask(main)
+--LrTasks.startAsyncTask(main)

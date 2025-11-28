@@ -2,7 +2,7 @@
 
 A Lightroom Classic plugin which uploads images to a Piwigo host via the Piwigo REST API.
 
-Current Version: 20251127.3
+Current Version: 20251128.4
 
 ## The following fuctionality is available:
 
@@ -35,6 +35,25 @@ Current Version: 20251127.3
 
 ## The following functionality is not currently planned:
 * Download images from Piwigo to local drive
+
+## Notes on the relationship between Piwigo Albums and LrC Publish Services
+The plugin provides a function to import an existing Piwigo album structure into LrC. It works with the following constraints:
+- If a Piwigo album contains sub-albums, an equivalent Publish Collection Set is created in the LrC Publish Service.
+- If a Piwigo album contains only photographs (i.e. no sub-albums) then a Publish Collection is created in the LrC Publish Service.
+- Piwigo allows an album to contain both photographs and sub albums. LrC does not allow this - a Publish Collection Set can contain only further Publish Collection Sets, or Publish Collections, not both. Publish Collections can contain only photographs and not further Publish Collection Sets. A workround for this constraint is under development.
+- Piwigo allows albums with the same name to exist under the same parent. LrC does not allow this - albums with the same name can only exist if they are sub albums of different parents within the publish service.
+- The plugin allows the alteration of the Piwigo album structure:
+-- New albums containing photographs can be created - right-click in Publish Service -> Create Piwigo Album... or Create Piwigo Album (Smart collection)...
+-- New albums containing sub-albums can created - right-click in Publish Service -> Create Piwigo Album (Set for sub-albums)... 
+-- Albums may be re-parented by click-dragging them to a new parent
+-- Albums may be re-named - right-click -> Rename...
+-- Albums may be deleted - right-click -> Delete...
+-- All these changes are reflected in the corresponding Piwigo Albums - the Piwigo Album ID (Cat ID) is stored against the corresponding LrC Publish Collection / Set to maintain this relationship
+- Piwigo has no knowledge of the LrC structure (or constraints), so if changes are made to the Piwigo album structure directly in Piwigo these changes are not reflected in Piwigo.
+- The Import Albums routine can be re-run at any time. It will attempt to add albums added to Piwigo since the last run, noting the constraints above. 
+-- If a sub-album has been added to an album that had no sub-albums at the time of first run then an error will be shown and the album won't be created.
+-- If an album with a duplicate name has been created under the same parent it will be ignored.
+
 
 ## Installation and Configuration
 * Install the plugin via the Lightroom Plugin Manager: 
@@ -96,3 +115,4 @@ However, in the meantime this plugin does what I need and hasn't corrupted eithe
 4. Once a connection is established, the Import Albums button will activate. Click this button to import the album struction from Piwigo. An important note is that this plugin does not yet support Piwigo albums having both photos in them, and sub albums (see planned functionality above). You will see Collection Sets and Collections in the Publish Service corresponding to your albums in Piwigo.
 5. You can then populate these collections and publish to the Piwigo host. 
 6. If you already have a different Piwigo Publish service you can copy photos from those publish service collections to this one. Clicking the Publish button will send these photos to the correspoding Piwigo album, but be aware that it will create duplicate photos if a copy is already in the Piwigo album outside of this plugin, so you may wish to clear the album prior to running the export from LrC.
+

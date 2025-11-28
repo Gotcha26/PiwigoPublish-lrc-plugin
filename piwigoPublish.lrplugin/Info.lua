@@ -32,7 +32,7 @@ return {
 		file = "PublishServiceProvider.lua",
 	},
 
-    --[[
+    
     LrLibraryMenuItems = {
         -- Menu items for Library -> Plug In Extras -> Piwigo Publisher
         {
@@ -40,8 +40,8 @@ return {
             file = "PWExtraOptions.lua",
         },
     },
-    ]]
+    
 	LrPluginInfoProvider = 'PluginInfo.lua',
 
-    VERSION = { major=20251127, minor=3, revision=0 },
+    VERSION = { major=20251128, minor=4, revision=0 },
 }

@@ -316,34 +316,31 @@ local function normaliseId(id)
 end
 
 -- *************************************************
-function utils.recursiveSearch(collNode, findName)
+function utils.recursivePubCollectionSearchByRemoteID(collNode, findID)
 -- Recursively search for a published collection or published collection set
 -- matching a given remoteId (string or number)
-
-    --log:info("recursiveSearch - collNode: " .. collNode:getName() .. " for name: " .. findName)
-    --log:info("recursiveSearch - collNode type is " .. tostring(collNode:type()))
+    log:info("recursivePubCollectionSearchByRemoteID " .. collNode:getName(), findID)
 
     -- Check this collNode if it has a remote ID (only if collNode is a collection or set)
-    if collNode:type() == 'LrPublishService' or collNode:type() == 'LrPublishedCollectionSet' then
-        --log:info("recursiveSearch 1 - " .. collNode:type(), collNode:getName())
-        local thisName = collNode:getName()
-        if thisName == findName then
-            -- this collection or set matches
-            --log:info("recursiveSearch - ** MATCH ** collNode is matching node: " .. collNode:getName())
+    if collNode:type() == 'LrPublishedCollection' or collNode:type() == 'LrPublishedCollectionSet' then
+        local thisID = collNode:getRemoteId()
+        if thisID == findID then
+            log:info("recursivePubCollectionSearchByRemoteID  - found collNade " .. findID)
             return collNode
         end
     end
     -- Search immediate child collections
-    if collNode.getChildCollections then
-        local children = collNode:getChildCollections()
+    local children = collNode:getChildCollections()
+    if children then
         if children then
+            log:info("recursivePubCollectionSearchByRemoteID - checking " .. #children .. " child collections")
             for _, coll in ipairs(children) do
                 local type = coll:type()
-                local thisName = coll:getName()
-             --  log:info("recursiveSearch 2 - " .. type,thisName)
-                if thisName == findName then
+                local thisID = coll:getRemoteId()
+                log:info("recursivePubCollectionSearchByRemoteID  - checking childnode " .. coll:getName(), thisID)
+                if thisID == findID then
                     -- this collection matches
-                    --log:info("recursiveSearch - ** MATCH ** Found matching collection: " .. coll:getName())
+                    log:info("recursivePubCollectionSearchByRemoteID  - found childnode " .. coll:getName(), findID)
                     return coll
                 end
             end
@@ -355,10 +352,9 @@ function utils.recursiveSearch(collNode, findName)
         local collSets = collNode:getChildCollectionSets()
         if  collSets then
             for _, set in ipairs(collSets) do
-                local foundSet = utils.recursiveSearch(set, findName)
+                local foundSet = utils.recursivePubCollectionSearchByRemoteID(set, findID)
                 if foundSet then 
                     -- this set matches
-                    --log:info("recursiveSearch - ** MATCH ** Found matching collection set: " .. foundSet:getName())
                     return foundSet
                 end
             end
@@ -515,7 +511,7 @@ function utils.extract_cookies(raw)
 
 end
 
-
+-- *************************************************
 function utils.getLogfilePath()
     local filename = 'PiwigoPublishPlugin.log'
     local macPath14 = LrPathUtils.getStandardFilePath('home') .. "/Library/Logs/Adobe/Lightroom/LrClassicLogs/"

@@ -214,6 +214,21 @@ local function buildCatHierarchy(allCats)
 end
 
 -- *************************************************
+local function findCat(allCats, findID)
+
+    -- return cat from allCats based on cat id
+    local foundCat = {}
+    for jj, thisCat in pairs(allCats) do
+        if thisCat.id == findID then
+            foundCat = thisCat
+            break
+        end
+    end
+
+    return foundCat
+end
+
+-- *************************************************
 local function buildCategoryPath(cat, allCats)
 -- Given a leaf category `cat` and the full list `allCats`,
 -- return a table representing the ordered path of category objects
@@ -255,6 +270,9 @@ local function createCollection(propertyTable, node, parentNode, isLeafNode, sta
 
     -- getPublishService to get reference to this publish service - returned in propertyTable._service
     -- needs to be refreshed each time  to relfect lastest state of publishedCollections created further below
+    log:info("createCollection")
+    log:info("Node " .. node.id, node.name)
+ 
     rv = PiwigoAPI.getPublishService(propertyTable)
     if not rv then
         LrErrors.throwUserError("Error in createCollection: Cannot find Piwigo publish service for host/user.")
@@ -270,15 +288,17 @@ local function createCollection(propertyTable, node, parentNode, isLeafNode, sta
         -- no parent node so we start at root with the publishService
         parentColl = publishService
     else
-        -- find parent collection
-        parentColl = utils.findPublishNodeByName(publishService, parentNode.name)
+        -- find parent publishcollection in this publish service
+        log:info("Looking for parentNode " .. parentNode.id, parentNode.name)
+        parentColl = utils.recursivePubCollectionSearchByRemoteID(publishService, parentNode.id)
     end
-    existingColl = utils.findPublishNodeByName(publishService, node.name)
-
-    if utils.nilOrEmpty(parentColl:getName()) then
+    if not(parentColl) then
         LrErrors.throwUserError("Error in createCollection: No parent collection for " .. node.name)
         stat.errors = stat.errors + 1
     else
+        -- look for this collection - create if not found
+        log:info("Looking for node " .. node.id .. ", " .. node.name)
+        existingColl = utils.recursivePubCollectionSearchByRemoteID(publishService, node.id)
         if not(existingColl) then
             -- not an existing collection/set for this node and we have got the parent collection/set
             if parentColl:type() ~= "LrPublishedCollectionSet" and parentColl:type() ~= "LrPublishService" then
@@ -287,14 +307,15 @@ local function createCollection(propertyTable, node, parentNode, isLeafNode, sta
                 stat.errors = stat.errors + 1
             else
                 if isLeafNode then
-                    -- create collection
-
+                    -- create Publishedcollection
+                    log:info("Create PublishedCollection " .. node.name)
                     catalog:withWriteAccessDo("Create PublishedCollection ", function()
                         newColl = publishService:createPublishedCollection( node.name, parentColl, true )
                     end)
                     stat.collections = stat.collections + 1
                 else
-                    -- Create a new collection set for intermediate levels
+                    -- Create PublishedCollectionSet
+                    log:info("Create PublishedCollectionSet " .. node.name)
                     catalog:withWriteAccessDo("Create PublishedCollectionSet ", function() 
                         newColl = publishService:createPublishedCollectionSet( node.name, parentColl, true )
                     end)
@@ -316,34 +337,35 @@ local function createCollection(propertyTable, node, parentNode, isLeafNode, sta
 end
 
 -- *************************************************
-local function traverseChildren(node, parentNode, propertyTable, statusData, depth)
-    -- traverseChildren
-    -- Traverses a hierarchy recursively, creates collections or collections sets as needed
-    -- 'node' is a table representing a category (or the root list).
-    -- 'parenNode' is the node of which this node is a child
-    -- 'statusData' tracks new and existing collections and sets
-    -- 'depth' is used internally to track nesting level.
+local function createCollectionsFromCatHierarchy(catNode, parentNode, propertyTable, statusData, depth)
+   -- Traverses the category hierarchy recursively, creating collections or collections sets as needed
+    -- catNode is an category table item returned by pwg.categories.getList
+    -- parenNode is the category table item of which this node is a child (blank for top level category)
+    -- statusData tracks new and existing collections and sets
+    -- depth is used internally to track nesting level.
 
-    local stat = statusData
+    log:info("createCollectionsFromCatHierarchy - processing " .. catNode.id, catNode.name)
     depth = depth or 0
-
-    if type(node) == 'table' and node.id then
+    if depth > statusData.maxDepth then
+        statusData.maxDepth = depth
+    end
+    -- process catNode
+    if type(catNode) == 'table' and catNode.id then
+        -- catNode is valid and processible
         -- create collection or collectionSet
         local isLeafNode = false
-        if node.nb_categories == 0 then
+        if catNode.nb_categories == 0 then
+            -- this category doesn't contain subcategories so it is a leaf node
             isLeafNode = true
-        else
         end
-        local rv = createCollection(propertyTable, node, parentNode, isLeafNode, stat)
+        local rv = createCollection(propertyTable, catNode, parentNode, isLeafNode, statusData)
     end
-
-    -- if this node has children, recurse into each child
-    if node.children and type(node.children) == 'table' then
-        for _, child in ipairs(node.children) do
-            traverseChildren(child, node, propertyTable, stat, depth + 1)
+    -- now recursively process children of catNode
+    if catNode.children and type(catNode.children) == 'table' then
+        for _, child in ipairs(catNode.children) do
+            createCollectionsFromCatHierarchy(child, catNode, propertyTable, statusData, depth + 1)
         end
     end
-
 end
 
 -- *************************************************
@@ -521,17 +543,14 @@ function PiwigoAPI.pwConnect(propertyTable)
     return rv
 end
 
-
-
 -- *************************************************
 function PiwigoAPI.importAlbums(propertyTable)
-
     -- Import albums from piwigo and build local album structure based on piwigo categories
     -- will use remoteId in collections and collection sets to track piwigo category ids
     -- if collections or collections sets already exist they are maintained
-    -- 
+
     local rv
-    log:info("PiwigoAPI:importAlbums - starting import of albums from Piwigo")
+    log:info("PiwigoAPI:importAlbums")
     -- getPublishService to get reference to this publish service - returned in propertyTable._service
     rv = PiwigoAPI.getPublishService(propertyTable, false)
     if not rv then
@@ -551,7 +570,6 @@ function PiwigoAPI.importAlbums(propertyTable)
             return
         end
     end
-
     -- get categories from piwigo
     local allCats
     rv, allCats  = PiwigoAPI.pwCategoriesGet(propertyTable, "")
@@ -564,10 +582,8 @@ function PiwigoAPI.importAlbums(propertyTable)
         return
     end
 
-    log:info("PiwigoAPI:importAlbums - allCats\n" .. utils.serialiseVar(allCats))
     -- hierarchical table of categories
     local catHierarchy = buildCatHierarchy(allCats)
-    log:info("PiwigoAPI:importAlbums - built category hierarchy with " .. #catHierarchy .. " top level albums")     
 
     -- in Piwigo an album can have photos as well as sub-albums. In LrC, a collectionset does not have photos
     -- ToDo - deal with this via creating a collection within each collection set for photos at this level in Piwigo - so called super-album
@@ -575,24 +591,29 @@ function PiwigoAPI.importAlbums(propertyTable)
         existing = 0,
         collectionSets = 0,
         collections = 0,
-        errors = 0
+        errors = 0,
+        maxDepth = 0
     }
     local progressScope = LrProgressScope {
         title = "Import album structure...",
         caption = "Starting...",
         functionContext = context,
     }
+    
     for cc, thisNode in pairs(catHierarchy) do
+        -- each thisNode is a top level Piwigo album
         if progressScope:isCanceled() then 
             break
         end
         progressScope:setPortionComplete(cc, #catHierarchy)
         progressScope:setCaption("Processing " .. cc .. " of " .. #catHierarchy .. " top level albums")
-        traverseChildren(thisNode, "", propertyTable, statusData)
+        local parentNode = "" -- set to empty string to start at publishservice collection root
+        -- now create publishcollectionsets and publishcollections for this album and it's sub albums
+        createCollectionsFromCatHierarchy(thisNode, parentNode, propertyTable, statusData)
     end
     progressScope:done()
-    LrDialogs.message("Import Piwigo Albums", string.format("%s collections, %s collection sets, %s existing, %s errors",statusData.collections,statusData.collectionSets,statusData.existing,statusData.errors ))
-    return
+    LrDialogs.message("Import Piwigo Albums", string.format("%s new collections, %s new collection sets, %s existing, %s errors",statusData.collections,statusData.collectionSets,statusData.existing,statusData.errors ))
+   
 end
 
 -- *************************************************

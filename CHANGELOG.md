@@ -1,5 +1,9 @@
 # Changelog
 
+## [20251128.4] - 2025-11-28
+### Fixed
+- non-unique album names within Piwigo Album hierarchy were not properly created during import albums process. See updated readme for more details on this.
+
 ## [20251127.3] - 2025-11-27
 ### Added
 - Checked compatibility with Piwigo v16.0.0 and API Keys
