@@ -257,6 +257,22 @@ local function buildCategoryPath(cat, allCats)
 
     return path
 end
+-- *************************************************
+local function createPublishCollection(catalog, publishService, propertyTable, name, remoteId, parentSet)
+    
+    local newColl
+    catalog:withWriteAccessDo("Create PublishedCollection ", function()
+        newColl = publishService:createPublishedCollection( name, parentSet, true )
+    end)
+    -- now add remoteids and urls to collection
+    catalog:withWriteAccessDo("Add Piwigo details to collection", function() 
+        newColl:setRemoteId( remoteId)
+        newColl:setRemoteUrl( propertyTable.host .. "/index.php?/category/" .. remoteId )
+        newColl:setName( name )
+    end)
+    return newColl
+end
+
 
 -- *************************************************
 local function createCollection(propertyTable, node, parentNode, isLeafNode, statusData)  
@@ -621,8 +637,6 @@ function PiwigoAPI.pwCategoriesGet(propertyTable, thisCat)
     -- get list of categories from Piwigo
     -- if thisCat is set then return this category and children, otherwise all categories
     local status, statusDes
-
-
     local Params = {
         { name = "method", value = "pwg.categories.getList"},
         { name = "recursive", value = "true"},
@@ -724,7 +738,6 @@ function PiwigoAPI.pwCategoriesMove(propertyTable, info, thisCat, newCat, callSt
 
 end
 
-
 -- *************************************************
 function PiwigoAPI.pwCategoriesAdd(propertyTable, info, metaData, callStatus)
     -- create new pwigo category
@@ -780,8 +793,6 @@ function PiwigoAPI.pwCategoriesAdd(propertyTable, info, metaData, callStatus)
         callStatus.status = false
     end
     return callStatus
-
-
 end
 
 -- *************************************************
@@ -816,14 +827,12 @@ function PiwigoAPI.pwCategoriesDelete( propertyTable, info, metaData, callStatus
         return callStatus
     end
 
-
     if utils.nilOrEmpty(checkCats) then
         -- if album is missing from Piwigo we can still go ahead and delete collection on LrC
         -- so set callStatus.status to true
         callStatus.status = true
         callStatus.statusMsg = 'Delete Album - Album does not exist on piwigo at ' .. propertyTable.host
         return callStatus
-
     end
     -- delete album on piwigo
     -- parameters for POST
@@ -898,7 +907,6 @@ function PiwigoAPI.pwCategoriesSetinfo(propertyTable, info, callStatus)
         { name = "pwg_token", value = propertyTable.token}
     }
     log:info("PiwigoAPI.pwCategoriesSetinfo - params \n" .. utils.serialiseVar(params))
-    
 
     local httpResponse, httpHeaders = LrHttp.postMultipart(
         propertyTable.pwurl,
@@ -1125,18 +1133,68 @@ function PiwigoAPI.deletePhoto(propertyTable, pwCatID, pwImageID, callStatus)
     return callStatus
 end
 
-
-
 -- *************************************************
 function PiwigoAPI.associateImages(propertyTable)
 end
 
 -- *************************************************
 function PiwigoAPI.specialCollections(propertyTable)
+    -- create special collections to allow photos to be published to Piwigo albums with sub albums
+    -- for each publishedCollectionSet look for child collection with name format
+    -- [Photos in collectionname]
+    -- if missing, create it using the same remoteId as the publishedCollectionSet uses
+
+    log:info("PiwigoAPI.specialCollections")
+    local rv
+    local catalog = LrApplication.activeCatalog()
+    local allSets = {}
+
+    -- getPublishService to get reference to this publish service - returned in propertyTable._service
+    rv = PiwigoAPI.getPublishService(propertyTable)
+    if not rv then
+        LrErrors.throwUserError("Error in PiwigoAPI.specialCollections: Cannot find Piwigo publish service for host/user.")
+        return false
+    end
+    local publishService = propertyTable._service
+    if not publishService then
+        LrErrors.throwUserError("PiwigoAPI.specialCollections: Piwigo publish service is nil.")
+        return false
+    end
+
+    -- get all publishedcollectionsets in this publish service
+    utils.recursePubCollectionSets(publishService, allSets)
+    if #allSets == 0 then
+        LrDialogs.message("Create Special Collections", "No collection sets found so no special collections created" )
+        return false
+    end
+    local progressScope = LrProgressScope {
+        title = "Create Special Collections...",
+        caption = "Starting...",
+        functionContext = context,
+    }
+    
+    for s, thisSet in pairs(allSets) do
+        progressScope:setPortionComplete(s, #allSets)
+        progressScope:setCaption("Processing " .. s .. " of " .. #allSets .. " collction sets")
+        local remoteId = thisSet:getRemoteId()
+        local name = thisSet:getName()
+        local scName = "[Photos in " .. name .. " ]"
+        local scColl = createPublishCollection(catalog, publishService, propertyTable, scName, remoteId, thisSet)
+        if scColl == nil then
+            LrDialogs.message("Failed to create special collection for " .. name,"","warning")
+        end
+    end
+
+    progressScope:done()
+    LrDialogs.message("Create Special Collections", string.format("%s collection sets processed",#allSets ))
+    return true
 end
 
 -- *************************************************
 function PiwigoAPI.setAlbumCover(propertyTable)
+
+    -- Set album cover on Piwigo Album
+    
     log:info("PiwigoAPI.setAlbumCover")
     log:info("propertyTable\n" .. utils.serialiseVar(propertyTable))
     local catalog = LrApplication.activeCatalog()

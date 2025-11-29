@@ -316,6 +316,27 @@ local function normaliseId(id)
 end
 
 -- *************************************************
+function utils.recursePubCollectionSets(collNode, allSets)
+    -- Recursively search for all published collection sets
+
+    if collNode:type() == 'LrPublishedCollectionSet' then
+        table.insert(allSets, collNode)
+    end
+
+    -- Search child sets recursively
+    if collNode.getChildCollectionSets then
+        local collSets = collNode:getChildCollectionSets()
+        if  collSets then
+            for _, set in ipairs(collSets) do
+                local foundSet = utils.recursePubCollectionSets(set, allSets)
+            end
+        end
+    end
+    return allSets
+
+end
+
+-- *************************************************
 function utils.recursivePubCollectionSearchByRemoteID(collNode, findID)
 -- Recursively search for a published collection or published collection set
 -- matching a given remoteId (string or number)

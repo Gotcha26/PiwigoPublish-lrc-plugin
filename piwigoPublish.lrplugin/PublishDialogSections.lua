@@ -232,28 +232,32 @@ local function prefsDialog (f, propertyTable)
 				tooltip = "Click to fetch the current album structure from the Piwigo Host above. Only albums the user has permission to see will be included",
 			},
 		},
-		--[[
+
 		f:spacer { height = 2 },
 		f:row {
 			f:push_button {
-				title = 'Create special collections',
+				title = 'Create Special Collections',
 				width = share 'buttonwidth',
 				enabled = bind('Connected', propertyTable),
-				tooltip = "Create special publish collections for collection sets, allowing images to be published to albums with sub-albums on Piwigo",
+				tooltip = "Create special publish collections for publish collection sets, allowing images to be published to Piwigo albums with sub-albums",
 				action = function(button)
-					LrTasks.startAsyncTask(function()
-						PiwigoAPI.specialCollections(propertyTable)
-					end)
+					local result = LrDialogs.confirm("Create Special Collections","Are you sure you want to create Special Collections?\nExisting collections will be unaffected.","Import","Cancel")
+					if result == 'ok' then
+						LrTasks.startAsyncTask(function()
+							PiwigoAPI.specialCollections(propertyTable)
+						end)
+					end
 				end,
 			},
         	f:static_text {
 				title = "Create special publish collections to allow images to be published to albums with sub-albums on Piwigo",
 				alignment = 'left',
             	-- width = share 'labelWidth',
-				width_in_chars = 50,
-				tooltip = "Create special collections to allow images to be published to albums with sub-albums on Piwigo"
+				-- width_in_chars = 50,
+				tooltip = "Create special collections to allow images to be published to Piwigo albums with sub-albums - which is not natively supported on LrC"
 			},
    		},
+		--[[	
 		f:spacer { height = 2 },
 		f:row {
 			f:push_button {

@@ -1,5 +1,9 @@
 # Changelog
 
+## [20251129.6] - 2025-11-29
+### Added
+- Special collections can be created, allowing Piwigo albums with sub-albums to also have photos published in them
+
 ## [20251129.5] - 2025-11-29
 ### Fixed
 - Error on startup when no Piwigo hosts defined
