@@ -432,7 +432,6 @@ function PiwigoAPI.sanityCheckAndFixURL(url)
         utils.handleError('sanityCheckAndFixURL: URL is empty', "Error: Piwigo server URL is empty.")
         return false
     end
-
     --local sanitizedURL = string.match(url, "^https?://[%w%.%-]+[:%d]*")
     local sanitizedURL = url:gsub("/$", "")
     if sanitizedURL then
@@ -455,7 +454,7 @@ end
 -- *************************************************
 function PiwigoAPI.login(propertyTable)
     if utils.nilOrEmpty(propertyTable.host) or utils.nilOrEmpty(propertyTable.userName) or utils.nilOrEmpty(propertyTable.userPW) then 
-        utils.handleError('PiwigoAPI:login - missing host, username or password', "Error: Piwigo server URL, username or password is empty.")
+        log:info('PiwigoAPI:login - missing host, username or password', "Error: Piwigo server URL, username or password is empty.")
         return false
     end
 

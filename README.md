@@ -2,7 +2,7 @@
 
 A Lightroom Classic plugin which uploads images to a Piwigo host via the Piwigo REST API.
 
-Current Version: 20251128.4
+Current Version: 20251128.5
 
 ## The following fuctionality is available:
 
@@ -53,7 +53,7 @@ The plugin provides a function to import an existing Piwigo album structure into
 - The Import Albums routine can be re-run at any time. It will attempt to add albums added to Piwigo since the last run, noting the constraints above. 
   - If a sub-album has been added to an album that had no sub-albums at the time of first run then an error will be shown and the album won't be created.
   - If an album with a duplicate name has been created under the same parent it will be ignored.
-
+  - It does not remove collections that no longer have corresponding Piwigo albums.
 
 ## Installation and Configuration
 * Install the plugin via the Lightroom Plugin Manager: 
@@ -62,6 +62,7 @@ The plugin provides a function to import an existing Piwigo album structure into
     * Publish Services -> + -> Go to Publishing Manager -> Add -> Via Service: Piwigo Publisher -> Name: -> Create
 * Complete the Piwigo Host Settings fields: Piwigo Host, User Name, Password and click 'Check Connection'
     * If details are correct you will see a message 'Connected to Piwigo Gallery at yourhostname as role' at the bottom of the Piwigo Host Settings box. NOTE - the webmaster role is needed to create/move albums on Piwigo
+    * macOS - If you are unable to connect to a Piwigo server running on your local network you should check that Adobe Lightroom Classic has Local Network Access enabled - Settings -> Privacy & Security -> Local Network
 * Click SAVE at the bottom right of this screen. You will return to the Publish Service panel with this service now in the list.
 * Right-Click on the service and then Edit Settings...
     * You can now click 'Import Albums' in the Piwigo Publish Service Configuration Extras panel to import the existing album structure from Piwigo

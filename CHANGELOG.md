@@ -1,5 +1,9 @@
 # Changelog
 
+## [20251129.5] - 2025-11-29
+### Fixed
+- Error on startup when no Piwigo hosts defined
+
 ## [20251128.4] - 2025-11-28
 ### Fixed
 - non-unique album names within Piwigo Album hierarchy were not properly created during import albums process. See updated readme for more details on this.
