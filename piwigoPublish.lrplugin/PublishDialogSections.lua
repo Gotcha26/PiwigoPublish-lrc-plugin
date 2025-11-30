@@ -238,7 +238,8 @@ local function prefsDialog (f, propertyTable)
 			f:push_button {
 				title = 'Create Special Collections',
 				width = share 'buttonwidth',
-				enabled = bind('Connected', propertyTable),
+				--enabled = bind('Connected', propertyTable),
+				enabled = false, -- temporary disabled
 				tooltip = "Create special publish collections for publish collection sets, allowing images to be published to Piwigo albums with sub-albums",
 				action = function(button)
 					local result = LrDialogs.confirm("Create Special Collections","Are you sure you want to create Special Collections?\nExisting collections will be unaffected.","Import","Cancel")
