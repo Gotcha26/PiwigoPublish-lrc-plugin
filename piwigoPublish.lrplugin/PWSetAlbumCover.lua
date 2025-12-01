@@ -1,6 +1,6 @@
 --[[
    
-    Info.lua
+    PWSetAlbumCover.lua
 
     Copyright (C) 2024 Fiona Boston <fiona@fbphotography.uk>.
 
@@ -19,29 +19,10 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ]]
-return {
-    LrSdkVersion = 14.3,
-    LrSdkMinimumVersion = 6.0,
-    LrPluginName = "Piwigo Publisher",
-    LrToolkitIdentifier = "fiona.boston.PwigoPublish",
 
-    LrInitPlugin = "Init.lua",
+--*******************************************
+local function SetAlbumCover()
+-- 
+end
 
-	LrExportServiceProvider = {
-		title = "Piwigo Publisher",
-		file = "PublishServiceProvider.lua",
-	},
-
-    
-    LrLibraryMenuItems = {
-        -- Menu items for Library -> Plug In Extras -> Piwigo Publisher
-        {
-            title = "Piwigo Publisher Extra Options",
-            file = "PWExtraOptions.lua",
-        },
-    },
-    
-	LrPluginInfoProvider = 'PluginInfo.lua',
-
-    VERSION = { major=20251201, minor=8, revision=0 },
-}
+LrTasks.startAsyncTask(SetAlbumCover)

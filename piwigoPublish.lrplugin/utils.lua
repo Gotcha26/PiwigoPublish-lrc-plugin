@@ -316,6 +316,40 @@ local function normaliseId(id)
 end
 
 -- *************************************************
+function utils.findPhotoInCollectionSet(pubCollOrSet, selPhoto)
+    -- recursivly search published collection set hierarchy for a photo and return publishedphoto object
+    log:info("utils.findPhotoInCollectionSet - pubCollOrSet " .. pubCollOrSet:getName() .. ", selPhoto " .. selPhoto.localIdentifier)
+
+    if pubCollOrSet:type() == "LrPublishedCollection" then
+        -- publishedcollection - look for photo
+        local publishedPhotos = pubCollOrSet:getPublishedPhotos()
+        local thisPubPhoto = nil
+        for p, pubPhoto in pairs(publishedPhotos) do
+            local thisPhoto = pubPhoto:getPhoto()
+            if thisPhoto.localIdentifier == selPhoto.localIdentifier then
+                thisPubPhoto = pubPhoto
+                return thisPubPhoto
+            end
+        end
+    end
+
+    if pubCollOrSet:type() == "LrPublishedCollectionSet" then
+        -- publishedcollectionset - Search child sets recursively
+        if pubCollOrSet:getChildCollections() then
+            local collSets = pubCollOrSet:getChildCollections()
+            if  collSets then
+                for _, set in ipairs(collSets) do
+                    local thisPubPhoto = utils.findPhotoInCollectionSet(set, selPhoto)
+                    if thisPubPhoto then
+                        return thisPubPhoto
+                    end
+                end
+            end
+        end
+    end
+
+end
+-- *************************************************
 function utils.recursePubCollectionSets(collNode, allSets)
     -- Recursively search for all published collection sets
 
@@ -324,11 +358,11 @@ function utils.recursePubCollectionSets(collNode, allSets)
     end
 
     -- Search child sets recursively
-    if collNode.getChildCollectionSets then
+    if collNode:getChildCollectionSets() then
         local collSets = collNode:getChildCollectionSets()
         if  collSets then
             for _, set in ipairs(collSets) do
-                local foundSet = utils.recursePubCollectionSets(set, allSets)
+                local thisSet = utils.recursePubCollectionSets(set, allSets)
             end
         end
     end
@@ -364,7 +398,7 @@ function utils.recursivePubCollectionSearchByRemoteID(collNode, findID)
     end
 
     -- Search child sets recursively
-    if collNode.getChildCollectionSets then
+    if collNode:getChildCollectionSets() then
         local collSets = collNode:getChildCollectionSets()
         if  collSets then
             for _, set in ipairs(collSets) do

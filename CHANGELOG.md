@@ -1,9 +1,13 @@
 # Changelog
 
+
+## [20251201.8] - 2025-12-01
+### Added
+- Can set Piwigo album cover from plugin
+
 ## [20251130.7] - 2025-11-30
 ### Fixed
 - Bug when deleting Special Collections removed incorrect album in Piwigo
-
 
 ## [20251129.6] - 2025-11-29
 ### Added

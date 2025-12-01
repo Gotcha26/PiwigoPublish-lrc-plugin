@@ -86,19 +86,106 @@ local function httpGet(url, params, headers)
 end
 
 -- *************************************************
-local function httpPost(propertyTable, params)
+local function httpPost(propertyTable, params, headers)
 -- generic function to call LrHttp.Post
     -- LrHttp.post( url, postBody, headers, method, timeout, totalSize )
 
     -- convert table of name, value pairs to a urlencoded string
     local body = utils.buildBodyFromParams(params)
 
+    log:info("PiwigoAPI.pwConnect - connecting to " .. propertyTable.pwurl)
+    log:info("PiwigoAPI.pwConnect - body:\n" .. utils.serialiseVar(body))
+
+    local httpResponse, httpHeaders = LrHttp.post(propertyTable.pwurl, body, headers)
+
+    log:info("PiwigoAPI.pwConnect - response headers:\n" .. utils.serialiseVar(httpHeaders))
+    log:info("PiwigoAPI.pwConnect - response body:\n" .. tostring(httpResponse))
+    
+    if (httpHeaders.status == 201) or (httpHeaders.status == 200) then
+        -- successful connection to Piwigo
+        -- Now check login result
+        local rtnBody = JSON:decode(httpResponse)
+        if rtnBody.stat == "ok" then
+            -- login ok - store session cookies
+            local cookies = {}
+            local SessionCookie = ""
+            local allCookies = {}
+            local fixedHeaders = utils.mergeSplitCookies(httpHeaders)
+            for _, h in ipairs(fixedHeaders or {}) do
+                if h.field:lower() == "set-cookie" then
+                    table.insert(allCookies, h.value)
+                    local nameValue = h.value:match("^([^;]+)")
+                    if nameValue and string.sub(nameValue,1,3) == "pwg" then
+                        table.insert(cookies, nameValue)
+                        if nameValue:match("^pwg_id=") then
+                            SessionCookie = nameValue
+                        end
+                    end
+                end
+            end
+            propertyTable.SessionCookie = SessionCookie
+            propertyTable.cookies  = cookies
+            propertyTable.cookieHeader = table.concat(propertyTable.cookies,"; ")
+            propertyTable.Connected = true
+        else
+            LrDialogs.message("Cannot log in to Piwigo - ", rtnBody.err .. ", " .. rtnBody.message)
+            return false
+        end
+    else
+        if httpHeaders.error then
+            statusDes = httpHeaders.error.name
+            status = httpHeaders.error.errorCode
+        else
+            statusDes = httpHeaders.statusDes
+            status = httpHeaders.status
+        end
+        LrDialogs.message("Cannot log in to Piwigo - ", status .. ", " .. statusDes)
+        return false
+    end
+
+
+
 end
 
 -- *************************************************
-local function httpPostMultiPart()
+local function httpPostMultiPart(propertyTable, params)
 -- generic function to call LrHttp.PostMultiPart 
     -- LrHttp.postMultipart( url, content, headers, timeout, callbackFn, suppressFormData )
+    local postResponse = {}
+
+    local httpResponse, httpHeaders = LrHttp.postMultipart(
+        propertyTable.pwurl,
+        params,
+        {
+            headers = { field = "Cookie", value = propertyTable.cookies }
+        }
+    )
+    log:info("PiwigoAPI.deletePhoto - httpResponse \n" .. utils.serialiseVar(httpResponse))
+    log:info("PiwigoAPI.deletePhoto - httpHeaders \n" .. utils.serialiseVar(httpHeaders))
+ 
+    local body
+    if httpResponse then 
+        body = JSON:decode(httpResponse)
+    end
+    if not body then
+        postResponse.status = false
+        postResponse.statusMsg = "no body returned"
+    end
+    if httpHeaders.status == 201 or httpHeaders.status == 200 then
+        if body.stat == "ok" then
+            postResponse.status = true
+            postResponse.statusMsg = ""
+        else
+            postResponse.status = false
+            postResponse.statusMsg = body.message or ""
+        end
+    else
+        postResponse.status = false
+        postResponse.statusMsg = body.message or ""
+    end
+    return postResponse
+
+
 end
 
 -- *************************************************
@@ -673,7 +760,7 @@ function PiwigoAPI.pwCategoriesMove(propertyTable, info, thisCat, newCat, callSt
 
     -- check connection to piwigo
     if not (propertyTable.Connected) then
-        rv = PiwigoAPI.login(propertyTable, false)
+        rv = PiwigoAPI.login(propertyTable)
         if not rv then
             callStatus.statusMsg =  'PiwigoAPI:pwCategoriesMove - cannot connect to piwigo'
             return callStatus
@@ -746,7 +833,7 @@ function PiwigoAPI.pwCategoriesAdd(propertyTable, info, metaData, callStatus)
     -- use pwg.categories.add
     -- check connection to piwigo
     if not (propertyTable.Connected) then
-        rv = PiwigoAPI.login(propertyTable, false)
+        rv = PiwigoAPI.login(propertyTable)
         if not rv then
             callStatus.statusMsg =  'PiwigoAPI:pwCategoriesAdd - cannot connect to piwigo'
             return callStatus
@@ -802,7 +889,7 @@ function PiwigoAPI.pwCategoriesDelete( propertyTable, info, metaData, callStatus
     local checkCats
     -- check connection to piwigo
     if not (propertyTable.Connected) then
-        rv = PiwigoAPI.login(propertyTable, false)
+        rv = PiwigoAPI.login(propertyTable)
         if not rv then
             callStatus.statusMsg =  'PiwigoAPI:pwCategoriesDelete - cannot connect to piwigo'
             return callStatus
@@ -879,7 +966,7 @@ function PiwigoAPI.pwCategoriesSetinfo(propertyTable, info, callStatus)
 
     -- check connection to piwigo
     if not (propertyTable.Connected) then
-        rv = PiwigoAPI.login(propertyTable, false)
+        rv = PiwigoAPI.login(propertyTable)
         if not rv then
             callStatus.statusMsg =  'PiwigoAPI.pwCategoriesSetinfo - cannot connect to piwigo'
             return callStatus
@@ -1089,7 +1176,7 @@ function PiwigoAPI.deletePhoto(propertyTable, pwCatID, pwImageID, callStatus)
     local rv
     -- check connection to piwigo
     if not (propertyTable.Connected) then
-        rv = PiwigoAPI.login(propertyTable, false)
+        rv = PiwigoAPI.login(propertyTable)
         if not rv then
             callStatus.statusMsg =  'PiwigoAPI:deletePhoto - cannot connect to piwigo'
             return callStatus
@@ -1194,14 +1281,22 @@ function PiwigoAPI.specialCollections(propertyTable)
 end
 
 -- *************************************************
-function PiwigoAPI.setAlbumCover(propertyTable)
+function PiwigoAPI.setAlbumCover(publishService)
 
     -- Set album cover on Piwigo Album
     
     log:info("PiwigoAPI.setAlbumCover")
-    log:info("propertyTable\n" .. utils.serialiseVar(propertyTable))
+    log:info("publishservice" .. publishService:getName())
     local catalog = LrApplication.activeCatalog()
+    local publishSettings = publishService:getPublishSettings()
+    log:info("publishSettings\n" .. utils.serialiseVar(publishSettings))
+
+    if not publishSettings then
+        LrDialogs.message("PiwigoAPI.setAlbumCover - Can't find PublishSettings for this publish collection","","warning")
+        return false
+    end
     local selPhotos =  catalog:getTargetPhotos()
+    local sources = catalog:getActiveSources()
     if utils.nilOrEmpty(selPhotos) then
         LrDialogs.message("Please select a photo to set as album cover","","warning")
         return false
@@ -1212,41 +1307,95 @@ function PiwigoAPI.setAlbumCover(propertyTable)
     end
 
 -- we now have a single photo.
-    local Photo = selPhotos[1]
-    log:info("Selected photo is " .. Photo:getFormattedMetadata("fileName"))
--- need to find which collection is active to find correct Piwigo album and if it has been published
-    local publishService = propertyTable.publishService  -- LrPublishConnection
-    local collection = propertyTable.collection          -- LrPublishedCollection being edited
+    local selPhoto = selPhotos[1]
+    log:info("Selected photo is " .. selPhoto.localIdentifier)
 
-    log:info("Publishservice is\n" .. utils.serialiseVar(publishService))
-    log:info("Collection is\n" ..  utils.serialiseVar(collection))
-
---[[
-    if source:className() == "LrPublishedCollection" then
-            -- It's a published collection (LrPublishedCollection)
-        local publishedCollection = source
-        local service = publishedCollection:getService()
-        
-        if service:getName() == "Your Service Name" then
-            -- This collection belongs to *your* publish service
-            LrDialogs.message("Selected published collection: " .. publishedCollection:getName())
-        else
-            LrDialogs.message("Selected published collection belongs to a different service: " .. service:getName())
+    -- is source a LrPublishedCollection or LrPublishedCollectionSet in selected published service
+    local useService = nil
+    local useSource = nil
+    local catId = nil
+    for s, source in pairs(sources) do
+        if source:type() == "LrPublishedCollection" or source:type() == "LrPublishedCollectionSet" then
+            log:info("Source " .. s .. " is " .. source:getName() )
+            local thisService = source:getService()
+            if thisService:getName() == publishService:getName() then
+                useService = thisService
+                useSource = source
+                catId = source:getRemoteId()
+                break
+            end
         end
-    else
-        LrDialogs.message("Not a published collection; it's a " .. source:className())
     end
-    ]]
+    if not useService then
+        LrDialogs.message("Please select a photo in the selected publish service (" .. publishService:getName() .. ")","","warning")
+        return false
+    end
+    if not useSource then
+        LrDialogs.message("Please select a photo in the selected publish service (" .. publishService:getName() .. ")","","warning")
+        return false
+    end
+    if not catId then
+        LrDialogs.message("PiwigoAPI.setAlbumCover - Can't find Piwigo album ID for remoteId for this publish collection","","warning")
+        return false
+    end
+    log:info("Source is " .. useSource:getName() )
+-- is photo in that source
+-- if so then we can set it as reference photo for album on Piwigo
+-- find publised photo in this collection / set
+    local thisPubPhoto = utils.findPhotoInCollectionSet(useSource, selPhoto)
+    if not thisPubPhoto then
+        LrDialogs.message("PiwigoAPI.setAlbumCover - Can't find this photo in collection set or collections","","warning")
+        return false
+    end
+    local remoteId = thisPubPhoto:getRemoteId()
+    if not remoteId then
+        LrDialogs.message("PiwigoAPI.setAlbumCover - Can't find Piwigo photos ID for this photo","","warning")
+        return false
+    end
+-- get reference to this photo in useSource to get remoteId
 
+    log:info("useService is " .. useService:getName())
+    local result = LrDialogs.confirm("Set Piwigo Album Cover","Set select photo as cover photo for " .. useSource:getName() .."?", "Ok","Cancel")
+    if result ~= 'ok' then
+        return false
+    end
 
--- check if photo exists in this piwigo album
-
+    log:info("Setting  photo " .. remoteId .. " as cover for " .. catId)
 -- set as the representative photo for an album. 
 -- the Piwigo web service doesn't require that the photo belongs to the album but this function does  
+-- use pwg.categories.setRepresentative(categoryId, photoId), POST only, Admin only 
 
--- use pwg.categories.setRepresentative, POST only, Admin only 
+    local rv
 
+    -- check connection to piwigo
+    if not (publishSettings.Connected) then
+        rv = PiwigoAPI.login(publishSettings)
+        if not rv then
+            LrDialogs.message('PiwigoAPI.setAlbumCover - cannot connect to piwigo')
+            return false
+        end
+    end
 
+    -- check role is admin level
+    if publishSettings.userStatus ~= "webmaster" then
+        LrDialogs.message("User needs webmaster role on piwigo gallery at " .. publishSettings.host .. " to set album cover")
+        return false
+    end
+
+    -- now update Piwigo
+    local params = {
+        { name = "method", value = "pwg.categories.setRepresentative" },
+        { name = "category_id", value = catId },
+        { name = "image_id", value = remoteId },
+    }
+    local postResponse = httpPostMultiPart(publishSettings, params)
+
+    if not postResponse.status then
+        LrDialogs.message("Unable to set cover photo - " .. postResponse.statusMsg)
+        return false
+    end
+
+    return true
 end
 
 -- *************************************************

@@ -21,40 +21,72 @@
 ]]
 
 -- *************************************************
-local function main()
+-- Define a value_equal function for the popup_menu
+local function valueEqual(a, b)
 
+    return a == b
+end
+-- *************************************************
+local function main()
+	local share = LrView.share
     LrFunctionContext.callWithContext("PWExtraOptionsContext", function(context)
         -- Create a property table inside the context
         
-        log:info("PWExtraOptions - icons is at " .. _PLUGIN.path .. '/icons/icon.png')
-
+        log:info("PWExtraOptions")
 
         local allServices = PiwigoAPI.getPublishServicesForPlugin(_PLUGIN.id)
         if #allServices == 0 then
             LrDialogs.message("No Piwigo publish services found.")
             return
         end
-
+        local serviceItems = {}
+        local serviceNames = {}
+        for i, s in ipairs(allServices) do
+            table.insert(serviceItems, {
+                title = s:getName(),
+                value = s,
+            })
+            table.insert(serviceNames, {
+                title = s:getName(),
+                value = i
+            })
+        end
+        log:info("serviceItems\n" .. utils.serialiseVar(serviceItems))
+        log:info("serviceNames\n" .. utils.serialiseVar(serviceNames))
         local props = LrBinding.makePropertyTable(context)
         local bind = LrView.bind
         -- Property table for UI bindings
         local props = bind {
-            selectedServiceIndex = 1, -- default to first service
+            selectedService = 1, -- default to first service
         }
-        local serviceNames = {}
-        for _, s in ipairs(allServices) do
-            table.insert(serviceNames, s:getName())
-        end
 
         local f = LrView.osFactory()
         local c = f:column {
             spacing = f:dialog_spacing(),
+
             f:row {
-            -- TOP: icon + version block
-                f:picture {
-                    alignment = 'left',
-                    value = iconPath,
-                    -- value = _PLUGIN:resourceId("icons/piwigoPublish_9_5.png"),
+                    f:picture {
+                        alignment = 'left',
+                        value = iconPath,
+                    },
+                f:column {
+                    spacing = f:control_spacing(),
+                    f:spacer { height = 1 },
+                    f:row {
+                        f:static_text {
+                            title = "    Piwigo Publisher Plugin",
+                            font = "<system/bold>",
+                            alignment = 'left',
+                            width = share 'labelWidth',
+                        },
+                    },
+                    f:row {
+                        f:static_text {
+                            title = "    Plugin Version " .. pluginVersion,
+                            alignment = 'left',
+                            width = share 'labelWidth',
+                        },
+                    },
                 },
             },
 
@@ -68,14 +100,12 @@ local function main()
                 },
 
                 f:popup_menu {
-                    value = bind 'selectedServiceIndex',
+                    value = LrView.bind{ key = 'selectedService', bind_to_object = props },
                     items = serviceNames,
+                    value_equal = valueEqual,
                     width = 300,
                 },
             },
-
-
-
             f:spacer { height = 20 },
             f:row {
                 f:static_text {
@@ -92,7 +122,15 @@ local function main()
                     tooltip = "Sets selected image as Piwigo album cover ",
                     action = function(button)
                         LrTasks.startAsyncTask(function()
-                            PiwigoAPI.setAlbumCover(propertyTable)
+                            local serviceNo = props.selectedService
+                            -- get service object for selected service
+                            local service = serviceItems[serviceNo].value
+                            if not service then
+                                LrDialogs.message("Error", "Could not find publish service", "error")
+                                return
+                            end
+                            PiwigoAPI.setAlbumCover(service )
+
                         end)
                     end,
                 },
@@ -115,4 +153,4 @@ end
 
 -- *************************************************
 -- Run main()
---LrTasks.startAsyncTask(main)
+LrTasks.startAsyncTask(main)

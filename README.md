@@ -2,7 +2,6 @@
 
 A Lightroom Classic plugin which uploads images to a Piwigo host via the Piwigo REST API.
 
-
 ## The following fuctionality is available:
 
 * Connect to Piwigo Server and download existing album structure
@@ -10,6 +9,7 @@ A Lightroom Classic plugin which uploads images to a Piwigo host via the Piwigo 
     * Images are not downloaded from Piwigo as part of this, nor are existing images in LrC automatically added to the newly created Published Collections.
 * Images added to the Publish Service are published to the corresponding album on Piwigo. Metadata and keywords are transferred, respecting rules configured in the Publishing Manager for this service.
 * Special collections can be created which allow images to be published to Piwigo albums that also have sub-albums. See details in the notes on the relationship between Piwigo Albums and LrC Publish Services below.
+* Set Piwigo album cover from an image in the Published Collection
 * Changes to images which trigger a re-publish will overwrite the previously published Piwigo image.
 * Images removed from the Publish Service are removed from corresponding album on Piwigo
 * Moving a Published Collection under a different Published Collection Set is reflected in the associated Piwigo albums
@@ -21,7 +21,6 @@ A Lightroom Classic plugin which uploads images to a Piwigo host via the Piwigo 
 
 ## The following functionality is under development:
 
-* Set Piwigo album cover from an image in the Published Collection
 * Consistency Check - check for images missing on Piwigo and update published status accordingly
 * Metadata Check - check metadata on Piwigo matches Lrc (Title, Caption, GPS, Creator)
 
@@ -29,7 +28,8 @@ A Lightroom Classic plugin which uploads images to a Piwigo host via the Piwigo 
 * Import collection/set/image structure from another publish service
     * if remoteIds / URLs are present these will be copied. Useful to copy another publish service where a Piwigo host is the target without having to clear the existing Piwigo albums prior to re-publishing.
 * Keyword Rules - customisation of how LrC keywords are exported to Piwigo
-* Localisation
+* Re-Sync metadata for a photo
+* Localisation for different languages
 
 ## The following functionality is not currently planned:
 * Download images from Piwigo to local drive
