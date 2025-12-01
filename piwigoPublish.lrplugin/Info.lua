@@ -39,9 +39,13 @@ return {
             title = "Piwigo Publisher Extra Options",
             file = "PWExtraOptions.lua",
         },
+        {
+            title = "Set Piwigo Album Cover from Selected Photo",
+            file = "PWSetAlbumCover.lua",
+        },
     },
     
 	LrPluginInfoProvider = 'PluginInfo.lua',
 
-    VERSION = { major=20251201, minor=8, revision=0 },
+    VERSION = { major=20251201, minor=9, revision=0 },
 }

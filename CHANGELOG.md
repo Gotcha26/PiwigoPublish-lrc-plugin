@@ -1,5 +1,8 @@
 # Changelog
 
+## [20251201.9] - 2025-12-01
+### Added
+- Library -> Plug-in Extras menu item to set Piwigo album cover directly
 
 ## [20251201.8] - 2025-12-01
 ### Added

@@ -1,6 +1,6 @@
 # PiwigoPublish-lrc-plugin
 
-A Lightroom Classic plugin which uploads images to a Piwigo host via the Piwigo REST API.
+A Lightroom Classic plugin which publishes images to a Piwigo host via the Piwigo REST API.
 
 ## The following fuctionality is available:
 
@@ -25,10 +25,10 @@ A Lightroom Classic plugin which uploads images to a Piwigo host via the Piwigo 
 * Metadata Check - check metadata on Piwigo matches Lrc (Title, Caption, GPS, Creator)
 
 ## The following functionality is planned:
-* Import collection/set/image structure from another publish service
-    * if remoteIds / URLs are present these will be copied. Useful to copy another publish service where a Piwigo host is the target without having to clear the existing Piwigo albums prior to re-publishing.
 * Keyword Rules - customisation of how LrC keywords are exported to Piwigo
 * Re-Sync metadata for a photo
+* Import collection/set/image structure from another publish service
+    * if remoteIds / URLs are present these will be copied. Useful to copy another publish service where a Piwigo host is the target without having to clear the existing Piwigo albums prior to re-publishing.
 * Localisation for different languages
 
 ## The following functionality is not currently planned:

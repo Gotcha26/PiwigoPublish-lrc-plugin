@@ -147,46 +147,7 @@ local function httpPost(propertyTable, params, headers)
 
 end
 
--- *************************************************
-local function httpPostMultiPart(propertyTable, params)
--- generic function to call LrHttp.PostMultiPart 
-    -- LrHttp.postMultipart( url, content, headers, timeout, callbackFn, suppressFormData )
-    local postResponse = {}
 
-    local httpResponse, httpHeaders = LrHttp.postMultipart(
-        propertyTable.pwurl,
-        params,
-        {
-            headers = { field = "Cookie", value = propertyTable.cookies }
-        }
-    )
-    log:info("PiwigoAPI.deletePhoto - httpResponse \n" .. utils.serialiseVar(httpResponse))
-    log:info("PiwigoAPI.deletePhoto - httpHeaders \n" .. utils.serialiseVar(httpHeaders))
- 
-    local body
-    if httpResponse then 
-        body = JSON:decode(httpResponse)
-    end
-    if not body then
-        postResponse.status = false
-        postResponse.statusMsg = "no body returned"
-    end
-    if httpHeaders.status == 201 or httpHeaders.status == 200 then
-        if body.stat == "ok" then
-            postResponse.status = true
-            postResponse.statusMsg = ""
-        else
-            postResponse.status = false
-            postResponse.statusMsg = body.message or ""
-        end
-    else
-        postResponse.status = false
-        postResponse.statusMsg = body.message or ""
-    end
-    return postResponse
-
-
-end
 
 -- *************************************************
 local function getVersion(propertyTable)
@@ -1349,7 +1310,7 @@ function PiwigoAPI.setAlbumCover(publishService)
     end
     local remoteId = thisPubPhoto:getRemoteId()
     if not remoteId then
-        LrDialogs.message("PiwigoAPI.setAlbumCover - Can't find Piwigo photos ID for this photo","","warning")
+        LrDialogs.message("PiwigoAPI.setAlbumCover - Can't find Piwigo photo ID for this photo","","warning")
         return false
     end
 -- get reference to this photo in useSource to get remoteId
@@ -1388,7 +1349,7 @@ function PiwigoAPI.setAlbumCover(publishService)
         { name = "category_id", value = catId },
         { name = "image_id", value = remoteId },
     }
-    local postResponse = httpPostMultiPart(publishSettings, params)
+    local postResponse = PiwigoAPI.httpPostMultiPart(publishSettings, params)
 
     if not postResponse.status then
         LrDialogs.message("Unable to set cover photo - " .. postResponse.statusMsg)
@@ -1397,6 +1358,49 @@ function PiwigoAPI.setAlbumCover(publishService)
 
     return true
 end
+
+
+-- *************************************************
+function PiwigoAPI.httpPostMultiPart(propertyTable, params)
+-- generic function to call LrHttp.PostMultiPart 
+    -- LrHttp.postMultipart( url, content, headers, timeout, callbackFn, suppressFormData )
+    local postResponse = {}
+
+    local httpResponse, httpHeaders = LrHttp.postMultipart(
+        propertyTable.pwurl,
+        params,
+        {
+            headers = { field = "Cookie", value = propertyTable.cookies }
+        }
+    )
+    log:info("PiwigoAPI.deletePhoto - httpResponse \n" .. utils.serialiseVar(httpResponse))
+    log:info("PiwigoAPI.deletePhoto - httpHeaders \n" .. utils.serialiseVar(httpHeaders))
+ 
+    local body
+    if httpResponse then 
+        body = JSON:decode(httpResponse)
+    end
+    if not body then
+        postResponse.status = false
+        postResponse.statusMsg = "no body returned"
+    end
+    if httpHeaders.status == 201 or httpHeaders.status == 200 then
+        if body.stat == "ok" then
+            postResponse.status = true
+            postResponse.statusMsg = ""
+        else
+            postResponse.status = false
+            postResponse.statusMsg = body.message or ""
+        end
+    else
+        postResponse.status = false
+        postResponse.statusMsg = body.message or ""
+    end
+    return postResponse
+
+
+end
+
 
 -- *************************************************
 function PiwigoAPI.createHeaders(propertyTable)
