@@ -322,7 +322,13 @@ function  utils.tagsToIds(pwTagTable, tagString)
         local tagId = ""
         local foundTag = false
         for _, pwTag in pairs(pwTagTable) do
-            if thisTag:lower() == pwTag.name_raw:lower() then
+            local pwTagName = ""
+            if pwTag.name_raw then
+                pwTagName = pwTag.name_raw
+            else
+                pwTagName = pwTag.name
+            end
+            if thisTag:lower() == pwTagName:lower() then
                 -- compare all lowercase to avoid issues with case mismatches leading to mistaken attempts to create missing tags
                 tagIdList = tagIdList .. pwTag.id .. ","
                 foundTag = true
