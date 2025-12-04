@@ -319,6 +319,7 @@ function  utils.tagsToIds(pwTagTable, tagString)
     local tagTable = utils.stringtoTable(tagString, ",")
     
     for _, thisTag in pairs(tagTable) do
+        log:info("utils.tagsToIds - looking for " .. thisTag)
         local tagId = ""
         local foundTag = false
         for _, pwTag in pairs(pwTagTable) do
@@ -348,6 +349,9 @@ end
 
 -- *************************************************
 function utils.BuildTagString(propertyTable, lrPhoto)
+    -- build text string of keywords on lrPhoto - to be sent to Piwigo
+    -- respect LrC includeOnExport flag set in keyword tag editor
+    -- respect KwFullHierarchy and KwSynonyms set in publish manager settings
     local tagString = ""
     local tagTable = {}
     for ii, thisKeyword in ipairs(lrPhoto:getRawMetadata("keywords")) do

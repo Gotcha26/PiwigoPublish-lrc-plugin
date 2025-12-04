@@ -1,4 +1,8 @@
 # Changelog
+## [20251204.11] - 2025-12-03
+### Fixed #7 Adding keywords to a photo directly via Piwigo API intermittently generates error 1003 Keyword already exists
+- 
+
 ## [20251203.10] - 2025-12-03
 ### Added
 - Metadata and keywords are sent directly to Piwigo without relying on exif/iptc

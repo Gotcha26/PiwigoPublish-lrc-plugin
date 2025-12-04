@@ -138,6 +138,11 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
             -- photo was uploaded with keywords included, but existing keywords aren't replaced by this process,
             -- so force a metadata update using pwg.images.setInfo with single_value_mode set to "replace" to force old metadata/keywords to be replaced
                 metaData.Remoteid = callStatus.remoteid
+                -- refresh cached tag list as new tags may have been created during updateGallery
+                rv, propertyTable.tagTable = PiwigoAPI.getTagList(propertyTable)
+                if not rv then
+                    LrDialogs.message('PiwigoAPI:updateMetadata - cannot get taglist from Piwigo')
+                end
                 callStatus = PiwigoAPI.updateMetadata(propertyTable,lrPhoto,metaData)
                 if not callStatus.status then
                     LrDialogs.message("Unable to set metadata for uploaded photo - " .. callStatus.statusMsg)

@@ -1175,9 +1175,7 @@ function PiwigoAPI.updateMetadata(propertyTable,lrPhoto,metaData)
         callStatus.statusMsg = "User needs webmaster role on piwigo gallery at " .. propertyTable.host .. " to update metadata"
         return callStatus
     end
-
     if metaData.Remoteid ~= "" then
-        -- check if remote photo exists and ignore parameter if not
         log:info("PiwigoAPI.updateMetadata - checking for existing photo with remoteid " .. metaData.Remoteid)  
         local rtnStatus = PiwigoAPI.checkPhoto(propertyTable, metaData.Remoteid)
         if not rtnStatus.status then
@@ -1473,6 +1471,7 @@ end
 -- *************************************************
 function PiwigoAPI.getTagList(propertyTable)
     -- return table of all tags on Piwigo
+    -- return as allTags
 
     local rv
     -- check connection to piwigo
