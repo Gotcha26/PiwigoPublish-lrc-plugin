@@ -81,6 +81,14 @@ The plugin provides a function to import an existing Piwigo album structure into
     * You can now click 'Import Albums' in the Piwigo Publish Service Configuration Extras panel to import the existing album structure from Piwigo
     * NOTE an error will occur if the SAVE process is not completed before the Import Albums option is run
 
+## Imagick Graphics Library
+The plugin was initially developed against a Piwigo instance using the GD image library. Switching to imagick revealed an issue in that imagick was unable to process as particlarly big image I was using during testing (it was a hugh panorama at approx 24000x4000 pixels, and no resizing was active in the Publishing Manager). With imagick active, and Admin->Configuration->Options->Photo Sizes->Resize after upload checked, the upload process crashed - fixing the crash revealed an error "piwigo External ImageMagick Corrupt imagearray ()". If the Resize after upload was unchecked the error didn't appear but the image was corrupt and not viewable in Piwigo even though a successful upload was reported back to the plugin.
+
+Enabling Resize to Fit in the LrC Publish Manger (I set resize to max of 4k x 4k) stopped this error appearing. 
+
+I am investigating whether there is something else causing this but I suspect some imagick memory limits were being exceed by the huge image.
+
+If you see similar errors please check image sizes prior to raising an issue.
 
 ## CREDITS
 
