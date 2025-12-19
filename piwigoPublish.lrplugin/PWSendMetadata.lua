@@ -42,7 +42,6 @@ local function SendMetadata()
         if type(source) == "table" and source.type then
             local srcType = source:type()
             if srcType == "LrPublishedCollection" or srcType == "LrPublishedCollectionSet" then
-                log:info("Source " .. s .. " is " .. source:getName() )
                 local thisService = source:getService()
                 local thisSettings = thisService:getPublishSettings()
                 -- is this publish service using this plugin?

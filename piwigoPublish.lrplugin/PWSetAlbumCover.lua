@@ -41,9 +41,6 @@ local function SetAlbumCover()
 
 -- we now have a single photo.
     local selPhoto = selPhotos[1]
-    log:info("Selected photo is " .. selPhoto.localIdentifier)
-
-
     -- is source a LrPublishedCollection or LrPublishedCollectionSet in selected published service
     local useService = nil
     local useSource = nil
@@ -53,7 +50,6 @@ local function SetAlbumCover()
         if type(source) == "table" and source.type then
             local srcType = source:type()
             if srcType == "LrPublishedCollection" or srcType == "LrPublishedCollectionSet" then
-                log:info("Source " .. s .. " is " .. source:getName() )
                 local thisService = source:getService()
                 local thisSettings = thisService:getPublishSettings()
                 -- is this publish service using this plugin?

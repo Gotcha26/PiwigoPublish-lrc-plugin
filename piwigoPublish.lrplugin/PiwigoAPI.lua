@@ -326,22 +326,9 @@ local function buildCategoryPath(cat, allCats)
 
     return path
 end
--- *************************************************
-local function createPublishCollection(catalog, publishService, propertyTable, name, remoteId, parentSet)
-    -- create new collection or return existing
-    log:info("createPublishCollection - " .. name .. ", " .. remoteId)
-    local newColl
-    catalog:withWriteAccessDo("Create PublishedCollection ", function()
-        newColl = publishService:createPublishedCollection( name, parentSet, true )
-    end)
-    -- add remoteids and urls to collection
-    catalog:withWriteAccessDo("Add Piwigo details to collection", function() 
-        newColl:setRemoteId( remoteId)
-        newColl:setRemoteUrl( propertyTable.host .. "/index.php?/category/" .. remoteId )
-        newColl:setName( name )
-    end)
-    return newColl
-end
+
+
+
 
 
 -- *************************************************
@@ -453,6 +440,97 @@ end
 -- G L O B A L   F U N C T I O N S
 -- *************************************************
 
+-- *************************************************
+function PiwigoAPI.fixSpecialCollectionNames(catalog, publishService, propertyTable)
+    -- fix extra space in specialCollectionNames
+    -- get all collectionsets
+    local collSets = {}
+    collSets = utils.recursePubCollectionSets(publishService, collSets)
+
+    -- Now look for specialCollections for each collset 
+    for cs, collSet in pairs(collSets) do
+        local childColls = collSet:getChildren()
+        if childColls then
+            local parentName = collSet:getName()
+            for cc, childCol in pairs(childColls) do
+                local ccName = childCol:getName()
+                local remoteId = childCol:getRemoteId()
+                if string.sub(ccName,1,11) == "[ Photos in" and string.sub(ccName,-2) == " ]" then
+                    -- special collection - fix name by removing space prior to ]
+                    local newName = PiwigoAPI.buildSpecialCollectionName(parentName)
+                    log:info("PiwigoAPI.fixSpecialCollectionNames - " .. ccName .. " fixed to " .. newName)
+                    catalog:withWriteAccessDo("Set Collection Name", function() 
+                        childCol:setName( newName )
+                    end)
+                end
+            end 
+        end
+    end
+end
+
+-- *************************************************
+function PiwigoAPI.buildSpecialCollectionName(name)
+    -- consistently build special collection name
+    local scName = "[Photos in " .. name.. " ]"
+    return scName
+end
+
+
+
+-- *************************************************
+function PiwigoAPI.setCollectionDets(thisCollorSet, catalog, propertyTable, name, remoteId, parentSet)
+    catalog:withWriteAccessDo("Add Piwigo details to collection", function() 
+        thisCollorSet:setRemoteId( remoteId )
+        thisCollorSet:setRemoteUrl( propertyTable.host .. "/index.php?/category/" .. remoteId )
+        thisCollorSet:setName( name )
+        thisCollorSet:setParent( parentSet )
+    end)
+    return true
+end
+
+-- *************************************************
+function PiwigoAPI.createPublishCollectionSet(catalog, publishService, propertyTable, name, remoteId, parentSet)
+
+
+    --PiwigoAPI.createPublishCollectionSet(catalog, useService, publishSettings, selCollName, catId, selColParent)
+    -- create new publish collection set or return existing
+    log:info("createPublishCollectionSet - " .. name .. ", " .. remoteId)
+    local newColl
+    catalog:withWriteAccessDo("Create PublishedCollectionSet ", function()
+        newColl = publishService:createPublishedCollectionSet( name, parentSet, true )
+    end)
+    -- add remoteids and urls to collection
+    PiwigoAPI.setCollectionDets(newColl, catalog, propertyTable, name, remoteId, parentSet)
+    --[[
+    catalog:withWriteAccessDo("Add Piwigo details to collection", function() 
+        newColl:setRemoteId( remoteId)
+        newColl:setRemoteUrl( propertyTable.host .. "/index.php?/category/" .. remoteId )
+        newColl:setName( name )
+    end)
+    ]]
+    return newColl
+
+end
+
+-- *************************************************
+function PiwigoAPI.createPublishCollection(catalog, publishService, propertyTable, name, remoteId, parentSet)
+    -- create new publish collection or return existing
+    log:info("createPublishCollection - " .. name .. ", " .. remoteId)
+    local newColl
+    catalog:withWriteAccessDo("Create PublishedCollection ", function()
+        newColl = publishService:createPublishedCollection( name, parentSet, true )
+    end)
+    -- add remoteids and urls to collection
+    PiwigoAPI.setCollectionDets(newColl, catalog, propertyTable, name, remoteId, parentSet)
+    --[[
+    catalog:withWriteAccessDo("Add Piwigo details to collection", function() 
+        newColl:setRemoteId( remoteId)
+        newColl:setRemoteUrl( propertyTable.host .. "/index.php?/category/" .. remoteId )
+        newColl:setName( name )
+    end)
+    ]]
+    return newColl
+end
 -- *************************************************
 function PiwigoAPI.ConnectionChange(propertyTable)
 	log:info('PublishDialogSections.ConnectionChange')
@@ -1341,14 +1419,21 @@ function PiwigoAPI.specialCollections(propertyTable)
         caption = "Starting...",
         functionContext = context,
     }
-
+    --[[
+    -- check if scNameFix has been run and run it if not
+    if not(propertyTable.scNameFix) then
+        log:info("PiwigoAPI.specialCollections - running scNameFix")
+        rv = PiwigoAPI.fixSpecialCollectionNames(catalog, publishService, propertyTable)
+        propertyTable.scNameFix = true
+    end
+    ]]
     for s, thisSet in pairs(allSets) do
         progressScope:setPortionComplete(s, #allSets)
         progressScope:setCaption("Processing " .. s .. " of " .. #allSets .. " collction sets")
         local remoteId = thisSet:getRemoteId()
         local name = thisSet:getName()
-        local scName = "[Photos in " .. name .. " ]"
-        local scColl = createPublishCollection(catalog, publishService, propertyTable, scName, remoteId, thisSet)
+        local scName = PiwigoAPI.buildSpecialCollectionName(name)
+        local scColl = PiwigoAPI.createPublishCollection(catalog, publishService, propertyTable, scName, remoteId, thisSet)
         if scColl == nil then
             LrDialogs.message("Failed to create special collection for " .. name,"","warning")
         end

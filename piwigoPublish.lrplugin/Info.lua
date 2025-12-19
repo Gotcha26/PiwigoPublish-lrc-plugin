@@ -49,9 +49,13 @@ return {
             title = "Send Metadata to Piwigo for Selected Photos",
             file = "PWSendMetadata.lua",
         },
+        {
+            title = "Convert selected Published Collection to Published Collection Set",
+            file = "PWCollToSet.lua",
+        },
     },
     
 	LrPluginInfoProvider = 'PluginInfo.lua',
 
-    VERSION = { major=20251218, minor=13, revision=0 },
+    VERSION = { major=20251219, minor=14, revision=0 },
 }

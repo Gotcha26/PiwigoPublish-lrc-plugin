@@ -52,6 +52,7 @@ return {
 		{ key = "userPW", default = '' },
 		{ key = "KwFullHierarchy", default = true},
 		{ key = "KwSynonyms", default = true},
+        --{ key = "scNameFix",default = false}
 		
 	},
 
