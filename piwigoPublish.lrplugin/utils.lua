@@ -406,9 +406,10 @@ end
 -- *************************************************
 function utils.findPhotoInCollectionSet(pubCollOrSet, selPhoto)
     -- recursivly search published collection set hierarchy for a photo and return publishedphoto object
-    log:info("utils.findPhotoInCollectionSet - pubCollOrSet " .. pubCollOrSet:getName() .. ", selPhoto " .. selPhoto.localIdentifier)
+    --log:info("utils.findPhotoInCollectionSet - pubCollOrSet " .. pubCollOrSet:getName() .. ", selPhoto " .. selPhoto.localIdentifier)
 
     if pubCollOrSet:type() == "LrPublishedCollection" then
+        log:info("utils.findPhotoInCollectionSet - searching in LrPublishedCollection " .. pubCollOrSet:getName())
         -- publishedcollection - look for photo
         local publishedPhotos = pubCollOrSet:getPublishedPhotos()
         local thisPubPhoto = nil
@@ -422,12 +423,26 @@ function utils.findPhotoInCollectionSet(pubCollOrSet, selPhoto)
     end
 
     if pubCollOrSet:type() == "LrPublishedCollectionSet" then
-        -- publishedcollectionset - Search child sets recursively
+        -- publishedcollectionset - Search child collections recursively
         if pubCollOrSet:getChildCollections() then
-            local collSets = pubCollOrSet:getChildCollections()
-            if  collSets then
-                for _, set in ipairs(collSets) do
-                    local thisPubPhoto = utils.findPhotoInCollectionSet(set, selPhoto)
+            --log:info("utils.findPhotoInCollectionSet - searching in child collections of " .. pubCollOrSet:getName())
+            local childColls = pubCollOrSet:getChildCollections()
+            if  childColls then
+                for _, childCol in ipairs(childColls) do
+                    local thisPubPhoto = utils.findPhotoInCollectionSet(childCol, selPhoto)
+                    if thisPubPhoto then
+                        return thisPubPhoto
+                    end
+                end
+            end
+        end
+        -- search child collection sets
+        if pubCollOrSet:getChildCollectionSets() then
+            --log:info("utils.findPhotoInCollectionSet - searching in child collection sets of " .. pubCollOrSet:getName())
+            local childSets = pubCollOrSet:getChildCollectionSets()
+            if childSets then
+                for _,childSet in pairs(childSets) do
+                    local thisPubPhoto = utils.findPhotoInCollectionSet(childSet, selPhoto)
                     if thisPubPhoto then
                         return thisPubPhoto
                     end

@@ -1,4 +1,8 @@
 # Changelog
+## [20251223.15] - 2025-12-23
+### Fixed
+- Set Piwigo Album Cover from Selected Photo would only allow setting the cover for the selected photo's album or immediate parent. This fix allow any album cover in the selected photo's album hierarchy to be set to the selected photo
+
 ## [20251219.14] - 2025-12-19
 ### Added
 - A new menu item has been added Library->Plug-in Extras->Piwigo Publisher->Convert selected Published Collection to Published Collection Set.  This option enables a Publish Collection to be converted to a Publish Collection Set, enabling sub albums to be created under this album.
