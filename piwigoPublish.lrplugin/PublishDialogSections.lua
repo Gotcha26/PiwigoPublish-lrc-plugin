@@ -198,7 +198,7 @@ local function prefsDialog (f, propertyTable)
 	local share = LrView.share
 
 	return {
-		title = "Piwigo Publish Service Configuration Extras",
+		title = "Piwigo Publish Service Configuration and Options",
 		bind_to_object = propertyTable,
 		f:row {
 			f:static_text {

@@ -23,8 +23,10 @@ return {
     LrSdkVersion = 14.3,
     LrSdkMinimumVersion = 6.0,
     LrPluginName = "Piwigo Publisher",
+    -- typo in PwigoPublish is noted but can't be changed without forcing all services using this plugin to be re-initialised.
     LrToolkitIdentifier = "fiona.boston.PwigoPublish",
-
+    LrMetadataProvider  = 'CustomMetadata.lua',
+    LrMetadataTagsetFactory = 'Tagset.lua',
     LrInitPlugin = "Init.lua",
 
 	LrExportServiceProvider = {
@@ -57,5 +59,5 @@ return {
     
 	LrPluginInfoProvider = 'PluginInfo.lua',
 
-    VERSION = { major=20251223, minor=15, revision=0 },
+    VERSION = { major=20251224, minor=16, revision=0 },
 }

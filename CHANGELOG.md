@@ -1,4 +1,12 @@
 # Changelog
+
+## [20251224.16] - 2025-12-24
+### Added
+- Custom metadata displaying details of most recent upload for an image is maintained. Note that if the same image is published via multiple instances of this plugin (for example to different Piwigo hosts) then only details of the most recent upload will be displayed. Details of the previous upload are overwritten. This metadata is for display / information purposes only so the overwrite has no functional impact. Images published with earlier versions of the plugin will not display the metadata - re-publishing them will refresh it. When an image is removed from a published collection this metadata is cleared, regardless of whether it has also been published via a different instance of this plugin.
+
+### Fixed
+Fixed #18 Setting up another publish service on a different catalogue generates an error message 'PiwigoAPI.lua 694 attempt to concatenate local statusDes (a nil value) - note this fixes the crash rather than the underlying issue that triggered the crash which is still being investigated
+
 ## [20251223.15] - 2025-12-23
 ### Fixed
 - Set Piwigo Album Cover from Selected Photo would only allow setting the cover for the selected photo's album or immediate parent. This fix allow any album cover in the selected photo's album hierarchy to be set to the selected photo

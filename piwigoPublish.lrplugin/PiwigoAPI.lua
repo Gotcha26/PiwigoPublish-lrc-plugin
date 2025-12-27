@@ -531,6 +531,7 @@ function PiwigoAPI.createPublishCollection(catalog, publishService, propertyTabl
     ]]
     return newColl
 end
+
 -- *************************************************
 function PiwigoAPI.ConnectionChange(propertyTable)
 	log:info('PublishDialogSections.ConnectionChange')
@@ -541,6 +542,30 @@ function PiwigoAPI.ConnectionChange(propertyTable)
 	propertyTable.cookies = nil
 	propertyTable.userStatus = ""
 	propertyTable.token = ""
+end
+
+-- *************************************************
+function PiwigoAPI.storeMetaData(catalog, propertyTable, lrPhoto, pluginData)
+
+    log:info("PiwigoAPI.storeMetaData - pluginData\n" .. utils.serialiseVar(pluginData))
+    
+    -- set metadata for photo
+    catalog:withWriteAccessDo("Updating " .. lrPhoto:getFormattedMetadata("fileName"),
+    function()
+
+        lrPhoto:setPropertyForPlugin(_PLUGIN,"pwHostURL",pluginData.pwHostURL)
+        lrPhoto:setPropertyForPlugin(_PLUGIN,"pwAlbumName",pluginData.albumName)
+        lrPhoto:setPropertyForPlugin(_PLUGIN,"pwAlbumURL",pluginData.albumUrl)
+        lrPhoto:setPropertyForPlugin(_PLUGIN,"pwImageURL",pluginData.ImageURL)
+        lrPhoto:setPropertyForPlugin(_PLUGIN,"pwUploadDate",pluginData.pwUploadDate)
+        lrPhoto:setPropertyForPlugin(_PLUGIN,"pwUploadTime",pluginData.pwUploadTime)
+
+    end )
+
+
+    -- store mapping between lrPhoto and pwigo id
+    propertyTable.publishedPhotoMap[pluginData.pwImageID] = lrPhoto.localIdentifier
+
 end
 
 -- *************************************************
@@ -688,7 +713,7 @@ function PiwigoAPI.pwConnect(propertyTable)
             statusDes = httpHeaders.error.name
             status = httpHeaders.error.errorCode
         else
-            statusDes = httpHeaders.statusDes
+            statusDes = httpHeaders.statusDes or httpHeaders.statusDesc
             status = httpHeaders.status
         end
         LrDialogs.message("Cannot log in to Piwigo - ", status .. ", " .. statusDes)

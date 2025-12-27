@@ -96,9 +96,12 @@ local function SendMetadata()
         callStatus = {}
         local metaData = {}
 
+            -- allow custom metadata selection here
         metaData.Creator = lrPhoto:getFormattedMetadata( "creator" ) or ""
         metaData.Title = lrPhoto:getFormattedMetadata("title") or ""
         metaData.Caption = lrPhoto:getFormattedMetadata("caption") or ""
+
+
         metaData.fileName = lrPhoto:getFormattedMetadata("fileName") or ""
         local lrTime = lrPhoto:getRawMetadata("dateTimeOriginal") 
         metaData.dateCreated = LrDate.timeToUserFormat(lrTime, "%Y-%m-%d %H:%M:%S")

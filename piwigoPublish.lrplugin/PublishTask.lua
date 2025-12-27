@@ -32,6 +32,7 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
     end
     PiwigoBusy = true
     local callStatus ={}
+    local catalog = LrApplication.activeCatalog()
     local exportSession = exportContext.exportSession
     local propertyTable = exportContext.propertyTable
     local rv
@@ -54,8 +55,9 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
     log:info('PublishTask.processRenderedPhotos - publishSettings:\n' .. utils.serialiseVar(propertyTable))
 
     local publishedCollection = exportContext.publishedCollection
-    local albumId = publishedCollection:getRemoteId()
     local albumName = publishedCollection:getName()
+    local albumId = publishedCollection:getRemoteId()
+    local albumUrl = publishedCollection:getRemoteUrl()
     local parentCollSet = publishedCollection:getParent()
     local parentID = ""
     local requestRepub = false
@@ -118,9 +120,11 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
             local filePath = pathOrMessage
             local metaData = {}
             metaData.Albumid = albumId
+            -- allow custom metadata selection here
             metaData.Creator = lrPhoto:getFormattedMetadata( "creator" ) or ""
             metaData.Title = lrPhoto:getFormattedMetadata("title") or ""
             metaData.Caption = lrPhoto:getFormattedMetadata("caption") or ""
+
             metaData.fileName = lrPhoto:getFormattedMetadata("fileName") or ""
             local lrTime = lrPhoto:getRawMetadata("dateTimeOriginal") 
             metaData.dateCreated = LrDate.timeToUserFormat(lrTime, "%Y-%m-%d %H:%M:%S")
@@ -139,7 +143,20 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
                 rendition:recordPublishedPhotoId(callStatus.remoteid or "")
                 rendition:recordPublishedPhotoUrl(callStatus.remoteurl or "")
                 rendition:renditionIsDone(true)
-         
+            -- set metadata for photo
+            
+                 catalog:withWriteAccessDo("Updating " .. lrPhoto:getFormattedMetadata("fileName"),
+                    function()
+
+                        lrPhoto:setPropertyForPlugin(_PLUGIN,"pwHostURL",propertyTable.host)
+                        lrPhoto:setPropertyForPlugin(_PLUGIN,"pwAlbumName",albumName)
+                        lrPhoto:setPropertyForPlugin(_PLUGIN,"pwAlbumURL",albumUrl)
+                        lrPhoto:setPropertyForPlugin(_PLUGIN,"pwImageURL",callStatus.remoteurl)
+                        lrPhoto:setPropertyForPlugin(_PLUGIN,"pwUploadDate",os.date("%Y-%m-%d"))
+                        lrPhoto:setPropertyForPlugin(_PLUGIN,"pwUploadTime",os.date("%H:%M:%S"))
+
+                end )
+
             -- photo was uploaded with keywords included, but existing keywords aren't replaced by this process,
             -- so force a metadata update using pwg.images.setInfo with single_value_mode set to "replace" to force old metadata/keywords to be replaced
                 metaData.Remoteid = callStatus.remoteid
@@ -190,10 +207,32 @@ function PublishTask.deletePhotosFromPublishedCollection(publishSettings, arrayO
     end
     PiwigoBusy = true
     local callStatus ={}
+    local errStatus = ""
 
 
+    -- build tables to allow access to catalog LrPhoto object 
     local catalog = LrApplication.activeCatalog()
     local publishedCollection = catalog:getPublishedCollectionByLocalIdentifier(localCollectionId)
+    local publishedPhotos = publishedCollection:getPublishedPhotos()
+    local photosToUnpublish = {}
+    local pubPhotoByRemoteID = {}
+    for _, pubPhoto in pairs(publishedPhotos) do
+        pubPhotoByRemoteID[pubPhoto:getRemoteId()] = pubPhoto
+    end
+
+    -- build table of photo objects for each item in arrayofphotoids
+    for i = 1, #arrayOfPhotoIds do
+        local pwImageID = arrayOfPhotoIds[i]
+        local pubPhoto = pubPhotoByRemoteID[pwImageID]
+        local lrphoto = pubPhoto:getPhoto()
+        photosToUnpublish[i] = {}
+        photosToUnpublish[i][1] = lrphoto
+        photosToUnpublish[i][2] = pwImageID
+        photosToUnpublish[i][3] = pubPhoto
+    end
+    
+    local pwCatID = publishedCollection:getRemoteId()
+
 
     -- check connection to piwigo
     if not (publishSettings.Connected) then
@@ -205,14 +244,52 @@ function PublishTask.deletePhotosFromPublishedCollection(publishSettings, arrayO
         end
     end
 
+    -- set up async prococess for piwigo calls
+     LrTasks.startAsyncTask(function ()
+        -- now go through each photo in photosToUnpublish and renove from Piwigo
+        for i, thisPhotoToUnpublish in pairs(photosToUnpublish) do
+            local thisLrPhoto = thisPhotoToUnpublish[1]
+            local thispwImageID = thisPhotoToUnpublish[2]
+            local thisPubPhoto = thisPhotoToUnpublish[3]
+            callStatus = PiwigoAPI.deletePhoto(publishSettings, pwCatID, thispwImageID, callStatus)
+            if callStatus.status then
+                catalog:withWriteAccessDo("Updating " .. thisLrPhoto:getFormattedMetadata("fileName"),
+                function()
+
+                    thisLrPhoto:setPropertyForPlugin(_PLUGIN,"pwHostURL","")
+                    thisLrPhoto:setPropertyForPlugin(_PLUGIN,"pwAlbumName","")
+                    thisLrPhoto:setPropertyForPlugin(_PLUGIN,"pwAlbumURL","")
+                    thisLrPhoto:setPropertyForPlugin(_PLUGIN,"pwImageURL","")
+                    thisLrPhoto:setPropertyForPlugin(_PLUGIN,"pwUploadDate","")
+                    thisLrPhoto:setPropertyForPlugin(_PLUGIN,"pwUploadTime","")
+                end )
+                thisPhotoToUnpublish[4] = true
+            else
+                PiwigoBusy = false
+                LrErrors.throwUserError('Failed to delete photo ' .. pwImageID .. ' from Piwigo - ' .. callStatus.statusMsg, 'Failed to delete photo')
+            end
+
+
+        end
+    end, errStatus )
+--[[
     for i = 1, #arrayOfPhotoIds do
         local pwImageID = arrayOfPhotoIds[i]
-        local pwCatID = publishedCollection:getRemoteId()
-
+        
 -- check if image is another album on Piwigo
 -- if not, can delete image,otherwise remove association with this ablum
 
         callStatus = PiwigoAPI.deletePhoto(publishSettings,pwCatID,pwImageID, callStatus)
+
+        -- remove custom metadata from photo
+                        lrPhoto:setPropertyForPlugin(_PLUGIN,"pwHostURL",propertyTable.host)
+                        lrPhoto:setPropertyForPlugin(_PLUGIN,"pwAlbumName",albumName)
+                        lrPhoto:setPropertyForPlugin(_PLUGIN,"pwAlbumURL",albumUrl)
+                        lrPhoto:setPropertyForPlugin(_PLUGIN,"pwImageURL",callStatus.remoteurl)
+                        lrPhoto:setPropertyForPlugin(_PLUGIN,"pwUploadDate",os.date("%Y-%m-%d"))
+                        lrPhoto:setPropertyForPlugin(_PLUGIN,"pwUploadTime",os.date("%H:%M:%S"))
+
+
         if callStatus.status then
             deletedCallback(arrayOfPhotoIds[i])
         else
@@ -221,6 +298,13 @@ function PublishTask.deletePhotosFromPublishedCollection(publishSettings, arrayO
         end
         deletedCallback( pwImageID)
     end
+]]
+    -- now finish process via deletedCallback
+    for i, thisPhotoToUnpublish in pairs(photosToUnpublish) do
+        local thispwImageID = thisPhotoToUnpublish[2]
+        deletedCallback(thispwImageID)
+    end
+
     PiwigoBusy = false
 end
 

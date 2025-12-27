@@ -23,6 +23,7 @@ A Lightroom Classic plugin which publishes images to a Piwigo host via the Piwig
     * New keywords are created if not present in the Piwigo keywords list
     * Tag comparison between LrC and Piwigo is not case sensitive - so for example 'This Is A Keyword' and 'this is a keyword' are treated as the same when sending keywords to Piwigo.
   * GPS location data is only sent via exif so users of the OpenStreetMap plugin need to ensure that location info is included in the Metadata settings on the LrC Publishing Manager
+* The plugin maintains a custom metadata set, Piwigo Publisher Metadata, with details of the most recent publishing activity for an image. NOTE - only images published using release 20251224.16 or later of this plugin will have this metadata.
 * Changes to images which trigger a re-publish will overwrite the previously published Piwigo image.
 * Images removed from the Publish Service are removed from corresponding album on Piwigo
 * Moving a Published Collection under a different Published Collection Set is reflected in the associated Piwigo albums
@@ -34,11 +35,12 @@ A Lightroom Classic plugin which publishes images to a Piwigo host via the Piwig
 
 ## The following functionality is under development:
 
-* Consistency Check - check for images missing on Piwigo and update published status accordingly
+* Metadata customisation - select which LrC metedata fields are used for Piwigo photo Title and Description fields.
 * Metadata Check - check metadata on Piwigo matches Lrc (Title, Caption, GPS, Creator)
 
 ## The following functionality is planned:
 
+* Consistency Check - check for images missing on Piwigo and update published status accordingly
 * Support for the X-PIWIGO-API header instead of Authorization when sending API keys - v16.1 and above
 * Import collection/set/image structure from another publish service
     * if remoteIds / URLs are present these will be copied. Useful to copy another publish service where a Piwigo host is the target without having to clear the existing Piwigo albums prior to re-publishing.
@@ -90,6 +92,10 @@ Enabling Resize to Fit in the LrC Publish Manger (I set resize to max of 4k x 4k
 I am investigating whether there is something else causing this but I suspect some imagick memory limits were being exceed by the huge image.
 
 If you see similar errors please check image sizes prior to raising an issue.
+
+## Logging
+
+Windows logs are UTF-16 and need to be opened with UTF-16 encoding
 
 ## CREDITS
 
