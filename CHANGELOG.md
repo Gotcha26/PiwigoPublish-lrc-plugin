@@ -1,4 +1,7 @@
 # Changelog
+## [20251227.17] - 2025-12-27
+### Fixed
+Fixed bug introduced by fix in previous release
 
 ## [20251224.16] - 2025-12-24
 ### Added

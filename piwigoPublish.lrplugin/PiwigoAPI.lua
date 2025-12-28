@@ -681,7 +681,15 @@ function PiwigoAPI.pwConnect(propertyTable)
     if (httpHeaders.status == 201) or (httpHeaders.status == 200) then
         -- successful connection to Piwigo
         -- Now check login result
-        local rtnBody = JSON:decode(httpResponse)
+        -- Decode JSON safely
+        local ok, rtnBody = pcall( JSON.decode, JSON, httpResponse )
+        if not ok or type(rtnBody) ~= "table" then
+            LrDialogs.message(
+                "Cannot log in to Piwigo",
+                "Invalid or unreadable server response"
+            )
+            return false
+        end
         if rtnBody.stat == "ok" then
             -- login ok - store session cookies
             local cookies = {}
@@ -705,18 +713,28 @@ function PiwigoAPI.pwConnect(propertyTable)
             propertyTable.cookieHeader = table.concat(propertyTable.cookies,"; ")
             propertyTable.Connected = true
         else
-            LrDialogs.message("Cannot log in to Piwigo - ", rtnBody.err .. ", " .. rtnBody.message)
+            LrDialogs.message(
+                "Cannot log in to Piwigo",
+                tostring(rtnBody.err or "Unknown error")
+                .. (rtnBody.message and (", " .. rtnBody.message) or "")
+            )
             return false
         end
     else
-        if httpHeaders.error then
-            statusDes = httpHeaders.error.name
-            status = httpHeaders.error.errorCode
+        local statusCode, statusDesc
+        status = httpHeaders and httpHeaders.status
+        if httpHeaders and httpHeaders.error then
+            statusCode = httpHeaders.error.errorCode or "?"
+            statusDesc = httpHeaders.error.name or "Unknown error"
         else
-            statusDes = httpHeaders.statusDes or httpHeaders.statusDesc
-            status = httpHeaders.status
+            statusCode = status or "?"
+            statusDesc = (httpHeaders and (httpHeaders.statusDes or httpHeaders.statusDesc)) or ""
         end
-        LrDialogs.message("Cannot log in to Piwigo - ", status .. ", " .. statusDes)
+
+        LrDialogs.message(
+            "Cannot log in to Piwigo",
+            tostring(statusCode) .. (statusDesc ~= "" and (", " .. statusDesc) or "")
+        )
         return false
     end
 
@@ -1696,8 +1714,7 @@ function PiwigoAPI.httpPostMultiPart(propertyTable, params)
     end
     if httpHeaders then
         postHeaders.status = httpHeaders.status
-        postHeaders.statusDesc = httpHeaders.statusDes or httpHeaders.statusDesc
-        
+        postHeaders.statusDesc = (httpHeaders and (httpHeaders.statusDes or httpHeaders.statusDesc)) or ""
     end
     if not body then
         postResponse.status = false
