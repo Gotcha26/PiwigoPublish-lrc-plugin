@@ -32,10 +32,12 @@ A Lightroom Classic plugin which publishes images to a Piwigo host via the Piwig
 * When Published Collection is deleted in LrC the associated Piwigo album is also deleted. Photos in the Piwigo album are also deleted if they would become orphans, but if they are associated with other albums they will be left.
 * Multiple Publish Services connecting to different Piwigo hosts can be created.
 * Deleting a Publish Service does not delete any images or albums on the Piwigo host it was associated with.
+* Import Smart Collection Settings supported
 
 ## The following functionality is under development:
 
 * Metadata customisation - select which LrC metedata fields are used for Piwigo photo Title and Description fields.
+* Per album custom settings - allowing image sizes and other settings to be set at album level, overriding the global Publish Manager settings
 * Metadata Check - check metadata on Piwigo matches Lrc (Title, Caption, GPS, Creator)
 
 ## The following functionality is planned:

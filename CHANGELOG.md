@@ -1,6 +1,9 @@
 # Changelog
+## [20251227.18] - 2025-12-27
+### ### Fixed
+Fixed #16 - When importing a smart collection album a publishing error occurs - Running Import Smart Collection Settings created a collection within the Publish Service but a corresponding Piwigo album wasn't. This fix checks for missing albums during the Publish process and creates them if needed
+
 ## [20251227.17] - 2025-12-27
-### Fixed
 Fixed bug introduced by fix in previous release
 
 ## [20251224.16] - 2025-12-24
