@@ -352,7 +352,7 @@ local function normalisePublishService(publishService)
     local visit
     local visitSet
     local visitCollection
-    log:info("normalisePublishService - processing\n" .. utils.serialiseVar(publishService))
+    --log:info("normalisePublishService - processing\n" .. utils.serialiseVar(publishService))
     -- *************************************************
     visit = function (container, parentPath, parentId)
         local children = container:getChildCollectionSets()
@@ -542,9 +542,9 @@ local function vps_createMissingPiwigoAlbumsFromIssues(catalog, propertyTable, p
     table.sort(missing, function(a, b)
         return #a.path < #b.path
     end)
-    log:info("createMissingPiwigoAlbumsFromIssues - missing\n",utils.serialiseVar(missing))
-    log:info("createMissingPiwigoAlbumsFromIssues - lrIndexByPath\n",utils.serialiseVar(lrIndexByPath))
-    log:info("createMissingPiwigoAlbumsFromIssues - lrIndexById\n",utils.serialiseVar(lrIndexById))
+    --log:info("createMissingPiwigoAlbumsFromIssues - missing\n",utils.serialiseVar(missing))
+    --log:info("createMissingPiwigoAlbumsFromIssues - lrIndexByPath\n",utils.serialiseVar(lrIndexByPath))
+    --log:info("createMissingPiwigoAlbumsFromIssues - lrIndexById\n",utils.serialiseVar(lrIndexById))
     local numCreated = 0
     local numFailed = 0
     for _, miss in ipairs(missing) do
@@ -886,7 +886,7 @@ function PiwigoAPI.validatePiwigoStructure(propertyTable)
     
     -- compare tables of album paths and ceate table of issues e.g.
     local issues = validatePublishAgainstPiwigo(lrIndexByPath, pwIndexByPath)
-    log:info("PiwigoAPI.validatePiwigoStructure - issues\n" .. utils.serialiseVar(issues))
+    --log:info("PiwigoAPI.validatePiwigoStructure - issues\n" .. utils.serialiseVar(issues))
 
     -- now process any issues
  
@@ -950,19 +950,26 @@ end
 
 -- *************************************************
 function PiwigoAPI.getPublishService(propertyTable)
-    -- get reference to publish service matching host and userName in propertyTable
+    -- get reference to publish service matching name, host and userName in propertyTable
     local catalog = LrApplication.activeCatalog()
     local services = catalog:getPublishServices()
-    local thisService
+    local thisService = nil
     local foundService = false
-
+    local thisName = propertyTable.LR_publish_connectionName
+    local thisHost = propertyTable.host
+    local thisUser = propertyTable.userName
+    log:info("PiwigoAPI.getPublishService - looking for publish service " .. thisName .. ", thisHost " .. thisHost .. ", user " .. thisUser)
     for _, s in ipairs(services) do
         local pluginSettings = s:getPublishSettings()
         local pluginID = s:getPluginId()
         local pluginName = s:getName()
+        local pluginHost = pluginSettings.host or ""
+        local pluginUser = pluginSettings.userName or ""
+        log:info("PiwigoAPI.getPublishService - checking service " .. pluginName .. ", Host " .. pluginHost .. ", user " .. pluginUser)
+        if (pluginName == thisName) and 
+            (pluginHost == thisHost) and
+            (pluginUser == thisUser) then
 
-        if pluginSettings.host == propertyTable.host and
-            pluginSettings.userName == propertyTable.userName then
             thisService = s
             foundService = true
             break
@@ -1145,7 +1152,7 @@ function PiwigoAPI.importAlbums(propertyTable)
     local rv
     log:info("PiwigoAPI:importAlbums")
     -- getPublishService to get reference to this publish service - returned in propertyTable._service
-    rv = PiwigoAPI.getPublishService(propertyTable, false)
+    rv = PiwigoAPI.getPublishService(propertyTable)
     if not rv then
         utils.handleError('PiwigoAPI:importAlbums - cannot find publish service - has it been saved?',
             "Error: Cannot find Piwigo publish service - has it been saved?")
@@ -1855,14 +1862,7 @@ function PiwigoAPI.specialCollections(propertyTable)
         caption = "Starting...",
         functionContext = context,
     }
-    --[[
-    -- check if scNameFix has been run and run it if not
-    if not(propertyTable.scNameFix) then
-        log:info("PiwigoAPI.specialCollections - running scNameFix")
-        rv = PiwigoAPI.fixSpecialCollectionNames(catalog, publishService, propertyTable)
-        propertyTable.scNameFix = true
-    end
-    ]]
+
     for s, thisSet in pairs(allSets) do
         progressScope:setPortionComplete(s, #allSets)
         progressScope:setCaption("Processing " .. s .. " of " .. #allSets .. " collction sets")
