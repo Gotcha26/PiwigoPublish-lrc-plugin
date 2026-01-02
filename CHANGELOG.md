@@ -1,4 +1,8 @@
 # Changelog
+## [20260102.21] - 2026-01-02
+### Fixed
+Fix #23 Check / link Piwigo Structure: mistake of using albums from other publishing setup from same site
+
 ## [20260101.20] - 2026-01-01
 ### Fixed
 Fixed #13 - new option to allow different metadata to be used for title and description
