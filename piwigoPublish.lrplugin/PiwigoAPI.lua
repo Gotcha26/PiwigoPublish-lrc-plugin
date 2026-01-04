@@ -35,8 +35,8 @@ local function httpGet(url, params, headers)
     local getResponse = {}
     local getUrl = utils.buildGet(url, params)
 
-    log:info("PWAPI.httpGet - calling " .. getUrl)
-    log:info("PWAPI.httpGet - headers are " .. utils.serialiseVar(headers))
+    --log:info("PWAPI.httpGet - calling " .. getUrl)
+    --log:info("PWAPI.httpGet - headers are " .. utils.serialiseVar(headers))
 
     local body, hdrs = LrHttp.get(getUrl, headers)
 
@@ -45,6 +45,10 @@ local function httpGet(url, params, headers)
 
     -- Missing or empty HTTP body
     if not body then
+        log:info("PWAPI.httpGet - calling " .. getUrl)
+        log:info("PWAPI.httpGet - headers are " .. utils.serialiseVar(headers))
+        log:info("PWAPI.httpGet - httpHeaders\n" .. utils.serialiseVar(hdrs))
+        log:info("PWAPI.httpGet - httpResponse\n" .. utils.serialiseVar(body))
         getResponse.status = "error"
         getResponse.errormessage = "No response body received"
         getResponse.response = nil
@@ -54,6 +58,10 @@ local function httpGet(url, params, headers)
     -- HTTP status check
     local statusCode = hdrs and hdrs.status or nil
     if not statusCode or statusCode < 200 or statusCode > 299 then
+        log:info("PWAPI.httpGet - calling " .. getUrl)
+        log:info("PWAPI.httpGet - headers are " .. utils.serialiseVar(headers))
+        log:info("PWAPI.httpGet - httpHeaders\n" .. utils.serialiseVar(hdrs))
+        log:info("PWAPI.httpGet - httpResponse\n" .. utils.serialiseVar(body))
         getResponse.status = "error"
         getResponse.errorMessage = string.format("HTTP error %s", tostring(statusCode))
         getResponse.response = nil
@@ -63,6 +71,10 @@ local function httpGet(url, params, headers)
     -- Try decoding JSON
     local decoded = JSON:decode(body)
     if not decoded then
+        log:info("PWAPI.httpGet - calling " .. getUrl)
+        log:info("PWAPI.httpGet - headers are " .. utils.serialiseVar(headers))
+        log:info("PWAPI.httpGet - httpHeaders\n" .. utils.serialiseVar(hdrs))
+        log:info("PWAPI.httpGet - httpResponse\n" .. utils.serialiseVar(body))
         getResponse.status = "error"
         getResponse.errorMessage = "Failed to parse JSON: " .. utils.serialiseVar(body)
         getResponse.response = nil
@@ -71,6 +83,10 @@ local function httpGet(url, params, headers)
 
     -- Piwigo API uses its own status
     if decoded.stat == "fail" or decoded.status == "fail" then
+        log:info("PWAPI.httpGet - calling " .. getUrl)
+        log:info("PWAPI.httpGet - headers are " .. utils.serialiseVar(headers))
+        log:info("PWAPI.httpGet - httpHeaders\n" .. utils.serialiseVar(hdrs))
+        log:info("PWAPI.httpGet - httpResponse\n" .. utils.serialiseVar(body))
         getResponse.status = "error"
         getResponse.errorMessage = decoded.err .. " - " .. decoded.message
         getResponse.response = decoded
@@ -214,48 +230,44 @@ end
 
 -- *************************************************
 local function buildCatHierarchy(allCats)
-    -- Step 1: Build a lookup table by id
-    local lookup = {}
+    -- convert flat list of categories to hierarchical table with children tables
+    log:info("buildCatHierarchy - allCats\n" .. utils.serialiseVar(allCats))
+    -- 1. Create all nodes (no hierarchy yet)
+    local nodes = {}
+    local roots = {}
     for _, cat in ipairs(allCats) do
-        lookup[cat.id] = cat
-        cat.children = {}
+        local id = tonumber(cat.id)
+        nodes[id] = {
+            id = id,
+            name = cat.name,
+            comment = cat.comment,
+            status = cat.status,
+            children = {}
+        }
     end
-
-    -- Step 2: Build the hierarchy
-    local hierarchy = {}
-
+    -- 2. Attach nodes to parents
     for _, cat in ipairs(allCats) do
         -- uppercats is a comma-separated list like "16,28" or "24,27"
-        local uppercats = cat.uppercats
-        local parentId = nil
+        local path = utils.stringtoTable(cat.uppercats, ",")
+        local id = tonumber(cat.id)
+        local node = nodes[id]
 
-        if uppercats then
-            local ids = {}
-            for id in uppercats:gmatch("[^,]+") do
-                table.insert(ids, tonumber(id))
-            end
-
-            -- parentId is the last id in uppercats before this category
-            if #ids > 1 then
-                parentId = ids
-                    [#ids - 0] -- the last number in the chain is this cat’s own id, so second to last is parent
-                if parentId == cat.id then
-                    parentId = ids[#ids - 1]
-                end
-            elseif #ids == 1 and ids[1] ~= cat.id then
-                parentId = ids[1]
-            end
-        end
-
-        -- attach to parent if there is one, else it's a root
-        if parentId and lookup[parentId] then
-            table.insert(lookup[parentId].children, cat)
+        if #path == 1 then
+            -- Top-level category
+            roots[#roots + 1] = node
         else
-            table.insert(hierarchy, cat)
+            -- Parent is the second-to-last element
+            local parent_id = tonumber(path[#path - 1])
+            local parent = nodes[parent_id]
+            if parent then
+                parent.children[#parent.children + 1] = node
+            end
         end
     end
-    return hierarchy
+    log:info("buildCatHierarchy - hierarchy\n" .. utils.serialiseVar(roots))
+    return roots
 end
+
 
 -- *************************************************
 local function findCat(allCats, findID)
@@ -354,7 +366,7 @@ local function normalisePublishService(publishService)
     local visitCollection
     --log:info("normalisePublishService - processing\n" .. utils.serialiseVar(publishService))
     -- *************************************************
-    visit = function (container, parentPath, parentId)
+    visit             = function(container, parentPath, parentId)
         local children = container:getChildCollectionSets()
         local collections = container:getChildCollections()
 
@@ -370,12 +382,12 @@ local function normalisePublishService(publishService)
     end
     -- *************************************************
     -- Forward declarations
-    visitSet = function (set, parentPath, parentId)
-        local name = set:getName()
-        local key  = utils.makePathKey(name)
-        local path = parentPath and (parentPath .. "/" .. key) or key
+    visitSet          = function(set, parentPath, parentId)
+        local name          = set:getName()
+        local key           = utils.makePathKey(name)
+        local path          = parentPath and (parentPath .. "/" .. key) or key
 
-        local entry = {
+        local entry         = {
             id       = set.localIdentifier,
             name     = name,
             key      = key,
@@ -386,19 +398,19 @@ local function normalisePublishService(publishService)
             children = {},
         }
 
-        indexByPath[path] = entry
+        indexByPath[path]   = entry
         indexById[entry.id] = entry
 
         -- recurse into this set
         visit(set, path, entry.id)
     end
     -- *************************************************
-    visitCollection = function(col, parentPath, parentId)
-        local name = col:getName()
-        local key  = utils.makePathKey(name)
-        local path = parentPath and (parentPath .. "/" .. key) or key
+    visitCollection   = function(col, parentPath, parentId)
+        local name          = col:getName()
+        local key           = utils.makePathKey(name)
+        local path          = parentPath and (parentPath .. "/" .. key) or key
 
-        local entry = {
+        local entry         = {
             id       = col.localIdentifier,
             name     = name,
             key      = key,
@@ -409,7 +421,7 @@ local function normalisePublishService(publishService)
             children = {}, -- always empty
         }
 
-        indexByPath[path] = entry
+        indexByPath[path]   = entry
         indexById[entry.id] = entry
 
         -- attach to parent
@@ -420,7 +432,6 @@ local function normalisePublishService(publishService)
 
     visit(publishService, nil, nil)
     return indexByPath, indexById
-
 end
 
 -- *************************************************
@@ -437,7 +448,7 @@ local function validatePublishAgainstPiwigo(lrIndexByPath, piwigoIndexByPath)
     for path, lrEntry in pairs(lrIndexByPath) do
         if lrEntry.kind == "collection" or lrEntry.kind == "set" then
             -- check for special collections that won't / shouldn't exist on Piwigo as a separate album
-            
+
             if (string.sub(lrEntry.key, 1, 1) == "[" and string.sub(lrEntry.key, -1) == "]") or (lrEntry.key:match("^※")) then
                 -- special collection from pwigo published or piwigo export plugins
                 -- check remote id is that of parent piwgo album
@@ -460,16 +471,15 @@ local function validatePublishAgainstPiwigo(lrIndexByPath, piwigoIndexByPath)
                     local piwigoId = piwigoEntry.id
                     if tostring(remoteId) ~= tostring(piwigoId) then
                         table.insert(issues.remoteIdMismatch, {
-                            path        = path,
-                            kind        = lrEntry.kind,
-                            localId     = lrEntry.id,
-                            remoteId    = remoteId,
-                            piwigoId    = piwigoId,
+                            path     = path,
+                            kind     = lrEntry.kind,
+                            localId  = lrEntry.id,
+                            remoteId = remoteId,
+                            piwigoId = piwigoId,
                         })
                     end
                 end
             end
-  
         end
     end
 
@@ -477,7 +487,7 @@ local function validatePublishAgainstPiwigo(lrIndexByPath, piwigoIndexByPath)
     for path, piwigoEntry in pairs(piwigoIndexByPath) do
         local lrEntry = lrIndexByPath[path]
         if (piwigoEntry.kind == nil or piwigoEntry.kind == "collection" or piwigoEntry.kind == "set")
-           and not lrEntry then
+            and not lrEntry then
             table.insert(issues.orphanPiwigo, {
                 path = path,
                 kind = "collection",
@@ -489,7 +499,8 @@ local function validatePublishAgainstPiwigo(lrIndexByPath, piwigoIndexByPath)
     return issues
 end
 -- *************************************************
-local function vps_fixRemoteIdMismatchesAndUpdateDets(catalog, propertyTable, publishService,lrIndexByPath, lrIndexById, pwIndexByPath,  issues)
+local function vps_fixRemoteIdMismatchesAndUpdateDets(catalog, propertyTable, publishService, lrIndexByPath, lrIndexById,
+                                                      pwIndexByPath, issues)
     -- fix mismtach between collection/set remote id and Piwigo album id  identified in issues.remoteIdMismatch
     local fixRemote = 0
     for _, mismatch in ipairs(issues.remoteIdMismatch) do
@@ -521,7 +532,6 @@ local function vps_fixRemoteIdMismatchesAndUpdateDets(catalog, propertyTable, pu
                 ))
             end
             fixRemote = fixRemote + 1
-
         else
             log:warn(string.format(
                 "Cannot find Lightroom entry for localId %s (path: %s)",
@@ -533,9 +543,10 @@ local function vps_fixRemoteIdMismatchesAndUpdateDets(catalog, propertyTable, pu
 end
 
 -- *************************************************
-local function vps_createMissingPiwigoAlbumsFromIssues(catalog, propertyTable, publishService, lrIndexByPath, lrIndexById, pwIndexByPath, issues)
+local function vps_createMissingPiwigoAlbumsFromIssues(catalog, propertyTable, publishService, lrIndexByPath, lrIndexById,
+                                                       pwIndexByPath, issues)
     --create Piwigo albums identified in issues.missingRemote
-    
+
 
     local missing = issues.missingRemote
     -- Sort paths top-down so parents are created before children
@@ -558,15 +569,15 @@ local function vps_createMissingPiwigoAlbumsFromIssues(catalog, propertyTable, p
             local parentEntry = lrIndexById[lrEntry.parentId]
             if parentEntry then
                 parentRemoteId = parentEntry.remoteId
-                parentLocalIdentifier = parentEntry.id 
+                parentLocalIdentifier = parentEntry.id
                 parentSet = catalog:getPublishedCollectionByLocalIdentifier(parentLocalIdentifier)
             end
         end
 
         -- get publishedCollection
-        
-        local ColOrSet = catalog:getPublishedCollectionByLocalIdentifier( colLocalIdentifier  )
-        
+
+        local ColOrSet = catalog:getPublishedCollectionByLocalIdentifier(colLocalIdentifier)
+
         --log:info("createMissingPiwigoAlbumsFromIssues - ColOrSet is " .. ColOrSet:getName() ..", a " .. ColOrSet:type())
         -- Create album in Piwigo
         local metaData = {}
@@ -587,10 +598,11 @@ local function vps_createMissingPiwigoAlbumsFromIssues(catalog, propertyTable, p
             PiwigoAPI.setCollectionDets(ColOrSet, catalog, propertyTable, albumName, albumId, parentSet)
             numCreated = numCreated + 1
         else
-            log:info("createMissingPiwigoAlbumsFromIssues - unable to create pwAlbum " .. albumName .. " under " .. (parentRemoteId or ""))
+            log:info("createMissingPiwigoAlbumsFromIssues - unable to create pwAlbum " ..
+                albumName .. " under " .. (parentRemoteId or ""))
             numFailed = numFailed + 1
         end
-     
+
 
         -- Update Lightroom entry
         lrEntry.remoteId = albumId
@@ -611,15 +623,16 @@ local function vps_createMissingPiwigoAlbumsFromIssues(catalog, propertyTable, p
             local parentPath = lrIndexByIdEntry.path
             table.insert(pwIndexByPath[parentPath].children, miss.path)
         end
-        log:info(string.format("Created missing Piwigo %s: %s (ID %s)",lrEntry.kind, miss.path, tostring(albumId) ))
+        log:info(string.format("Created missing Piwigo %s: %s (ID %s)", lrEntry.kind, miss.path, tostring(albumId)))
     end
 
     return numCreated, numFailed
 end
 
 -- *************************************************
-local function vps_fixSpecialCollections(catalog, propertyTable, publishService, lrIndexByPath, lrIndexById, pwIndexByPath, issues)
--- fix mismtach between collection/set remote id and Piwigo album id  identified in issues.remoteIdMismatch
+local function vps_fixSpecialCollections(catalog, propertyTable, publishService, lrIndexByPath, lrIndexById,
+                                         pwIndexByPath, issues)
+    -- fix mismtach between collection/set remote id and Piwigo album id  identified in issues.remoteIdMismatch
     local fixSpecial = 0
 
     for _, specialCollection in ipairs(issues.specialCollections) do
@@ -640,7 +653,8 @@ local function vps_fixSpecialCollections(catalog, propertyTable, publishService,
                 local parentRemoteId = parentColSet:getRemoteId()
                 local checkName = PiwigoAPI.buildSpecialCollectionName(parentName)
                 if (checkName ~= scName) or (scRemoteId ~= parentRemoteId) then
-                    PiwigoAPI.setCollectionDets(scColOrSet, catalog, propertyTable, checkName, parentRemoteId, parentColSet)
+                    PiwigoAPI.setCollectionDets(scColOrSet, catalog, propertyTable, checkName, parentRemoteId,
+                        parentColSet)
                     fixSpecial = fixSpecial + 1
                 end
             end
@@ -652,7 +666,7 @@ end
 -- *************************************************
 local function createCollection(propertyTable, node, parentNode, isLeafNode, statusData)
     local rv
-    local newColl
+
     local parentColl
     local existingColl, existingSet
     local catalog = LrApplication.activeCatalog()
@@ -684,37 +698,97 @@ local function createCollection(propertyTable, node, parentNode, isLeafNode, sta
         LrErrors.throwUserError("Error in createCollection: No parent collection for " .. node.name)
         stat.errors = stat.errors + 1
     else
+        local remoteId = node.id
+        local collName = node.name
+        local collDescription = node.comment or ""
+        local collStatus = node.status or "public"
         -- look for this collection - create if not found
-        existingColl = utils.recursivePubCollectionSearchByRemoteID(publishService, node.id)
+        existingColl = utils.recursivePubCollectionSearchByRemoteID(publishService, remoteId)
         if not (existingColl) then
             -- not an existing collection/set for this node and we have got the parent collection/set
             if parentColl:type() ~= "LrPublishedCollectionSet" and parentColl:type() ~= "LrPublishService" then
                 -- parentColl is not of type that can accept child collections - need to handle
                 LrErrors.throwUserError("Error in createCollection: Parent collection for " ..
-                    node.name .. " is " .. parentColl:type() .. " - can't create child collection")
+                    collName .. " is " .. parentColl:type() .. " - can't create child collection")
                 stat.errors = stat.errors + 1
             else
+                local collectionSettings = {}
+                local newColl
                 if isLeafNode then
                     -- create Publishedcollection
+
+                    log:info("createCollection - creating PublishedCollection " ..
+                        collName .. " under parent " .. parentColl:getName())
                     catalog:withWriteAccessDo("Create PublishedCollection ", function()
-                        newColl = publishService:createPublishedCollection(node.name, parentColl, true)
+                        newColl = publishService:createPublishedCollection(collName, parentColl, true)
                     end)
-                    stat.collections = stat.collections + 1
+                    -- now add remoteids and urls to collections and collection sets, and description and status
+                    if newColl == nil then
+                        LrErrors.throwUserError("Error in createCollection: Failed to create PublishedCollection " ..
+                            collName .. " under parent " .. parentColl:getName())
+                        stat.errors = stat.errors + 1
+                    else
+                        collectionSettings = newColl:getCollectionInfoSummary().collectionSettings or {}
+                        collectionSettings.albumDescription = collDescription
+                        collectionSettings.albumPrivate = collStatus == "private"
+                        catalog:withWriteAccessDo("Add Piwigo details to collections", function()
+                            newColl:setRemoteId(remoteId)
+                            newColl:setRemoteUrl(propertyTable.host .. "/index.php?/category/" .. remoteId)
+                            newColl:setName(collName)
+                            newColl:setCollectionSettings(collectionSettings)
+                        end)
+                        stat.collections = stat.collections + 1
+                    end
                 else
                     -- Create PublishedCollectionSet
+                    log:info("createCollection - creating PublishedCollectionSet " ..
+                        collName .. " under parent " .. parentColl:getName())
                     catalog:withWriteAccessDo("Create PublishedCollectionSet ", function()
-                        newColl = publishService:createPublishedCollectionSet(node.name, parentColl, true)
+                        newColl = publishService:createPublishedCollectionSet(collName, parentColl, true)
                     end)
-                    stat.collectionSets = stat.collectionSets + 1
+                    if newColl == nil then
+                        LrErrors.throwUserError("Error in createCollection: Failed to create PublishedCollectionSet " ..
+                            collName .. " under parent " .. parentColl:getName())
+                        stat.errors = stat.errors + 1
+                        return stat
+                    else
+                        -- now add remoteids and urls to collections and collection sets, and description and status
+                        collectionSettings = newColl:getCollectionSetInfoSummary().collectionSettings or {}
+                        collectionSettings.albumDescription = collDescription
+                        collectionSettings.albumPrivate = collStatus == "private"
+                        catalog:withWriteAccessDo("Add Piwigo details to collections", function()
+                            newColl:setRemoteId(remoteId)
+                            newColl:setRemoteUrl(propertyTable.host .. "/index.php?/category/" .. remoteId)
+                            newColl:setName(collName)
+                            newColl:setCollectionSetSettings(collectionSettings)
+                        end)
+                        stat.collectionSets = stat.collectionSets + 1
+                    end
                 end
-                -- now add remoteids and urls to collections and collection sets
-                catalog:withWriteAccessDo("Add Piwigo details to collections", function()
-                    newColl:setRemoteId(node.id)
-                    newColl:setRemoteUrl(propertyTable.host .. "/index.php?/category/" .. node.id)
-                    newColl:setName(node.name)
-                end)
             end
         else
+            -- update existing collection/set details with albumdescription and status
+            local collectionSettings = {}
+            if existingColl:type() == "LrPublishedCollection" then
+                -- existing collection
+                log:info("createCollection - updating existing PublishedCollection " .. existingColl:getName())
+                collectionSettings = existingColl:getCollectionInfoSummary().collectionSettings or {}
+                collectionSettings.albumDescription = collDescription
+                collectionSettings.albumPrivate = collStatus == "private"
+                catalog:withWriteAccessDo("Update Piwigo details to collections", function()
+                    existingColl:setCollectionSettings(collectionSettings)
+                end)
+            elseif existingColl:type() == "LrPublishedCollectionSet" then
+                -- existing collection set
+                log:info("createCollection - updating existing PublishedCollectionSet " .. existingColl:getName())
+                collectionSettings = existingColl:getCollectionSetInfoSummary().collectionSettings or {}
+                collectionSettings.albumDescription = collDescription
+                collectionSettings.albumPrivate = collStatus == "private"
+                catalog:withWriteAccessDo("Update Piwigo details to collections", function()
+                    existingColl:setCollectionSetSettings(collectionSettings)
+                end)
+            end
+
             stat.existing = stat.existing + 1
         end
     end
@@ -729,7 +803,7 @@ local function createCollectionsFromCatHierarchy(catNode, parentNode, propertyTa
     -- statusData tracks new and existing collections and sets
     -- depth is used internally to track nesting level.
 
-    log:info("createCollectionsFromCatHierarchy - processing " .. catNode.id, catNode.name)
+    --log:info("createCollectionsFromCatHierarchy - processing " .. catNode.id, catNode.name)
     depth = depth or 0
     if depth > statusData.maxDepth then
         statusData.maxDepth = depth
@@ -739,8 +813,8 @@ local function createCollectionsFromCatHierarchy(catNode, parentNode, propertyTa
         -- catNode is valid and processible
         -- create collection or collectionSet
         local isLeafNode = false
-        if catNode.nb_categories == 0 then
-            -- this category doesn't contain subcategories so it is a leaf node
+        if utils.nilOrEmpty(catNode.children) then
+            -- this category doesn't contain children so it is a leaf node
             isLeafNode = true
         end
         local rv = createCollection(propertyTable, catNode, parentNode, isLeafNode, statusData)
@@ -774,7 +848,7 @@ function PiwigoAPI.fixSpecialCollectionNames(catalog, publishService, propertyTa
                 local remoteId = childCol:getRemoteId()
                 if string.sub(ccName, 1, 11) == "[ Photos in" and string.sub(ccName, -2) == " ]" then
                     -- special collection - fix name by removing space prior to ]
-                    
+
                     local newName = PiwigoAPI.buildSpecialCollectionName(parentName)
                     log:info("PiwigoAPI.fixSpecialCollectionNames - " .. ccName .. " fixed to " .. newName)
                     catalog:withWriteAccessDo("Set Collection Name", function()
@@ -795,12 +869,38 @@ end
 
 -- *************************************************
 function PiwigoAPI.setCollectionDets(thisCollorSet, catalog, propertyTable, name, remoteId, parentSet)
+    -- (catalog, propertyTable, thisCollorSet, parentSet, metaData)
+    -- local name = metaData.name
+    -- local remoteId = metaData.remoteId
+    -- local albumDescription = metaData.albumDescription
+    -- local albumPrivate = metaData.albumPrivate
+    -- local isSpecialCollection = metaData.isSpecialCollection
+
     catalog:withWriteAccessDo("Add Piwigo details to collection", function()
         thisCollorSet:setRemoteId(remoteId)
         thisCollorSet:setRemoteUrl(propertyTable.host .. "/index.php?/category/" .. remoteId)
         thisCollorSet:setName(name)
         thisCollorSet:setParent(parentSet)
+        --[[
+        if thisCollorSet:type() == "LrPublishedCollection" then
+            -- existing collection
+            log:info("setCollectionDets - updating existing PublishedCollection " .. thisCollorSet:getName())
+            local collectionSettings = thisCollorSet:getCollectionInfoSummary().collectionSettings or {}
+            collectionSettings.albumDescription = albumDescription
+            collectionSettings.albumPrivate = albumPrivate == "private"
+            collectionSettings.isSpecialCollection = isSpecialCollection
+            thisCollorSet:setCollectionSettings(collectionSettings)
+        elseif thisCollorSet:type() == "LrPublishedCollectionSet" then
+            -- existing collection set
+            log:info("setCollectionDets - updating existing PublishedCollectionSet " .. thisCollorSet:getName())
+            local collectionSettings = thisCollorSet:getCollectionSetInfoSummary().collectionSettings or {}
+            collectionSettings.albumDescription = albumDescription
+            collectionSettings.albumPrivate = albumPrivate == "private"
+            thisCollorSet:setCollectionSetSettings(collectionSettings)
+        end
+]]
     end)
+
     return true
 end
 
@@ -814,6 +914,10 @@ function PiwigoAPI.createPublishCollectionSet(catalog, publishService, propertyT
         newColl = publishService:createPublishedCollectionSet(name, parentSet, true)
     end)
     -- add remoteids and urls to collection
+    -- local metaData = {}
+    -- metaData.name = name
+    -- metaData.remoteId = remoteId
+    -- PiwigoAPI.setCollectionDets(catalog, propertyTable, newCollSet, parentSet, metaData)
     PiwigoAPI.setCollectionDets(newColl, catalog, propertyTable, name, remoteId, parentSet)
 
     return newColl
@@ -842,7 +946,7 @@ function PiwigoAPI.validatePiwigoStructure(propertyTable)
     -- will create Piwigo albums if missing
     -- will add remoteIds to local collection / sets if missing
     -- will not create any new collection / sets
-    
+
     local rv, allCats
     local catalog = LrApplication.activeCatalog()
     rv = PiwigoAPI.getPublishService(propertyTable)
@@ -857,7 +961,7 @@ function PiwigoAPI.validatePiwigoStructure(propertyTable)
     end
 
     -- get all categories from Piwigo
-   
+
     rv, allCats = PiwigoAPI.pwCategoriesGet(propertyTable, "")
     if not rv then
         utils.handleError('PiwigoAPI:validatePiwigoStructure - cannot get categories from piwigo',
@@ -883,21 +987,25 @@ function PiwigoAPI.validatePiwigoStructure(propertyTable)
     end)
     --log:info("PiwigoAPI.validatePiwigoStructure - lrIndexByPath\n" .. utils.serialiseVar(lrIndexByPath))
     --log:info("PiwigoAPI.validatePiwigoStructure - lrIndexById\n" .. utils.serialiseVar(lrIndexById))
-    
+
     -- compare tables of album paths and ceate table of issues e.g.
     local issues = validatePublishAgainstPiwigo(lrIndexByPath, pwIndexByPath)
     --log:info("PiwigoAPI.validatePiwigoStructure - issues\n" .. utils.serialiseVar(issues))
 
     -- now process any issues
- 
-    local numCreated, numFailed =  vps_createMissingPiwigoAlbumsFromIssues(catalog, propertyTable, publishService, lrIndexByPath, lrIndexById, pwIndexByPath, issues)
-    local numFixed = vps_fixRemoteIdMismatchesAndUpdateDets(catalog, propertyTable, publishService,lrIndexByPath, lrIndexById, pwIndexByPath,  issues)
-    local numSpecial = vps_fixSpecialCollections(catalog, propertyTable, publishService, lrIndexByPath, lrIndexById, pwIndexByPath, issues)
-    LrDialogs.message(
-        "Check Piwigo Structure", 
-        string.format("Albums created on Piwigo: %s, Piwigo links updated: %s, Albums unable to create: %s (check log file for details)",numCreated,numFixed,numFailed
-        ))
 
+    local numCreated, numFailed = vps_createMissingPiwigoAlbumsFromIssues(catalog, propertyTable, publishService,
+        lrIndexByPath, lrIndexById, pwIndexByPath, issues)
+    local numFixed = vps_fixRemoteIdMismatchesAndUpdateDets(catalog, propertyTable, publishService, lrIndexByPath,
+        lrIndexById, pwIndexByPath, issues)
+    local numSpecial = vps_fixSpecialCollections(catalog, propertyTable, publishService, lrIndexByPath, lrIndexById,
+        pwIndexByPath, issues)
+    LrDialogs.message(
+        "Check Piwigo Structure",
+        string.format(
+            "Albums created on Piwigo: %s, Piwigo links updated: %s, Albums unable to create: %s (check log file for details)",
+            numCreated, numFixed, numFailed
+        ))
 end
 
 -- *************************************************
@@ -958,18 +1066,15 @@ function PiwigoAPI.getPublishService(propertyTable)
     local thisName = propertyTable.LR_publish_connectionName
     local thisHost = propertyTable.host
     local thisUser = propertyTable.userName
-    log:info("PiwigoAPI.getPublishService - looking for publish service " .. thisName .. ", thisHost " .. thisHost .. ", user " .. thisUser)
     for _, s in ipairs(services) do
         local pluginSettings = s:getPublishSettings()
         local pluginID = s:getPluginId()
         local pluginName = s:getName()
         local pluginHost = pluginSettings.host or ""
         local pluginUser = pluginSettings.userName or ""
-        log:info("PiwigoAPI.getPublishService - checking service " .. pluginName .. ", Host " .. pluginHost .. ", user " .. pluginUser)
-        if (pluginName == thisName) and 
+        if (pluginName == thisName) and
             (pluginHost == thisHost) and
             (pluginUser == thisUser) then
-
             thisService = s
             foundService = true
             break
@@ -1185,9 +1290,10 @@ function PiwigoAPI.importAlbums(propertyTable)
             "Error: No categories found in Piwigo server.")
         return
     end
-
+    --log:info("PiwigoAPI:importAlbums - allCats\n" .. utils.serialiseVar(allCats)  )
     -- hierarchical table of categories
     local catHierarchy = buildCatHierarchy(allCats)
+    log:info("PiwigoAPI:importAlbums - catHierarchy\n" .. utils.serialiseVar(catHierarchy))
 
     local statusData = {
         existing = 0,
@@ -1196,6 +1302,7 @@ function PiwigoAPI.importAlbums(propertyTable)
         errors = 0,
         maxDepth = 0
     }
+
     local progressScope = LrProgressScope {
         title = "Import album structure...",
         caption = "Starting...",
@@ -1214,20 +1321,69 @@ function PiwigoAPI.importAlbums(propertyTable)
         createCollectionsFromCatHierarchy(thisNode, parentNode, propertyTable, statusData)
     end
     progressScope:done()
+
     LrDialogs.message("Import Piwigo Albums",
         string.format("%s new collections, %s new collection sets, %s existing, %s errors", statusData.collections,
             statusData.collectionSets, statusData.existing, statusData.errors))
 end
 
 -- *************************************************
+function PiwigoAPI.pwCategoriesGetThis(propertyTable, thisCat)
+    log:info("PiwigoAPI.pwCategoriesGetThis - propertyTable\n" .. utils.serialiseVar(propertyTable))
+    local rv
+
+    -- check connection to piwigo
+    if not (propertyTable.Connected) then
+        rv = PiwigoAPI.login(propertyTable)
+        if not rv then
+            LrDialogs.message("PiwigoAPI.pwCategoriesGetThis - cannot connect to piwigo - ")
+            return nil
+        end
+    end
+
+    -- check role is admin level
+    if propertyTable.userStatus ~= "webmaster" then
+        LrDialogs.message("PiwigoAPI.pwCategoriesGetThis - user needs webmaster role ")
+        return nil
+    end
+
+    -- return single category info from Piwigo
+    if utils.nilOrEmpty(thisCat) then
+        log:info("PiwigoAPI.pwCategoriesGetThis - thisCat is empty")
+        return nil
+    end
+    --use piwigoapi.pwCategoriesGet to get all categerioes under thisCat
+
+    local rv, allCats = PiwigoAPI.pwCategoriesGet(propertyTable, tostring(thisCat))
+    if not rv then
+        log:info("PiwigoAPI.pwCategoriesGetThis - cannot get category " .. thisCat)
+        return nil
+    end
+    if utils.nilOrEmpty(allCats) then
+        log:info("PiwigoAPI.pwCategoriesGetThis - no categories found in piwigo for category " .. thisCat)
+        return nil
+    end
+    -- go tjhrough allCats to find thisCat
+    for _, cat in ipairs(allCats) do
+        if tostring(cat.id) == tostring(thisCat) then
+            return cat
+        end
+    end
+    log:info("PiwigoAPI.pwCategoriesGetThis - cannot find category " .. thisCat .. " in returned categories")
+    return nil
+end
+
+-- *************************************************
 function PiwigoAPI.pwCategoriesGet(propertyTable, thisCat)
     -- get list of categories from Piwigo
     -- if thisCat is set then return this category and children, otherwise all categories
-    local status, statusDes
+
     local Params = {
-        { name = "method",    value = "pwg.categories.getList" },
+        --{ name = "method",    value = "pwg.categories.getList" },
+        { name = "method",    value = "pwg.categories.getAdminList" },
         { name = "recursive", value = "true" },
-        { name = "fullname",  value = "false" }
+        --{ name = "tree",     value = "false" },
+        --{ name = "fullname", value = "false" }
     }
 
     if not (utils.nilOrEmpty(thisCat)) then
@@ -1463,8 +1619,9 @@ function PiwigoAPI.pwCategoriesDelete(propertyTable, info, metaData, callStatus)
 end
 
 -- *************************************************
-function PiwigoAPI.pwCategoriesSetinfo(propertyTable, info, callStatus)
+function PiwigoAPI.pwCategoriesSetinfo(propertyTable, info, metaData)
     -- Set info on category - change name etc
+    local callStatus = {}
     callStatus.status = false
     callStatus.statusMsg = ""
     local rv
@@ -1485,13 +1642,17 @@ function PiwigoAPI.pwCategoriesSetinfo(propertyTable, info, callStatus)
         return callStatus
     end
 
-    local remoteId = info.remoteId
-    local newName = info.name
+    local remoteId = metaData.remoteId
+    local name = metaData.name
+    local description = metaData.description
+    local status = metaData.status or "public"
 
     local params = {
         { name = "method",      value = "pwg.categories.setInfo" },
         { name = "category_id", value = tostring(remoteId) },
-        { name = "name",        value = newName },
+        { name = "name",        value = name },
+        { name = "comment",     value = description },
+        { name = "status",      value = status },
         { name = "pwg_token",   value = propertyTable.token }
     }
     log:info("PiwigoAPI.pwCategoriesSetinfo - params \n" .. utils.serialiseVar(params))

@@ -422,15 +422,213 @@ end
 -- ************************************************
 function PublishTask.viewForCollectionSettings(f, publishSettings, info)
     log:info("PublishTask.viewForCollectionSettings")
+
+    local thisName = info.name
+    if string.sub(thisName, 1, 1) == "[" and string.sub(thisName, -1) == "]" then
+        LrDialogs.message(
+            "Edit Piwigo Album",
+            "Cannot edit special collection " .. thisName .. " created by Piwigo Publisher plugin",
+            "info"
+        )
+        return false
+    end
+
+    local bind = LrView.bind
+    local share = LrView.share
+    local collectionSettings = assert(info.collectionSettings)
+    -- piwigo album settings
+    if collectionSettings.albumDescription == nil then
+        collectionSettings.albumDescription = ""
+    end
+    if collectionSettings.albumPrivate == nil then
+        collectionSettings.albumPrivate = false
+    end
+
+    -- customisation of image export settings
+    if collectionSettings.enableCustom == nil then
+        collectionSettings.enableCustom = false
+    end
+    if collectionSettings.reSize == nil then
+        collectionSettings.reSize = false
+    end
+    if collectionSettings.reSizeParam == nil then
+        collectionSettings.reSizeParam = "Long Edge"
+    end
+    if collectionSettings.reSizeNoEnlarge == nil then
+        collectionSettings.reSizeNoEnlarge = true
+    end
+    if collectionSettings.reSizeLongEdge == nil then
+        collectionSettings.reSizeLongEdge = 1024
+    end
+    if collectionSettings.reSizeShortEdge == nil then
+        collectionSettings.reSizeShortEdge = 1024
+    end
+    if collectionSettings.reSizeW == nil then
+        collectionSettings.reSizeW = 1024
+    end
+    if collectionSettings.reSizeH == nil then
+        collectionSettings.reSizeH = 1024
+    end
+    if collectionSettings.reSizeMP == nil then
+        collectionSettings.reSizeMP = 5
+    end
+    if collectionSettings.reSizePC == nil then
+        collectionSettings.reSizePC = 50
+    end
+    if collectionSettings.metaData == nil then
+        collectionSettings.metaData = "All"
+    end
+    if collectionSettings.metaDataNoPerson == nil then
+        collectionSettings.metaDataNoPerson = true
+    end
+    if collectionSettings.metaDataNoLocation == nil then
+        collectionSettings.metaDataNoLocation = false
+    end
+    if collectionSettings.KwFullHierarchy == nil then
+        collectionSettings.KwFullHierarchy = true
+    end
+    if collectionSettings.KwSynonyms == nil then
+        collectionSettings.KwSynonyms = true
+    end
+    -- build UI
+    local reSizeOptions = {
+        { title = "Long Edge",  value = "Long Edge" },
+        { title = "Short Edge", value = "Short Edge" },
+        { title = "Dimensions", value = "Dimensions" },
+        { title = "Megapixels", value = "MegaPixels" },
+        { title = "Percent",    value = "Percent" },
+    }
+    local metaDataOpts = {
+        { title = "All Metadata",                         value = "All Metadata" },
+        { title = "Copyright only",                       value = "Copyright Only" },
+        { title = "Copyright & Contact Info Only",        value = "Copyright & Contact Info Only" },
+        { title = "All Except Camera Raw Info",           value = "All Except Camera Raw Info" },
+        { title = "All Except Camera  & Camera Raw Info", value = "All Except Camera  & Camera Raw Info" },
+    }
+
+    local pwAlbumUI = f:group_box {
+        title = "Piwigo Album Settings",
+        font = "<system/bold>",
+        size = 'regular',
+        fill_horizontal = 1,
+        bind_to_object = assert(collectionSettings),
+        f:column {
+            spacing = f:control_spacing(),
+
+            f:separator { fill_horizontal = 1 },
+
+            f:row {
+                f:static_text { title = "Album Description:", font = "<system>", alignment = 'right', width = share 'label_width', },
+                f:edit_field {
+                    value = bind 'albumDescription',
+                    width_in_chars = 40,
+                    font = "<system>",
+                    alignment = 'left',
+                    height_in_lines = 4,
+                },
+            },
+            --[[
+            f:row {
+                f:checkbox {
+                    title = "Album is Private",
+                    tooltip = "If checked, this album will be private on Piwigo",
+                    value = bind 'albumPrivate',
+                }
+            }
+]]
+        }
+    }
+
+    local pubSettingsUI = f:group_box {
+        title = "Custom Publish Settings (Overrides defaults set in Publish Settings)",
+        font = "<system/bold>",
+        size = 'regular',
+        fill_horizontal = 1,
+        bind_to_object = assert(collectionSettings),
+        f:column {
+            spacing = f:control_spacing(),
+            fill_horizontal = 1,
+            f:separator { fill_horizontal = 1 },
+            f:row {
+                f:checkbox {
+                    title = "Use custom settings for this album",
+                    tooltip = "If checked, these settings will replace the defaults set in Publish Settings",
+                    value = bind 'enableCustom',
+                }
+            },
+            f:row {
+                f:group_box { -- group for export parameters
+                    title = "Export Settings",
+                    visible = bind 'enableCustom',
+                    font = "<system>",
+                    fill_horizontal = 1,
+                    f:row {
+                        fill_horizontal = 1,
+                        spacing = f:label_spacing(),
+
+                        f:checkbox {
+                            title = "Resize Image",
+                            tooltip = "If checked, published image will be resized per these settings",
+                            value = bind 'reSize',
+                        },
+                        f:static_text {
+                            title = "Use :",
+                            alignment = 'right',
+                            fill_horizontal = 1,
+                        },
+
+                        f:popup_menu {
+                            value = bind 'reSizeParam',
+                            items = sizeOpts,
+                            value_equal = valueEqual,
+                        },
+                        f:checkbox {
+                            title = "Allow Enlarge Image",
+                            tooltip = "If checked, published image will be enlarged if necessary",
+                            value = bind 'reSizeEnlarge',
+                        },
+
+                    },
+
+
+                },
+            },
+            f:row {
+                f:group_box { -- group for Metadata parameters
+                    title = "Metadata Settings",
+                    visible = bind 'enableCustom',
+                    font = "<system>",
+                    fill_horizontal = 1,
+                    f:spacer { height = 2 },
+
+                    f:checkbox { title = "Include Full Keyword Hierarchy",
+                        tooltip = "If checked, all keywords in a keyword hierarchy will be sent to Piwigo",
+                        value = bind 'KwFullHierarchy',
+                    },
+                    f:checkbox { title = "Include Keywords Synonyms",
+                        tooltip = "If checked, keywords synonyms will be sent to Piwigo",
+                        value = bind 'KwSynonyms',
+                    }
+
+                },
+            },
+        },
+    }
+
+    local UI = f:column {
+        spacing = f:control_spacing(),
+        pwAlbumUI,
+        --pubSettingsUI,
+    }
+    return UI
 end
 
 -- ************************************************
 function PublishTask.updateCollectionSettings(publishSettings, info)
-    -- this callback is triggered by LrC when a change is made to an existing collectionset or a new one is created
+    -- this callback is triggered by LrC when a change is made to an existing collection or a new one is created
 
     -- We use it for the creation of new collections to create a corresponding album on Piwigo
-    -- therefore we need to check if the associated piwigo album already exists and do nothing if so
-    -- check if operation is in progress and exit if so
+    -- and to update album description on existing albums if set
 
 
     log:info("PublishTask.updateCollectionSettings")
@@ -445,21 +643,43 @@ function PublishTask.updateCollectionSettings(publishSettings, info)
     }
 
     local metaData = {}
-    local newCollectionName = info.name
-    local newCollection = info.publishedCollection
+    local CollectionName = info.name
+    local Collection = info.publishedCollection
 
-
-
-    -- check if remoteId is present on this collection and exit if so
-    local remoteId = newCollection:getRemoteId()
-    if not (utils.nilOrEmpty(remoteId)) then
-        -- album exists on Piwigo - ignore
-        callStatus.status = true
-        return callStatus
+    local collectionSettings = assert(info.collectionSettings)
+    -- piwigo album settings
+    if collectionSettings.albumDescription == nil then
+        collectionSettings.albumDescription = ""
     end
-    -- create new album on Piwigo
-    metaData.name = newCollectionName
+    if collectionSettings.albumPrivate == nil then
+        collectionSettings.albumPrivate = false
+    end
+
+    local remoteId = Collection:getRemoteId()
+
+    metaData.name = CollectionName
     metaData.type = "collection"
+    metaData.remoteId = remoteId
+    metaData.description = collectionSettings.albumDescription or ""
+    if collectionSettings.albumPrivate then
+        metaData.status = "private"
+    else
+        metaData.status = "public"
+    end
+    if not (utils.nilOrEmpty(remoteId)) then
+        -- collection has a remoteId so get album from piwigo
+        local thisCat = PiwigoAPI.pwCategoriesGetThis(publishSettings, remoteId)
+        if not thisCat then
+            LrErrors.throwUserError('Publish photos to Piwigo - cannot check category exists on piwigo at ' ..
+                publishSettings.host)
+            return nil
+        end
+        CallStatus = PiwigoAPI.pwCategoriesSetinfo(publishSettings, info, metaData)
+        return CallStatus
+    end
+
+    -- create new album on Piwigo
+
     if utils.nilOrEmpty(info.parents) then
         -- creating album at root of publish service
         metaData.parentCat = ""
@@ -471,9 +691,11 @@ function PublishTask.updateCollectionSettings(publishSettings, info)
     if callStatus.status then
         -- add remote id and url to collection
         local catalog = LrApplication.activeCatalog()
+
+        -- switch to use PiwigoAPI.createPublishCollection
         catalog:withWriteAccessDo("Add Piwigo details to collections", function()
-            newCollection:setRemoteId(callStatus.newCatId)
-            newCollection:setRemoteUrl(publishSettings.host .. "/index.php?/category/" .. callStatus.newCatId)
+            Collection:setRemoteId(callStatus.newCatId)
+            Collection:setRemoteUrl(publishSettings.host .. "/index.php?/category/" .. callStatus.newCatId)
         end)
         LrDialogs.message(
             "New Piwigo Album",
@@ -487,12 +709,123 @@ end
 
 -- ************************************************
 function PublishTask.viewForCollectionSetSettings(f, publishSettings, info)
+    local bind = LrView.bind
+    local share = LrView.share
+    local collectionSettings = assert(info.collectionSettings)
+    -- piwigo album settings
+    if collectionSettings.albumDescription == nil then
+        collectionSettings.albumDescription = ""
+    end
+    if collectionSettings.albumPrivate == nil then
+        collectionSettings.albumPrivate = false
+    end
 
+    -- customisation of image export settings
+    if collectionSettings.enableCustom == nil then
+        collectionSettings.enableCustom = false
+    end
+    if collectionSettings.reSize == nil then
+        collectionSettings.reSize = false
+    end
+    if collectionSettings.reSizeParam == nil then
+        collectionSettings.reSizeParam = "Long Edge"
+    end
+    if collectionSettings.reSizeNoEnlarge == nil then
+        collectionSettings.reSizeNoEnlarge = true
+    end
+    if collectionSettings.reSizeLongEdge == nil then
+        collectionSettings.reSizeLongEdge = 1024
+    end
+    if collectionSettings.reSizeShortEdge == nil then
+        collectionSettings.reSizeShortEdge = 1024
+    end
+    if collectionSettings.reSizeW == nil then
+        collectionSettings.reSizeW = 1024
+    end
+    if collectionSettings.reSizeH == nil then
+        collectionSettings.reSizeH = 1024
+    end
+    if collectionSettings.reSizeMP == nil then
+        collectionSettings.reSizeMP = 5
+    end
+    if collectionSettings.reSizePC == nil then
+        collectionSettings.reSizePC = 50
+    end
+    if collectionSettings.metaData == nil then
+        collectionSettings.metaData = "All"
+    end
+    if collectionSettings.metaDataNoPerson == nil then
+        collectionSettings.metaDataNoPerson = true
+    end
+    if collectionSettings.metaDataNoLocation == nil then
+        collectionSettings.metaDataNoLocation = false
+    end
+    if collectionSettings.KwFullHierarchy == nil then
+        collectionSettings.KwFullHierarchy = true
+    end
+    if collectionSettings.KwSynonyms == nil then
+        collectionSettings.KwSynonyms = true
+    end
+    -- build UI
+    local reSizeOptions = {
+        { title = "Long Edge",  value = "Long Edge" },
+        { title = "Short Edge", value = "Short Edge" },
+        { title = "Dimensions", value = "Dimensions" },
+        { title = "Megapixels", value = "MegaPixels" },
+        { title = "Percent",    value = "Percent" },
+    }
+    local metaDataOpts = {
+        { title = "All Metadata",                         value = "All Metadata" },
+        { title = "Copyright only",                       value = "Copyright Only" },
+        { title = "Copyright & Contact Info Only",        value = "Copyright & Contact Info Only" },
+        { title = "All Except Camera Raw Info",           value = "All Except Camera Raw Info" },
+        { title = "All Except Camera  & Camera Raw Info", value = "All Except Camera  & Camera Raw Info" },
+    }
+
+    local pwAlbumUI = f:group_box {
+        title = "Piwigo Album Settings",
+        font = "<system/bold>",
+        size = 'regular',
+        fill_horizontal = 1,
+        bind_to_object = assert(collectionSettings),
+        f:column {
+            spacing = f:control_spacing(),
+
+            f:separator { fill_horizontal = 1 },
+
+            f:row {
+                f:static_text { title = "Album Description:", font = "<system>", alignment = 'right', width = share 'label_width', },
+                f:edit_field {
+                    value = bind 'albumDescription',
+                    width_in_chars = 40,
+                    font = "<system>",
+                    alignment = 'left',
+                    height_in_lines = 4,
+                },
+            },
+            --[[
+            f:row {
+                f:checkbox {
+                    title = "Album is Private",
+                    tooltip = "If checked, this album will be private on Piwigo",
+                    value = bind 'albumPrivate',
+                }
+            }
+            ]]
+        }
+    }
+
+    local UI = f:column {
+        spacing = f:control_spacing(),
+        pwAlbumUI,
+        --pubSettingsUI,
+    }
+    return UI
 end
 
 -- ************************************************
 function PublishTask.updateCollectionSetSettings(publishSettings, info)
-    -- this callback is triggered by LrC when a change is made to an existing collectionset or a new one is created
+    -- this callback is triggered by LrC when a change is made to an existing collectionset and when a new one is created
     -- We use it only for the creation of new collections to create a corresponding album on Piwigo
     -- therefore we need to check if the associated piwigo album already exists and do nothing if so
     log:info("PublishTask.updateCollectionSetSettings")
@@ -506,19 +839,53 @@ function PublishTask.updateCollectionSetSettings(publishSettings, info)
         statusMsg = ""
     }
 
-    local metaData = {}
-    local newCollectionName = info.name
-    local newCollection = info.publishedCollection
 
-    -- check if remoteId is present on this collection and exit if so
-    local remoteId = newCollection:getRemoteId()
+    local CollectionName = info.name
+    local Collection = info.publishedCollection
+    local collectionSettings = assert(info.collectionSettings)
+    local remoteId = Collection:getRemoteId()
+    local name = info.name
+
+
+    -- piwigo album settings
+    if collectionSettings.albumDescription == nil then
+        collectionSettings.albumDescription = ""
+    end
+    if collectionSettings.albumPrivate == nil then
+        collectionSettings.albumPrivate = false
+    end
+    -- check if remoteId is present on this collection
+    local metaData = {}
+    metaData.name = name
+    metaData.remoteId = remoteId
+    metaData.description = collectionSettings.albumDescription
+    if collectionSettings.albumPrivate then
+        metaData.status = "private"
+    else
+        metaData.status = "public"
+    end
+    -- update albumdesc if album exists and set
+
+
+    metaData.name = CollectionName
+    metaData.type = "collectionset"
+    metaData.description = collectionSettings.albumDescription
+    log:info("PublishTask.updateCollectionSetSettings - info\n" .. utils.serialiseVar(info))
+    log:info("PublishTask.updateCollectionSetSettings - metaData\n" .. utils.serialiseVar(metaData))
     if not (utils.nilOrEmpty(remoteId)) then
-        callStatus.status = true
-        return callStatus
+        -- collection has a remoteId so get album from piwigo
+        local thisCat = PiwigoAPI.pwCategoriesGetThis(publishSettings, remoteId)
+        if not thisCat then
+            LrErrors.throwUserError('Publish photos to Piwigo - cannot check category exists on piwigo at ' ..
+                publishSettings.host)
+            return nil
+        end
+        CallStatus = PiwigoAPI.pwCategoriesSetinfo(publishSettings, info, metaData)
+        return CallStatus
     end
 
-    metaData.name = newCollectionName
-    metaData.type = "collectionset"
+    -- create new album on Piwigo
+
     if utils.nilOrEmpty(info.parents) then
         -- creating album at root of publish service
         metaData.parentCat = ""
@@ -529,10 +896,11 @@ function PublishTask.updateCollectionSetSettings(publishSettings, info)
     callStatus = PiwigoAPI.pwCategoriesAdd(publishSettings, info, metaData, callStatus)
     if callStatus.status then
         -- add remote id and url to collection
+        -- switch to use PiwigoAPI.createPublishCollectionSet
         local catalog = LrApplication.activeCatalog()
         catalog:withWriteAccessDo("Add Piwigo details to collections", function()
-            newCollection:setRemoteId(callStatus.newCatId)
-            newCollection:setRemoteUrl(publishSettings.host .. "/index.php?/category/" .. callStatus.newCatId)
+            Collection:setRemoteId(callStatus.newCatId)
+            Collection:setRemoteUrl(publishSettings.host .. "/index.php?/category/" .. callStatus.newCatId)
         end)
         LrDialogs.message(
             "New Piwigo Album",
@@ -598,6 +966,18 @@ function PublishTask.renamePublishedCollection(publishSettings, info)
     local newName = info.name
     local collection = info.publishedCollection
     local oldName = collection:getName()
+
+    local metaData = {}
+    metaData.name = newName
+    metaData.remoteId = remoteId
+    metaData.oldName = oldName
+    metaData.description = info.collectionSettings.albumDescription or ""
+    if info.collectionSettings.albumPrivate then
+        metaData.status = "private"
+    else
+        metaData.status = "public"
+    end
+
     if string.sub(oldName, 1, 1) == "[" and string.sub(oldName, -1) == "]" then
         callStatus.statusMsg = "Cannot re-name a special collection"
     else
@@ -607,7 +987,7 @@ function PublishTask.renamePublishedCollection(publishSettings, info)
             if PiwigoBusy then
                 callStatus.statusMsg = "Piwigo Publisher is busy. Please try later."
             else
-                callStatus = PiwigoAPI.pwCategoriesSetinfo(publishSettings, info, callStatus)
+                callStatus = PiwigoAPI.pwCategoriesSetinfo(publishSettings, info, metaData)
             end
         end
     end

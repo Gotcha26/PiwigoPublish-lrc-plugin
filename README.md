@@ -5,12 +5,14 @@ A Lightroom Classic plugin which publishes images to a Piwigo host via the Piwig
 ## The following fuctionality is available:
 
 * Connect to Piwigo Server and download existing album structure
-    * Published Collection Sets and Published Collections are created in the LrC Publish Service corresponding to the albums and sub-albums in Piwigo (see features under development).
+    * Published Collection Sets and Published Collections are created in the LrC Publish Service corresponding to the albums and sub-albums in Piwigo - a◊lbum descriptions are imported
     * Images are not downloaded from Piwigo as part of this, nor are existing images in LrC automatically added to the newly created Published Collections.
 * Images added to the Publish Service are published to the corresponding album on Piwigo. Metadata and keywords are transferred, respecting rules configured in the Publishing Manager for this service.
 * Special collections can be created which allow images to be published to Piwigo albums that also have sub-albums. See details in the notes on the relationship between Piwigo Albums and LrC Publish Services below.
 * The plugin allows a Publish Collection to be converted to a Publish Collection Set - a Special Collection is created for the new Publish Collection Set and any photos that were in the converted Publish Collection will be in this Special Collection. This enables sub albums to be created under an album that was initially created for photos only.
 * Set Piwigo album cover from an image in the Published Collection
+* Album descriptions  can be maintained by the plugin. Right-click on an album in the Publish Services panel to display dialog where Album Description can be edited - formatting tags (html markup) are sent unchanged so formatting can be managed. Existing descriptions will be imported from Piwigo if the Import Albums option is run, but these will not include the html markup.
+  
 * Metadata and keywords are exported directly to Piwigo regardless of exif/iptc settings - as part of the publish process along with the photo, or separately via a menu on the Library -> Plug-in Extras menu - which sends the metadata without re-sending the photo.
   * the following fields are set : 
     * author from Lrc Creator,
@@ -23,7 +25,7 @@ A Lightroom Classic plugin which publishes images to a Piwigo host via the Piwig
     * Flags for Include Full Keyword Hierarchy and Include Keyword Synonyms can be set in the LrC Publishing Manager (the equivalent flags set in the LrC Keyword Tag editor are not visible to plugins so can't be used)
     * New keywords are created if not present in the Piwigo keywords list
     * Keyword comparison between LrC and Piwigo is not case sensitive as Piwigo effectively does case-folding and accent-folding to enable keyword based URLs to work - so for example 'This Is A Keyword' and 'this is a keyword' are treated as the same when sending keywords to Piwigo.
-  * GPS location data is only sent via exif so users of the OpenStreetMap plugin need to ensure that location info is included in the Metadata settings on the LrC Publishing Manager
+  * GPS location data is only sent via exif so users of the OpenStreetMap plugin need to ensure that location info is included in the Metadata settings of the LrC Publishing Manager
 * The plugin maintains a custom metadata set, Piwigo Publisher Metadata, with details of the most recent publishing activity for an image. NOTE - only images published using release 20251224.16 or later of this plugin will have this metadata.
 * Changes to images which trigger a re-publish will overwrite the previously published Piwigo image.
 * Images removed from the Publish Service are removed from corresponding album on Piwigo
@@ -38,7 +40,6 @@ A Lightroom Classic plugin which publishes images to a Piwigo host via the Piwig
 
 ## The following functionality is under development:
 
-* Metadata customisation - select which LrC metedata fields are used for Piwigo photo Title and Description fields.
 * Per album custom settings - allowing image sizes and other settings to be set at album level, overriding the global Publish Manager settings
 * Localisation for different languages
 
@@ -71,6 +72,7 @@ The plugin provides a function to import an existing Piwigo album structure into
   - If a sub-album has been added to an album that had no sub-albums at the time of first run then an error will be shown and the album won't be created.
   - If an album with a duplicate name has been created under the same parent it will be ignored.
   - It does not remove collections that no longer have corresponding Piwigo albums.
+  - If an album has a description set on Piwigo this will be imported and associated with the collection. Formatting (html markup) will not be imported, just the plain text.
 - The Create Special Collections routine can be re-run at any time. Existing special collections will be unchanged but any collection sets created since the last run will have special collections created.
 
 ## Installation and Configuration

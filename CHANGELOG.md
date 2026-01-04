@@ -1,4 +1,11 @@
 # Changelog
+## [20260104.22] - 2026-01-04
+### Fixed
+Changes to Category (album) visibility in Piwigo could cause duplicates to be created by plugin if a previously public album was changed to private in Piwigo and then a photo published to it. The plugin now effectively ignores public/private settings and can access all albums on the Piwigo host.
+
+### Added
+Album descriptions can be maintained by the plugin. Right-click on an album to display dialog where Album Description can be edited - see Readme for more information
+
 ## [20260102.21] - 2026-01-02
 ### Fixed
 Fix #23 Check / link Piwigo Structure: mistake of using albums from other publishing setup from same site
