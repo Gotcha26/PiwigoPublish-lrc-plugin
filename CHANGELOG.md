@@ -1,4 +1,10 @@
 # Changelog
+## [20260106.24] - 2026-01-06
+### Fixed
+Fix #23 - Keyword settings in publish service settings dialog get cut-off
+Fix #21 - bad argument #1 to '?' - see readme note on embedded metadata
+
+
 ## [20260105.23] - 2026-01-05
 ### Fixed
 Fix #24 rename album does not update custom metadata. Also fix error that incorrect albumname was used for metadata with special collections 

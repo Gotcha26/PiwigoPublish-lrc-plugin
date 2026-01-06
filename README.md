@@ -15,8 +15,8 @@ A Lightroom Classic plugin which publishes images to a Piwigo host via the Piwig
   
 * Metadata and keywords are exported directly to Piwigo regardless of exif/iptc settings - as part of the publish process along with the photo, or separately via a menu on the Library -> Plug-in Extras menu - which sends the metadata without re-sending the photo.
   * the following fields are set : 
-    * author from Lrc Creator,
-    * date_creation from LrC Date Time Original
+    * author from LrC Creator,
+    * date_creation from LrC Created Date, Original Date, Capture Date or Imagefile Creation Date - whichever is found first.
     * name (title) - default from LrC Title,
     * comment (description) - default from LrC Caption,
     * tokenised strings may be used instead for image name (title) and comment (description) - tokens idenfified by {{token}} will be substituted for image specific values on export. All metadata documented in photo:getFormattedMetadata (see https://archive.stecman.co.nz/files/docs/lightroom-sdk/API-Reference/modules/LrPhoto.html#photo:getFormattedMetadata) and photo:getRawMetadata (see https://archive.stecman.co.nz/files/docs/lightroom-sdk/API-Reference/modules/LrPhoto.html#photo:getRawMetadata) from the Lightroom Classic SDK are supported as tokens - for example: title, caption, headline, altTextAccessibility, extDescrAccessibility, copyName will substitute the corresponding values from the image.

@@ -27,10 +27,16 @@ PublishTask = {}
 
 -- ************************************************
 function PublishTask.processRenderedPhotos(functionContext, exportContext)
+    log:info("PublishTask.processRenderedPhotos")
     if PiwigoBusy then
         return nil
     end
     PiwigoBusy = true
+
+    -- start of pcall
+    --  local success, err = LrTasks.pcall(function()
+    -- BEGIN existing publish logic
+
     local callStatus = {}
     local catalog = LrApplication.activeCatalog()
     local exportSession = exportContext.exportSession
@@ -46,13 +52,12 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
     if not (propertyTable.Connected) then
         rv = PiwigoAPI.login(propertyTable)
         if not rv then
+            log:info('PublishTask.processRenderedPhotos - publishSettings:\n' .. utils.serialiseVar(propertyTable))
             PiwigoBusy = false
             LrErrors.throwUserError('Publish photos to Piwigo - cannot connect to piwigo at ' .. propertyTable.host)
             return nil
         end
     end
-
-    log:info('PublishTask.processRenderedPhotos - publishSettings:\n' .. utils.serialiseVar(propertyTable))
 
     local publishedCollection = exportContext.publishedCollection
     local collectionInfo = publishedCollection:getCollectionInfoSummary()
@@ -112,7 +117,7 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
         stopIfCanceled = true,
     }
 
-    log:info("PublishTask.processRenderedPhotos - renditionSettings\n" .. utils.serialiseVar(renditionParams))
+
     -- now wait for photos to be exported and then upload to Piwigo
     for i, rendition in exportContext:renditions(renditionParams) do
         -- reset connection every 75 uploads
@@ -123,6 +128,7 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
             rv = PiwigoAPI.login(propertyTable)
             if not rv then
                 PiwigoBusy = false
+                log:info("PublishTask.processRenderedPhotos - renditionSettings\n" .. utils.serialiseVar(renditionParams))
                 LrErrors.throwUserError('Publish photos to Piwigo - cannot connect to piwigo at ' .. propertyTable.host)
                 break
             end
@@ -146,26 +152,10 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
             callStatus = {}
             local filePath = pathOrMessage
             local metaData = {}
+            -- build metadata structure
+            metaData = utils.getPhotoMetadata(propertyTable, lrPhoto)
             metaData.Albumid = albumId
-            metaData.Creator = lrPhoto:getFormattedMetadata("creator") or ""
-
-            if propertyTable.mdTitle and propertyTable.mdTitle ~= "" then
-                metaData.Title = utils.setCustomMetadata(lrPhoto, propertyTable.mdTitle)
-            else
-                metaData.Title = lrPhoto:getFormattedMetadata("title") or ""
-            end
-            if propertyTable.mdDescription and propertyTable.mdDescription ~= "" then
-                metaData.Caption = utils.setCustomMetadata(lrPhoto, propertyTable.mdDescription)
-            else
-                metaData.Caption = lrPhoto:getFormattedMetadata("caption") or ""
-            end
-
-            metaData.fileName = lrPhoto:getFormattedMetadata("fileName") or ""
-            local lrTime = lrPhoto:getRawMetadata("dateTimeOriginal")
-            metaData.dateCreated = (LrDate.timeToUserFormat(lrTime, "%Y-%m-%d %H:%M:%S")) or ""
             metaData.Remoteid = remoteId
-
-            metaData.tagString = utils.BuildTagString(propertyTable, lrPhoto) or ""
             -- run to build missingTags - tags that will be created on upload to Piwigo
             -- will use this to decide whether to run build tagtable cache
             -- means we don't have to rebuild after each uploaded photo
@@ -214,6 +204,10 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
         end
     end
     progressScope:done()
+
+    -- end od existing publish logic and pcall
+    --     end)
+
     PiwigoBusy = false
     -- Check if republishRequested
     if requestRepub then
@@ -316,10 +310,12 @@ end
 
 -- ************************************************
 function PublishTask.getCommentsFromPublishedCollection(publishSettings, arrayOfPhotoInfo, commentCallback)
-    --[[
-	for i, photoInfo in ipairs( arrayOfPhotoInfo ) do
+    log:info("PublishTask.getCommentsFromPublishedCollection")
+        --[[
+    for i, photoInfo in ipairs(arrayOfPhotoInfo) do
+        log:info("PublishTask.getCommentsFromPublishedCollection - photoInfo:\n" .. utils.serialiseVar(photoInfo))
 
-		local comments = PiwigoAPI.getComments( publishSettings, photoInfo.remoteId)
+	--	local comments = PiwigoAPI.getComments( publishSettings, photoInfo.remoteId)
 		
 		local commentList = {}
 		
@@ -341,10 +337,8 @@ function PublishTask.getCommentsFromPublishedCollection(publishSettings, arrayOf
 		end
 
 		commentCallback{ publishedPhoto = photoInfo, comments = commentList }
-
-	end
-
-]]
+    end
+    ]]
 end
 
 -- ************************************************
@@ -380,7 +374,7 @@ end
 
 -- ************************************************
 function PublishTask.addCommentToPublishedPhoto(publishSettings, remotePhotoId, commentText)
-
+    log:info("PublishTask.addCommentToPublishedPhoto")
 end
 
 -- ************************************************
@@ -1004,7 +998,9 @@ function PublishTask.renamePublishedCollection(publishSettings, info)
         -- go through all published photos in this collection and update metadata
         -- need to check that remoteUrl is same as metadata field as photo may be in multiple publish collections
         -- check all published photos in this collection
-        log:info("PublishTask.renamePublishedCollection - updating photo metadata in renamed collection - collection is a " .. collection:type())
+        log:info(
+        "PublishTask.renamePublishedCollection - updating photo metadata in renamed collection - collection is a " ..
+        collection:type())
         if collection:type() == "LrPublishedCollection" then
             -- only PublishedCollections have photos
             PiwigoAPI.updateMetaDataforCollection(publishSettings, collection, metaData)
@@ -1014,7 +1010,6 @@ function PublishTask.renamePublishedCollection(publishSettings, info)
             -- check for special collection within collectionset and rename that, and check meta of photos in that collection
             PiwigoAPI.updateMetaDataforCollectionSet(publishSettings, collection, metaData)
         end
-        
     else
         LrTasks.startAsyncTask(function()
             LrFunctionContext.callWithContext("revertRename", function(context)

@@ -96,25 +96,10 @@ local function SendMetadata()
         callStatus = {}
         local metaData = {}
 
-            -- allow custom metadata selection here
-        if publishSettings.mdTitle and publishSettings.mdTitle ~= "" then
-            metaData.Title = utils.setCustomMetadata(lrPhoto, publishSettings.mdTitle)
-        else
-            metaData.Title = lrPhoto:getFormattedMetadata("title") or ""
-        end
-        if publishSettings.mdDescription and publishSettings.mdDescription ~= "" then
-            metaData.Caption = utils.setCustomMetadata(lrPhoto, publishSettings.mdDescription)
-        else
-            metaData.Caption = lrPhoto:getFormattedMetadata("caption") or ""
-        end
-
-        metaData.Creator = lrPhoto:getFormattedMetadata( "creator" ) or ""
-
-        metaData.fileName = lrPhoto:getFormattedMetadata("fileName") or ""
-        local lrTime = lrPhoto:getRawMetadata("dateTimeOriginal") 
-        metaData.dateCreated = LrDate.timeToUserFormat(lrTime, "%Y-%m-%d %H:%M:%S")
+        -- build metadata structure
+        metaData = utils.getPhotoMetadata(publishSettings,lrPhoto)
         metaData.Remoteid = remoteId
-        metaData.tagString = utils.BuildTagString(publishSettings, lrPhoto)
+
         callStatus = PiwigoAPI.updateMetadata(publishSettings,lrPhoto,metaData)
         if not callStatus.status then
             LrDialogs.message("Unable to set metadata for uploaded photo - " .. callStatus.statusMsg)

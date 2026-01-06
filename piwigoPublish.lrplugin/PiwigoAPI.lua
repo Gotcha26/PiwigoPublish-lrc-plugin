@@ -926,11 +926,12 @@ end
 -- *************************************************
 function PiwigoAPI.createPublishCollection(catalog, publishService, propertyTable, name, remoteId, parentSet)
     -- create new publish collection or return existing
-    log:info("createPublishCollection - " .. name .. ", " .. remoteId)
+
     local newColl
     catalog:withWriteAccessDo("Create PublishedCollection ", function()
         newColl = publishService:createPublishedCollection(name, parentSet, true)
     end)
+
     -- add remoteids and urls to collection
     PiwigoAPI.setCollectionDets(newColl, catalog, propertyTable, name, remoteId, parentSet)
 
@@ -950,7 +951,7 @@ function PiwigoAPI.validatePiwigoStructure(propertyTable)
     local rv, allCats
     local catalog = LrApplication.activeCatalog()
     rv = PiwigoAPI.getPublishService(propertyTable)
-    if not rv then
+    if not PiwigoAPI.getPublishService(propertyTable) then
         LrErrors.throwUserError("Error in validatePiwigoStructure: Cannot find Piwigo publish service for host/user.")
         return false
     end
@@ -1294,7 +1295,7 @@ function PiwigoAPI.checkAdmin(propertyTable)
     if not (propertyTable.Connected) then
         rv = PiwigoAPI.login(propertyTable)
         if not rv then
-            callStatus.statusMsg = 'PiwigoAPI:updateMetadata - cannot connect to piwigo'
+            callStatus.statusMsg = 'PiwigoAPI.checkAdmin - cannot connect to piwigo'
             return callStatus
         end
     end
@@ -1756,6 +1757,7 @@ end
 
 -- *************************************************
 function PiwigoAPI.checkPhoto(propertyTable, pwImageID)
+    log:info("PiwigoAPI.checkPhoto - checking for photo with id " .. pwImageID)
     -- check if image with this id exists on Piwigo
     -- pwg.images.getInfo
     local rtnStatus = {}
@@ -1800,10 +1802,19 @@ function PiwigoAPI.updateGallery(propertyTable, exportFilename, metaData)
     local params = {
         { name = "method",   value = "pwg.images.addSimple" },
         { name = "category", value = metaData.Albumid },
-        { name = "author",   value = metaData.Creator },
-        { name = "name",     value = metaData.Title },
-        { name = "comment",  value = metaData.Caption }
     }
+    if metaData.Title and metaData.Title ~= "" then
+        table.insert(params,
+            { name = "name", value = metaData.Title })
+    end
+    if metaData.Creator and metaData.Creator ~= "" then
+        table.insert(params,
+            { name = "author", value = metaData.Creator })
+    end
+    if metaData.Caption and metaData.Caption ~= "" then
+        table.insert(params,
+            { name = "comment", value = metaData.Caption })
+    end
     -- keywords
     if metaData.tagString and metaData.tagString ~= "" then
         table.insert(params,
@@ -1935,29 +1946,53 @@ function PiwigoAPI.updateMetadata(propertyTable, lrPhoto, metaData)
         return callStatus
     end
     if metaData.Remoteid ~= "" then
-        log:info("PiwigoAPI.updateMetadata - checking for existing photo with remoteid " .. metaData.Remoteid)
+        
         local rtnStatus = PiwigoAPI.checkPhoto(propertyTable, metaData.Remoteid)
         if not rtnStatus.status then
+            log:info("PiwigoAPI.updateMetadata - checking for existing photo with remoteid " .. metaData.Remoteid)
             callStatus.statusMsg = "PiwigoAPI.updateMetadata - cannot locate image " ..
                 metaData.Remoteid .. " on Piwigo - cannot update metadata"
             return callStatus
         end
     else
+        log:info("PiwigoAPI.updateMetadata - checking for existing photo with remoteid " .. metaData.Remoteid)
         callStatus.statusMsg = "PiwigoAPI.updateMetadata - missing Piwigo image ID - cannot update metadata"
         return callStatus
     end
 
-    local params = {
+    -- sanity check metadata
+    metaData.Creator     = metaData.Creator or ""
+    metaData.Title       = metaData.Title or ""
+    metaData.Caption     = metaData.Caption or ""
+    metaData.dateCreated = metaData.dateCreated or ""
+    metaData.tagString   = metaData.tagString or ""
+    -- parameters for POST
+
+    local params         = {
         { name = "method",              value = "pwg.images.setInfo" },
         { name = "image_id",            value = tostring(metaData.Remoteid) },
-        { name = "author",              value = metaData.Creator },
-        { name = "name",                value = metaData.Title },
-        { name = "comment",             value = metaData.Caption },
-        { name = "date_creation",       value = metaData.dateCreated },
         { name = "single_value_mode",   value = "replace" }, -- force metadata to be replaced rather than appended
         { name = "multiple_value_mode", value = "replace" }, -- force tags to be replaced rather than appended
         { name = "pwg_token",           value = propertyTable.token }
     }
+
+    if metaData.Title and metaData.Title ~= "" then
+        table.insert(params,
+            { name = "name", value = metaData.Title })
+    end
+    if metaData.Creator and metaData.Creator ~= "" then
+        table.insert(params,
+            { name = "author", value = metaData.Creator })
+    end
+    if metaData.dateCreated and metaData.dateCreated ~= "" then
+        table.insert(params,
+            { name = "date_creation", value = metaData.dateCreated })
+    end
+    if metaData.Caption and metaData.Caption ~= "" then
+        table.insert(params,
+            { name = "comment", value = metaData.Caption })
+    end
+
     -- keywords
     if metaData.tagString and metaData.tagString ~= "" then
         -- convert tagString to list of tagIDS
@@ -1985,7 +2020,7 @@ function PiwigoAPI.updateMetadata(propertyTable, lrPhoto, metaData)
         end
     end
 
-    -- now update Piwigo
+       -- now update Piwigo
     local postResponse = PiwigoAPI.httpPostMultiPart(propertyTable, params)
     if not postResponse.status then
         callStatus.statusMsg = "Unable to set metadata - " .. postResponse.statusMsg
@@ -2096,8 +2131,10 @@ function PiwigoAPI.specialCollections(propertyTable)
         local remoteId = thisSet:getRemoteId()
         local name = thisSet:getName()
         local scName = PiwigoAPI.buildSpecialCollectionName(name)
+        log:info("Processing collection set " ..
+        thisSet:getName() .. ", " .. scName .. ", remoteId " .. tostring(remoteId))
         local scColl = PiwigoAPI.createPublishCollection(catalog, publishService, propertyTable, scName, remoteId,
-            thisSet)
+        thisSet)
         if scColl == nil then
             LrDialogs.message("Failed to create special collection for " .. name, "", "warning")
         end
@@ -2326,7 +2363,7 @@ function PiwigoAPI.httpPostMultiPart(propertyTable, params)
     -- LrHttp.postMultipart( url, content, headers, timeout, callbackFn, suppressFormData )
     local postResponse = {}
     local postHeaders = {}
-    log:info("PiwigoAPI.httpPostMultiPart - params\n" .. utils.serialiseVar(params))
+
     local httpResponse, httpHeaders = LrHttp.postMultipart(
         propertyTable.pwurl,
         params,
@@ -2334,8 +2371,6 @@ function PiwigoAPI.httpPostMultiPart(propertyTable, params)
             headers = { field = "Cookie", value = propertyTable.cookies }
         }
     )
-    log:info("PiwigoAPI.httpPostMultiPart - httpResponse \n" .. utils.serialiseVar(httpResponse))
-    log:info("PiwigoAPI.httpPostMultiPart - httpHeaders \n" .. utils.serialiseVar(httpHeaders))
 
     local body
     if httpResponse then
@@ -2346,6 +2381,9 @@ function PiwigoAPI.httpPostMultiPart(propertyTable, params)
         postHeaders.statusDesc = (httpHeaders and (httpHeaders.statusDes or httpHeaders.statusDesc)) or ""
     end
     if not body then
+        log:info("PiwigoAPI.httpPostMultiPart - params\n" .. utils.serialiseVar(params))
+        log:info("PiwigoAPI.httpPostMultiPart - httpResponse \n" .. utils.serialiseVar(httpResponse))
+        log:info("PiwigoAPI.httpPostMultiPart - httpHeaders \n" .. utils.serialiseVar(httpHeaders))
         postResponse.status = false
         postResponse.statusMsg = postHeaders.status .. " - " .. postHeaders.statusDesc
         return postResponse
@@ -2355,10 +2393,16 @@ function PiwigoAPI.httpPostMultiPart(propertyTable, params)
             postResponse.status = true
             postResponse.statusMsg = ""
         else
+            log:info("PiwigoAPI.httpPostMultiPart - params\n" .. utils.serialiseVar(params))
+            log:info("PiwigoAPI.httpPostMultiPart - httpResponse \n" .. utils.serialiseVar(httpResponse))
+            log:info("PiwigoAPI.httpPostMultiPart - httpHeaders \n" .. utils.serialiseVar(httpHeaders))
             postResponse.status = false
             postResponse.statusMsg = body.message or ""
         end
     else
+        log:info("PiwigoAPI.httpPostMultiPart - params\n" .. utils.serialiseVar(params))
+        log:info("PiwigoAPI.httpPostMultiPart - httpResponse \n" .. utils.serialiseVar(httpResponse))
+        log:info("PiwigoAPI.httpPostMultiPart - httpHeaders \n" .. utils.serialiseVar(httpHeaders))
         postResponse.status = false
         postResponse.statusMsg = body.message or ""
     end

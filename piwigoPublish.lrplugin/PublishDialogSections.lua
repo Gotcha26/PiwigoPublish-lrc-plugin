@@ -341,12 +341,14 @@ local function prefsDialog(f, propertyTable)
 			fill_horizontal = 1,
 			f:spacer { height = 2 },
 			f:row {
+				fill_horizontal = 1,
 				f:static_text {
 					title = "",
-					alignment = 'left',
+					alignment = 'right',
 					width_in_chars = 7,
 				},
 				f:checkbox {
+					font = "<system>",
 					title = "Include Full Keyword Hierarchy",
 					tooltip = "If checked, all keywords in a keyword hierarchy will be sent to Piwigo",
 					value = bind 'KwFullHierarchy',
@@ -356,12 +358,14 @@ local function prefsDialog(f, propertyTable)
 			f:spacer { height = 2 },
 
 			f:row {
+				fill_horizontal = 1,
 				f:static_text {
 					title = "",
-					alignment = 'left',
+					alignment = 'right',
 					width_in_chars = 7,
 				},
 				f:checkbox {
+					font = "<system>",
 					title = "Include Keyword Synonyms",
 					tooltip = "If checked, keyword synonyms will be sent to Piwigo",
 					value = bind 'KwSynonyms',

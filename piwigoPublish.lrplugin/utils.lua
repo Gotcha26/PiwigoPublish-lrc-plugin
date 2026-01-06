@@ -131,6 +131,43 @@ function utils.parseGPS(coordStr)
 end
 
 -- *************************************************
+function utils.formattedToISO(dateStr)
+    if not dateStr or dateStr == "" then
+        return nil
+    end
+
+    -- Convert Lightroom-formatted date/time (with optional fractional seconds)
+    local t = utils.normaliseDateTime(dateStr)
+    if not t then
+        return nil
+    end
+
+    -- Format as YYYY-MM-DD HH:MM
+    return LrDate.formatShortDateTime(t, "%Y-%m-%d %H:%M")
+end
+
+-- *************************************************
+function utils.normaliseDateTime(dateStr)
+    if not dateStr or dateStr == "" then
+        return nil
+    end
+
+    -- Try to match: MM/DD/YYYY HH:MM[:SS][.fff]
+    local month, day, year, hour, min = dateStr:match(
+        "(%d%d)/(%d%d)/(%d%d%d%d)%s+(%d%d):(%d%d)"
+    )
+
+    if month and day and year and hour and min then
+        return string.format("%04d-%02d-%02d %02d:%02d",
+            tonumber(year), tonumber(month), tonumber(day),
+            tonumber(hour), tonumber(min))
+    end
+
+    -- If match fails, try DD/MM/YYYY or other common formats as needed
+    return nil
+end
+
+-- *************************************************
 function utils.findNode(xmlNode, nodeName)
     -- iteratively find nodeName in xmlNode
 
@@ -207,6 +244,39 @@ end
 function utils.cutApiKey(key)
     -- replace characters of private string with elipsis
     return string.sub(key, 1, 20) .. '...'
+end
+
+-- *************************************************
+function utils.clean_spaces(text)
+    --removes spaces from the front and back of passed in text
+    text = string.gsub(text, "^%s*", "")
+    text = string.gsub(text, "%s*$", "")
+    return text
+end
+
+-- *************************************************
+function utils.nilOrEmpty(val)
+    -- check if val is nil or empty
+
+    if val == nil then
+        return true
+    end
+    if type(val) == "string" and val == "" then
+        return true
+    end
+    if type(val) == "table" then
+        -- Check if table has any elements (non-empty)
+        for _ in pairs(val) do
+            return false
+        end
+        return true
+    end
+    return false
+end
+
+---- *************************************************
+function utils.nonEmpty(v)
+    return (v ~= nil and v ~= "") and v or nil
 end
 
 ---- *************************************************
@@ -408,6 +478,50 @@ function utils.BuildTagString(propertyTable, lrPhoto)
     end
     tagString = utils.tabletoString(tagTable, ",")
     return tagString
+end
+
+-- *************************************************
+function utils.getPhotoMetadata(publishSettings, lrPhoto)
+    -- build set of metadata to be send to Piwigo
+    local metaData = {}
+    if publishSettings.mdTitle and publishSettings.mdTitle ~= "" then
+        metaData.Title = utils.setCustomMetadata(lrPhoto, publishSettings.mdTitle)
+    else
+        metaData.Title = lrPhoto:getFormattedMetadata("title") or ""
+    end
+    if publishSettings.mdDescription and publishSettings.mdDescription ~= "" then
+        metaData.Caption = utils.setCustomMetadata(lrPhoto, publishSettings.mdDescription)
+    else
+        metaData.Caption = lrPhoto:getFormattedMetadata("caption") or ""
+    end
+    metaData.Creator = lrPhoto:getFormattedMetadata("creator") or ""
+    metaData.fileName = lrPhoto:getFormattedMetadata("fileName") or ""
+
+    -- find a populated date field
+    local dtOriginal = lrPhoto:getRawMetadata("dateTimeOriginal")
+    local dtDigitized = lrPhoto:getRawMetadata("dateTimeDigitized")
+    local dt = lrPhoto:getRawMetadata("dateTime")
+    local rawDate = nil
+    if dtOriginal and dtOriginal ~= 0 then
+        rawDate = dtOriginal
+    elseif dtDigitized and dtDigitized ~= 0 then
+        rawDate = dtDigitized
+    elseif dt and dt ~= 0 then
+        rawDate = dt
+    end
+    if not rawDate then
+        -- last try - get the source file creation date
+        local sourceFile = lrPhoto:getRawMetadata("path")
+        if LrFileUtils.exists(sourceFile) then
+            rawDate = LrFileUtils.fileAttributes(sourceFile).fileCreationDate
+        end
+    end
+    local useDate = LrDate.timeToUserFormat(rawDate, "%Y-%m-%d %H:%M:%S")
+    metaData.dateCreated = useDate or ""
+
+    metaData.tagString = utils.BuildTagString(publishSettings, lrPhoto)
+
+    return metaData
 end
 
 -- *************************************************
@@ -760,7 +874,7 @@ function utils.setCustomMetadata(lrPhoto, mdTemplate)
 
     -- find all {{ }} tokens in the string
     for token in string.gmatch(metaStr, "{{(.-)}}") do
-        local replaceValue 
+        local replaceValue
         if string.sub(token, 1, 4) == "RAW_" then
             -- raw metadata token
             local rawToken = string.sub(token, 5)
@@ -785,7 +899,7 @@ function utils.setCustomMetadata(lrPhoto, mdTemplate)
             elseif rawTokenTable[token] then
                 replaceValue = safeGetMetadata(lrPhoto, token, "R")
             else
-                replaceValue = "{{" .. token .. "}} not recognised" 
+                replaceValue = "{{" .. token .. "}} not recognised"
             end
         end
         -- ensure replaceValue is string
@@ -819,7 +933,7 @@ function utils.findPhotoInCollectionSet(pubCollOrSet, selPhoto)
     --log:info("utils.findPhotoInCollectionSet - pubCollOrSet " .. pubCollOrSet:getName() .. ", selPhoto " .. selPhoto.localIdentifier)
 
     if pubCollOrSet:type() == "LrPublishedCollection" then
-        log:info("utils.findPhotoInCollectionSet - searching in LrPublishedCollection " .. pubCollOrSet:getName())
+        --log:info("utils.findPhotoInCollectionSet - searching in LrPublishedCollection " .. pubCollOrSet:getName())
         -- publishedcollection - look for photo
         local publishedPhotos = pubCollOrSet:getPublishedPhotos()
         local thisPubPhoto = nil
@@ -932,34 +1046,6 @@ function utils.findPublishNodeByName(service, name)
         return nil
     end
     return utils.recursiveSearch(service, normaliseId(name))
-end
-
--- *************************************************
-function utils.clean_spaces(text)
-    --removes spaces from the front and back of passed in text
-    text = string.gsub(text, "^%s*", "")
-    text = string.gsub(text, "%s*$", "")
-    return text
-end
-
--- *************************************************
-function utils.nilOrEmpty(val)
-    -- check if val is nil or empty
-
-    if val == nil then
-        return true
-    end
-    if type(val) == "string" and val == "" then
-        return true
-    end
-    if type(val) == "table" then
-        -- Check if table has any elements (non-empty)
-        for _ in pairs(val) do
-            return false
-        end
-        return true
-    end
-    return false
 end
 
 -- *************************************************
