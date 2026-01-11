@@ -229,7 +229,6 @@ local function prefsDialog(f, propertyTable)
 					width_in_chars = 50,
 					tooltip = "Click to fetch the current album structure from the Piwigo Host above. Only albums the user has permission to see will be included",
 				},
-
 			},
 
 			f:spacer { height = 1 },
@@ -393,7 +392,40 @@ local function prefsDialog(f, propertyTable)
 					tooltip = "If checked, Album descriptions will be maintainable in Lightroom and sent to Piwigo",
 					value = bind 'syncAlbumDescriptions',
 				},
+			},
+			f:spacer { height = 1 },
+
+			f:row {
+				fill_horizontal = 1,
+				f:static_text {
+					title = "",
+					alignment = 'right',
+					width_in_chars = 7,
+				},
+				f:checkbox {
+					title = "Synchronise comments as part of a Publish Process",
+					font = "<system>",
+					tooltip = "When checked, comments will be synchronised for all photos in a collection during a publish operation",
+					value = bind 'syncCommentsPublish',
+				},
+			},
+						f:row {
+				fill_horizontal = 1,
+				f:static_text {
+					title = "",
+					alignment = 'right',
+					width_in_chars = 7,
+				},
+				f:checkbox {
+					title = "Only include Published Photos",
+					enabled = bind ('syncCommentsPublish', propertyTable),
+					font = "<system>",
+					tooltip = "When checked, only photos being published will have comments synchronised",
+					value = bind 'syncCommentsPubOnly',
+				},
 			}
+
+
 		},
 	}
 end

@@ -1,6 +1,6 @@
 --[[
 
-    utils.lua
+    utils.lua - generic utility functions
 
     Copyright (C) 2024 Fiona Boston <fiona@fbphotography.uk>.
 
@@ -131,16 +131,42 @@ function utils.parseGPS(coordStr)
 end
 
 -- *************************************************
+function utils.timeStamp(dateStrISO)
+    if not dateStrISO or dateStrISO == "" then
+        return nil
+    end
+    -- check for ISO
+    if dateStrISO:match("^%d%d%d%d%-%d%d%-%d%d %d%d:%d%d:%d%d$") then
+        local year, month, day, hour, min, sec =  dateStrISO:match("(%d+)%-(%d+)%-(%d+) (%d+):(%d+):(%d+)")
+        local timestamp = os.time({
+            year  = year,
+            month = month,
+            day   = day,
+            hour  = tonumber(hour),
+            min   = tonumber(min),
+            sec   = tonumber(sec),
+        })
+        return timestamp
+    end
+    return nil
+end
+
+
+-- *************************************************
 function utils.formattedToISO(dateStr)
     if not dateStr or dateStr == "" then
         return nil
     end
-
+    -- check for ISO
+    if dateStr:match("^%d%d%d%d%-%d%d%-%d%d %d%d:%d%d:%d%d$") then
+        return dateStr
+    end
     -- Convert Lightroom-formatted date/time (with optional fractional seconds)
     local t = utils.normaliseDateTime(dateStr)
     if not t then
         return nil
     end
+
 
     -- Format as YYYY-MM-DD HH:MM
     return LrDate.formatShortDateTime(t, "%Y-%m-%d %H:%M")
@@ -1183,6 +1209,13 @@ function utils.getLogfilePath()
             return winPathOld .. filename
         end
     end
+end
+
+-- *************************************************
+function utils.pwBusyMessage(callingFunction, displayFunction)
+    -- display Piwigo Busy message
+
+    LrDialogs.message("Piwigo Publisher is busy. Please try " .. displayFunction .. " later.")
 end
 
 -- *************************************************

@@ -23,7 +23,7 @@
 
 
 return {
-    schemaVersion = 4,
+    schemaVersion = 5,
     metadataFieldsForPhotos = {
 
         {
@@ -79,6 +79,15 @@ return {
             id = 'pwUploadTime',
             title = 'Upload Time',
             version = 2
+        },
+        {
+            dataType = 'string',
+            readOnly = true,
+            searchable = false,
+            browsable = false,
+            id = 'pwCommentSync',
+            title = 'pwCommentSync',
+            version = 1
         },
     }
 }

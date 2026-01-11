@@ -42,14 +42,15 @@ A Lightroom Classic plugin which publishes images to a Piwigo host via the Piwig
 
 ## The following functionality is under development:
 
+* Import collection/set/image structure from another publish service
+    * if remoteIds / URLs are present these will be copied. Useful to copy another publish service where a Piwigo host is the target without having to clear the existing Piwigo albums prior to re-publishing.
 * Per album custom settings - allowing image sizes and other settings to be set at album level, overriding the global Publish Manager settings
 * Localisation for different languages
 
 ## The following functionality is planned:
 
 * Support for the X-PIWIGO-API header instead of Authorization when sending API keys - v16.1 and above
-* Import collection/set/image structure from another publish service
-    * if remoteIds / URLs are present these will be copied. Useful to copy another publish service where a Piwigo host is the target without having to clear the existing Piwigo albums prior to re-publishing.
+
 * Metadata Check - check metadata on Piwigo matches Lrc (Title, Caption, GPS, Creator)
 
 ## The following functionality is not currently planned:

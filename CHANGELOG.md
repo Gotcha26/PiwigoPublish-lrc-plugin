@@ -1,4 +1,12 @@
 # Changelog
+## [20260111.26] - 2026-01-09
+### Fixed
+Fix #35 Comments Synchronisation feature request
+Fix #30 Cannot get tag list from Piwigo - error 401. Incorrect error message fixed.
+
+### Added
+Comments synchronised between Piwigo and LrC
+
 ## [20260106.25] - 2026-01-06
 ### Fixed
 Fix #27 - Album formatting lost on import to LrC

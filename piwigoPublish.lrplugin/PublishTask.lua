@@ -33,10 +33,6 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
     end
     PiwigoBusy = true
 
-    -- start of pcall
-    --  local success, err = LrTasks.pcall(function()
-    -- BEGIN existing publish logic
-
     local callStatus = {}
     local catalog = LrApplication.activeCatalog()
     local exportSession = exportContext.exportSession
@@ -116,6 +112,8 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
     local renditionParams = {
         stopIfCanceled = true,
     }
+    -- flag to allow sync comments to manage process
+    RenderPhotos = true
 
 
     -- now wait for photos to be exported and then upload to Piwigo
@@ -178,6 +176,11 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
                         lrPhoto:setPropertyForPlugin(_PLUGIN, "pwImageURL", callStatus.remoteurl)
                         lrPhoto:setPropertyForPlugin(_PLUGIN, "pwUploadDate", os.date("%Y-%m-%d"))
                         lrPhoto:setPropertyForPlugin(_PLUGIN, "pwUploadTime", os.date("%H:%M:%S"))
+
+                        if propertyTable.syncCommentsPublish then
+                            -- set to allow comments to sync for this photo if flag set
+                            lrPhoto:setPropertyForPlugin(_PLUGIN, "pwCommentSync", "YES")
+                        end
                     end)
 
                 -- photo was uploaded with keywords included, but existing keywords aren't replaced by this process,
@@ -205,8 +208,6 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
     end
     progressScope:done()
 
-    -- end od existing publish logic and pcall
-    --     end)
 
     PiwigoBusy = false
     -- Check if republishRequested
@@ -288,6 +289,7 @@ function PublishTask.deletePhotosFromPublishedCollection(publishSettings, arrayO
                         thisLrPhoto:setPropertyForPlugin(_PLUGIN, "pwImageURL", "")
                         thisLrPhoto:setPropertyForPlugin(_PLUGIN, "pwUploadDate", "")
                         thisLrPhoto:setPropertyForPlugin(_PLUGIN, "pwUploadTime", "")
+                        thisLrPhoto:setPropertyForPlugin(_PLUGIN, "pwCommentSync", "")
                     end)
                 thisPhotoToUnpublish[4] = true
             else
@@ -312,34 +314,108 @@ end
 function PublishTask.getCommentsFromPublishedCollection(publishSettings, arrayOfPhotoInfo, commentCallback)
     log:info("PublishTask.getCommentsFromPublishedCollection")
     --[[
-    for i, photoInfo in ipairs(arrayOfPhotoInfo) do
-        log:info("PublishTask.getCommentsFromPublishedCollection - photoInfo:\n" .. utils.serialiseVar(photoInfo))
+    This callback is invoked in the following situations:
+    1 - For every photo in the Published Collection whenever any photo in that collection is published or re-published.
+    2 - When the user clicks Refresh in the Library module ▸ Comments panel.
+    3 - After the user adds a new comment to a photo in the Library module ▸ Comments panel.
+]]
 
-	--	local comments = PiwigoAPI.getComments( publishSettings, photoInfo.remoteId)
-		
-		local commentList = {}
-		
-		if comments and #comments > 0 then
-
-			for _, comment in ipairs( comments ) do
-
-				table.insert( commentList, {
-								commentId = comment.id,
-								commentText = comment.commentText,
-								dateCreated = comment.datecreate,
-								username = comment.author,
-								realname = comment.authorname,
-								url = comment.permalink
-							} )
-
-			end
-
-		end
-
-		commentCallback{ publishedPhoto = photoInfo, comments = commentList }
+    -- check PiwigoBusy flag
+    if PiwigoBusy then
+        utils.pwBusyMessage("PublishTask.getCommentsFromPublishedCollection", "Sync Comments")
+        return
     end
-    ]]
+
+    -- check if being called by processRenderedPhotos
+    local syncPubOnly = false
+    if RenderPhotos then
+        RenderPhotos = false
+        -- should we sync comments as part of the processRenderedPhotos operation
+        if not (publishSettings.syncCommentsPublish) then
+            log:info("PublishTask.getCommentsFromPublishedCollection - syncComments not enabled for publish")
+            return
+        end
+        -- should we sync comments only for photos published in preceding publish process
+        if publishSettings.syncCommentsPubOnly then
+            syncPubOnly = true
+        end
+    end
+
+
+
+    local catalog = LrApplication.activeCatalog()
+    -- loop through all photos to check for any with pwCommentSync set to "NO"
+    for i, photoInfo in ipairs(arrayOfPhotoInfo) do
+        --log:info("PublishTask.getCommentsFromPublishedCollection - photoInfo:\n" .. utils.serialiseVar(photoInfo))
+        local thisPubPhoto = photoInfo.publishedPhoto
+        local thisLrPhoto = thisPubPhoto:getPhoto()
+        -- assume to sync comments for all photos in arrayofphotoids
+        local syncThisPhoto = true
+        if syncPubOnly then
+            -- syncPubOnly will be set to true if getCommentsFromPublishedCollection has been called following processRenderedPhotos and user has checked the option to enable this
+            local commentSync = thisLrPhoto:getPropertyForPlugin(_PLUGIN, "pwCommentSync")
+            if commentSync == "YES" then
+                -- reset metadata
+                catalog:withWriteAccessDo("Updating " .. thisLrPhoto:getFormattedMetadata("fileName"),
+                    function()
+                        thisLrPhoto:setPropertyForPlugin(_PLUGIN, "pwCommentSync", "")
+                    end)
+            else
+                -- this photo was not part of recent processRenderedPhotos so ignore
+                syncThisPhoto = false
+            end
+        end
+
+        if syncThisPhoto then
+            -- get table of comments for this photo from Piwigo
+            local metaData = {}
+            metaData.remoteId = photoInfo.remoteId
+            local pwComments = PiwigoAPI.getComments(publishSettings, metaData)
+            -- convert pwComments to format required by commentCallback
+            --log:info("PublishTask.getCommentsFromPublishedCollection - commentList:\n" .. utils.serialiseVar(pwComments))
+            local commentList = {}
+            if pwComments and #pwComments > 0 then
+                for _, comment in ipairs(pwComments) do
+                    local dateCreated = comment.date
+                    local timeStamp = utils.timeStamp(dateCreated)
+                    log:info("dateCreated " .. dateCreated .. ", timeStamp " .. timeStamp)
+                    table.insert(commentList, {
+                        commentId = comment.id,
+                        commentText = comment.content,
+                        dateCreated = LrDate.timeFromPosixDate(tonumber(timeStamp)),
+                        username = comment.author,
+                        realname = comment.author,
+                        url = comment.page_url,
+                    })
+                end
+            end
+            --log:info("PublishTask.getCommentsFromPublishedCollection - commentList:\n" .. utils.serialiseVar(commentList))
+            commentCallback { publishedPhoto = photoInfo, comments = commentList }
+        end
+    end
 end
+
+-- ************************************************
+function PublishTaskcanAddCommentsToService(publishSettings)
+    log:info("PublishTask.canAddCommentToPublishedPhoto")
+    -- check if Piwgo has comments enabled
+    local commentsEnabled = PiwigoAPI.pwCheckComments(publishSettings)
+    return commentsEnabled
+end
+
+-- ************************************************
+function PublishTask.addCommentToPublishedPhoto(publishSettings, remotePhotoId, commentText)
+    log:info("PublishTask.addCommentToPublishedPhoto")
+    -- add comment to Piwigo Photo
+
+    local metaData = {}
+    metaData.remoteId = remotePhotoId
+    metaData.comment = commentText
+
+    local rv = PiwigoAPI.addComment(publishSettings, metaData)
+    return rv
+end
+
 
 -- ************************************************
 function PublishTask.didCreateNewPublishService(publishSettings, info)
@@ -370,11 +446,6 @@ function PublishTask.shouldDeletePublishedCollection(publishSettings, info)
     -- TODO
     -- Add dialog with details of photos and sub collections that will be orphaned if delete goes ahead
     log:info("PublishTask.shouldDeletePublishedCollection")
-end
-
--- ************************************************
-function PublishTask.addCommentToPublishedPhoto(publishSettings, remotePhotoId, commentText)
-    log:info("PublishTask.addCommentToPublishedPhoto")
 end
 
 -- ************************************************
@@ -535,7 +606,7 @@ function PublishTask.viewForCollectionSettings(f, publishSettings, info)
                     value = bind 'albumPrivate',
                 }
             }
-]]
+            ]]
         }
     }
 

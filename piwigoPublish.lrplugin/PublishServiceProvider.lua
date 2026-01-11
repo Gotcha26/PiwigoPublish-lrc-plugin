@@ -43,7 +43,7 @@ return {
 	supportsCustomSortOrder = false,
 	hidePrintResolution = true,
 	supportsIncrementalPublish = 'only', -- plugin only visible in publish services, not export
-	canAddCommentsToService = false,
+
 
 	-- these fields are stored in the publish service settings by Lightroom
 	exportPresetFields = {
@@ -54,8 +54,9 @@ return {
 		{ key = "KwSynonyms", default = true},
 		{ key = "mdTitle", default = "{{title}}"},
 		{ key = "mdDescription", default = "{{caption}}"},
-		{ key = "syncAlbumDescriptions", default = false}
-        --{ key = "scNameFix",default = false}
+		{ key = "syncAlbumDescriptions", default = false},
+		{ key = "syncCommentsPublish", default = true},
+		{ key = "syncCommentsPubOnly", default = false}
 		
 	},
 --[[
@@ -85,6 +86,7 @@ return {
 
 -- Images Processing function
 	processRenderedPhotos = PublishTask.processRenderedPhotos,
+	canAddCommentsToService = PublishTask.PublishTaskcanAddCommentsToService,
 	addCommentToPublishedPhoto = PublishTask.addCommentToPublishedPhoto,
 	getCommentsFromPublishedCollection = PublishTask.getCommentsFromPublishedCollection,
 	deletePhotosFromPublishedCollection = PublishTask.deletePhotosFromPublishedCollection,
