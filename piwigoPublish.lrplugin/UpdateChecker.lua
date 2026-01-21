@@ -5,7 +5,7 @@
     Checks GitHub Releases API for new versions
 
     Copyright (C) 2024 Fiona Boston <fiona@fbphotography.uk>.
-    Copyright (C) 2026 Julien Moreau <contact@julien-moreau.fr>.
+    Copyright (C) 2026 Julien Moreau
 
     This file is part of PiwigoPublish
 
@@ -37,21 +37,69 @@ UpdateChecker.CHECK_INTERVAL_DAYS = 1
 
 -- *************************************************
 function UpdateChecker.parseVersion(versionStr)
-    -- Converts version string like "20260111.26" to comparable number
-    -- Format: YYYYMMDD.revision
+    -- Converts version strings to comparable numbers
+    -- Supports two formats:
+    --   Date-based: "20260111.26" or "v20260111.26" → YYYYMMDD * 1000 + revision
+    --   SemVer: "1.2.3" or "v1.2.3" → major * 1000000 + minor * 1000 + patch
+    
     if not versionStr or versionStr == "" then
-        return 0
+        return 0, "unknown"
     end
     
     -- Remove 'v' prefix if present
-    versionStr = versionStr:gsub("^[vV]", "")
+    versionStr = tostring(versionStr):gsub("^[vV]", "")
     
-    local major, minor = versionStr:match("^(%d+)%.?(%d*)")
-    if major then
-        minor = minor or "0"
-        return tonumber(major) * 1000 + tonumber(minor)
+    -- Check if it's date-based (starts with 20xx) or SemVer
+    local firstPart = versionStr:match("^(%d+)")
+    if not firstPart then
+        return 0, "unknown"
     end
-    return 0
+    
+    if tonumber(firstPart) >= 20000000 then
+        -- Date-based format: YYYYMMDD.revision
+        local major, minor = versionStr:match("^(%d+)%.?(%d*)")
+        major = tonumber(major) or 0
+        minor = tonumber(minor) or 0
+        return major * 1000 + minor, "date"
+    else
+        -- SemVer format: major.minor.patch
+        local major, minor, patch = versionStr:match("^(%d+)%.?(%d*)%.?(%d*)")
+        major = tonumber(major) or 0
+        minor = tonumber(minor) or 0
+        patch = tonumber(patch) or 0
+        return major * 1000000 + minor * 1000 + patch, "semver"
+    end
+end
+
+-- *************************************************
+function UpdateChecker.parseGitHubDate(dateStr)
+    -- Parses GitHub ISO 8601 date (e.g., "2026-01-21T15:30:00Z") to timestamp
+    if not dateStr then return 0 end
+    
+    local year, month, day, hour, min, sec = dateStr:match("(%d+)-(%d+)-(%d+)T(%d+):(%d+):(%d+)")
+    if not year then return 0 end
+    
+    -- Convert to comparable number: YYYYMMDDHHMMSS
+    return tonumber(string.format("%04d%02d%02d%02d%02d%02d", 
+        year, month, day, hour, min, sec)) or 0
+end
+
+-- *************************************************
+function UpdateChecker.getInstalledVersionDate()
+    -- Returns the install/build date from the version info
+    -- For date-based: extracts YYYYMMDD from "20260111.26"
+    -- For semver: uses a stored build date or returns 0
+    
+    local versionInfo = _PLUGIN.VERSION or { major = 0, minor = 0, revision = 0 }
+    local major = versionInfo.major or 0
+    
+    if major >= 20000000 then
+        -- Date-based: major IS the date
+        return major
+    else
+        -- SemVer: check if we have a build date stored
+        return prefs.pluginBuildDate or 0
+    end
 end
 
 -- *************************************************
@@ -120,6 +168,8 @@ function UpdateChecker.checkForUpdates(silent)
         
         -- Extract version info
         local remoteVersion = data.tag_name
+        local publishedAt = data.published_at
+        
         if not remoteVersion then
             log:info("UpdateChecker.checkForUpdates - no tag_name in response")
             if not silent then
@@ -133,14 +183,41 @@ function UpdateChecker.checkForUpdates(silent)
         end
         
         log:info("UpdateChecker.checkForUpdates - remote version: " .. remoteVersion)
+        log:info("UpdateChecker.checkForUpdates - published_at: " .. tostring(publishedAt))
         log:info("UpdateChecker.checkForUpdates - current version: " .. pluginVersion)
         
-        local currentNum = UpdateChecker.parseVersion(pluginVersion)
-        local remoteNum = UpdateChecker.parseVersion(remoteVersion)
+        -- Determine comparison method based on version formats
+        local currentNum, currentFormat = UpdateChecker.parseVersion(pluginVersion)
+        local remoteNum, remoteFormat = UpdateChecker.parseVersion(remoteVersion)
         
-        log:info("UpdateChecker.checkForUpdates - currentNum: " .. currentNum .. ", remoteNum: " .. remoteNum)
+        log:info("UpdateChecker.checkForUpdates - currentNum: " .. currentNum .. " (" .. currentFormat .. ")")
+        log:info("UpdateChecker.checkForUpdates - remoteNum: " .. remoteNum .. " (" .. remoteFormat .. ")")
         
-        if remoteNum > currentNum then
+        local updateAvailable = false
+        
+        if currentFormat == remoteFormat then
+            -- Same format: direct comparison
+            updateAvailable = (remoteNum > currentNum)
+            log:info("UpdateChecker.checkForUpdates - same format comparison: " .. tostring(updateAvailable))
+        else
+            -- Different formats: compare by GitHub publish date vs installed version date
+            local remoteDate = UpdateChecker.parseGitHubDate(publishedAt)
+            local installedDate = UpdateChecker.getInstalledVersionDate()
+            
+            log:info("UpdateChecker.checkForUpdates - cross-format: remoteDate=" .. remoteDate .. ", installedDate=" .. installedDate)
+            
+            -- If we can't determine installed date, fall back to assuming update is available
+            if installedDate == 0 then
+                updateAvailable = true
+                log:info("UpdateChecker.checkForUpdates - unknown install date, assuming update available")
+            else
+                -- Compare: remoteDate is YYYYMMDDHHMMSS, installedDate is YYYYMMDD
+                -- Normalize installedDate to same format (assume 00:00:00)
+                updateAvailable = (remoteDate > installedDate * 1000000)
+            end
+        end
+        
+        if updateAvailable then
             -- New version available
             local changelog = data.body or "No changelog available."
             -- Truncate changelog if too long
@@ -210,13 +287,15 @@ end
 function UpdateChecker.getUpdateStatus()
     -- Returns a status string for display in Plugin Manager
     local latestVersion = prefs.latestVersion
-    local currentNum = UpdateChecker.parseVersion(pluginVersion)
-    local latestNum = UpdateChecker.parseVersion(latestVersion or "")
+    local currentNum, currentFormat = UpdateChecker.parseVersion(pluginVersion)
+    local latestNum, latestFormat = UpdateChecker.parseVersion(latestVersion or "")
     
-    if latestNum > currentNum then
+    if latestVersion and latestNum > currentNum and currentFormat == latestFormat then
         return string.format("Update available: %s", latestVersion)
-    else
+    elseif latestVersion then
         return "Up to date"
+    else
+        return "Not checked yet"
     end
 end
 

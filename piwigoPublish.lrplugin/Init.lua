@@ -73,7 +73,10 @@ end
 _G.PiwigoBusy = false
 _G.RenderPhotos = false
 _G.iconPath = _PLUGIN:resourceId("icons/icon_med.png")
-_G.pluginVersion = "20260111.26"
+
+-- Build version string from Info.lua VERSION table
+local versionInfo = _PLUGIN.VERSION or { major = 0, minor = 0, revision = 0 }
+_G.pluginVersion = string.format("%d.%d", versionInfo.major, versionInfo.minor)
 -- Auto-update checker
 _G.UpdateChecker = require "UpdateChecker"
 
