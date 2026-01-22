@@ -367,3 +367,67 @@
 "$$$/Piwigo/Success/MetadataSent=Métadonnées envoyées"
 "$$$/Piwigo/Success/SpecialCollectionsCreated=Création des collections spéciales"
 "$$$/Piwigo/Success/SpecialCollectionsCreatedMsg=%s ensembles de collections traités"
+
+-- =============================================================================
+-- Chaînes UI supplémentaires (ajouts v4)
+-- =============================================================================
+
+-- Info.lua
+"$$$/Piwigo/Menu/ExtraOptions=Options supplémentaires Piwigo Publisher"
+
+-- PWCollToSet.lua
+"$$$/Piwigo/CollToSet/CantAccessCollection=Impossible d'accéder à l'objet collection pour cette collection - vérifiez la sélection"
+"$$$/Piwigo/CollToSet/AlreadySet=Vous avez sélectionné un ensemble de collections - veuillez sélectionner une collection"
+"$$$/Piwigo/CollToSet/CantFindSettings=Impossible de trouver les paramètres de publication pour cette collection"
+"$$$/Piwigo/CollToSet/ConvertTitle=Convertir la collection en ensemble"
+"$$$/Piwigo/CollToSet/CantCreate=Impossible de créer le nouvel ensemble de collections"
+
+-- PWExtraOptions.lua
+"$$$/Piwigo/ExtraOptions/NoServices=Aucun service de publication Piwigo trouvé."
+"$$$/Piwigo/ExtraOptions/SelectService=Sélectionner le service de publication :"
+"$$$/Piwigo/ExtraOptions/AppliesToSelected=S'applique aux images sélectionnées"
+"$$$/Piwigo/ExtraOptions/SetCoverTooltip=Définit l'image sélectionnée comme couverture d'album Piwigo"
+"$$$/Piwigo/ExtraOptions/SetCoverForCollection=Définit l'image sélectionnée comme couverture d'album Piwigo pour cette collection"
+"$$$/Piwigo/ExtraOptions/Title=Options supplémentaires Piwigo"
+"$$$/Piwigo/ExtraOptions/CantFindService=Impossible de trouver le service de publication"
+
+-- PWSendMetadata.lua
+"$$$/Piwigo/SendMetadata/CantFindSettings=Impossible de trouver les paramètres de publication pour cette collection"
+"$$$/Piwigo/SendMetadata/CantFindPhoto=Impossible de trouver cette photo dans l'ensemble de collections"
+"$$$/Piwigo/SendMetadata/CantFindPhotoId=Impossible de trouver l'ID Piwigo de cette photo"
+
+-- PWSetAlbumCover.lua
+"$$$/Piwigo/AlbumCover/SelectSinglePhoto=Veuillez sélectionner une seule photo à définir comme couverture d'album ("
+"$$$/Piwigo/AlbumCover/CantFindSettings=Impossible de trouver les paramètres de publication pour cette collection"
+"$$$/Piwigo/AlbumCover/CantFindAlbumId=Impossible de trouver l'ID de l'album Piwigo pour cette collection"
+"$$$/Piwigo/AlbumCover/CantFindPhoto=Impossible de trouver cette photo dans l'ensemble de collections"
+"$$$/Piwigo/AlbumCover/CantFindPhotoId=Impossible de trouver l'ID Piwigo de cette photo"
+"$$$/Piwigo/AlbumCover/UserNeedsWebmaster=L'utilisateur doit avoir le rôle webmaster sur la galerie Piwigo"
+"$$$/Piwigo/AlbumCover/UnableToSetCover=Impossible de définir la photo de couverture -"
+
+-- PiwigoAPI.lua - Erreurs de connexion
+"$$$/Piwigo/Error/CannotLogin=Impossible de se connecter à Piwigo -"
+"$$$/Piwigo/Error/CannotGetUserStatus=Impossible d'obtenir le statut utilisateur depuis Piwigo -"
+"$$$/Piwigo/Error/NotWebmaster=Connexion à Piwigo réussie mais l'utilisateur n'a pas le statut Webmaster"
+"$$$/Piwigo/Error/CannotLoginSimple=Impossible de se connecter à Piwigo"
+
+-- PiwigoAPI.lua - Structure/Catégories
+"$$$/Piwigo/Progress/CheckStructure=Vérification de la structure Piwigo"
+"$$$/Piwigo/Progress/ImportAlbumStructure=Importation de la structure d'albums..."
+"$$$/Piwigo/Error/CannotGetCategories=Impossible de récupérer les catégories depuis Piwigo -"
+"$$$/Piwigo/Error/CannotAddCategory=Impossible d'ajouter une nouvelle catégorie à Piwigo -"
+
+-- PiwigoAPI.lua - Envoi/Commentaires
+"$$$/Piwigo/Error/CannotUpload=Impossible d'envoyer -"
+"$$$/Piwigo/Error/CommentsNotEnabled=Impossible d'ajouter un commentaire - les commentaires sont-ils activés sur"
+"$$$/Piwigo/Error/UnableToAddComment=Impossible d'ajouter un commentaire -"
+"$$$/Piwigo/Error/FailedToCreateSpecialCollection=Échec de la création de la collection spéciale pour"
+"$$$/Piwigo/Error/SelectPhotoInService=Veuillez sélectionner une photo dans le service de publication sélectionné ("
+"$$$/Piwigo/Error/UserNeedsWebmaster=L'utilisateur doit avoir le rôle webmaster sur la galerie Piwigo"
+"$$$/Piwigo/Error/UnableToSetCover=Impossible de définir la photo de couverture -"
+
+-- PublishDialogSections.lua
+"$$$/Piwigo/Config/CreateSpecialCollectionsTooltip=Créer des collections de publication spéciales pour les ensembles de collections, permettant la publication d'images dans des albums Piwigo qui ont des sous-albums"
+
+-- utils.lua
+"$$$/Piwigo/Status/Busy=Piwigo Publisher est occupé. Veuillez réessayer plus tard."

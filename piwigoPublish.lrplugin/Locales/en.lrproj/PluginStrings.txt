@@ -129,10 +129,10 @@
 "$$$/Piwigo/Metadata/UploadDate=Upload Date"
 "$$$/Piwigo/Metadata/UploadTime=Upload Time"
 "$$$/Piwigo/Metadata/AllMetadata=All Metadata"
-"$$$/Piwigo/Metadata/CopyrightOnly=Copyright only"
+"$$$/Piwigo/Metadata/CopyrightOnly=Copyright Only"
 "$$$/Piwigo/Metadata/CopyrightContactOnly=Copyright & Contact Info Only"
 "$$$/Piwigo/Metadata/AllExceptCameraRaw=All Except Camera Raw Info"
-"$$$/Piwigo/Metadata/AllExceptCameraAndRaw=All Except Camera & Camera Raw Info"
+"$$$/Piwigo/Metadata/AllExceptCameraAndRaw=All Except Camera  & Camera Raw Info"
 
 -- =============================================================================
 -- Keywords Settings
@@ -172,7 +172,7 @@
 "$$$/Piwigo/Export/Settings=Export Settings"
 "$$$/Piwigo/Export/ResizeImage=Resize Image"
 "$$$/Piwigo/Export/ResizeImageTooltip=If checked, published image will be resized per these settings"
-"$$$/Piwigo/Export/Use=Use:"
+"$$$/Piwigo/Export/Use=Use :"
 "$$$/Piwigo/Export/LongEdge=Long Edge"
 "$$$/Piwigo/Export/ShortEdge=Short Edge"
 "$$$/Piwigo/Export/Dimensions=Dimensions"
@@ -367,3 +367,67 @@
 "$$$/Piwigo/Success/MetadataSent=Metadata sent"
 "$$$/Piwigo/Success/SpecialCollectionsCreated=Create Special Collections"
 "$$$/Piwigo/Success/SpecialCollectionsCreatedMsg=%s collection sets processed"
+
+-- =============================================================================
+-- Additional UI Strings (v4 additions)
+-- =============================================================================
+
+-- Info.lua
+"$$$/Piwigo/Menu/ExtraOptions=Piwigo Publisher Extra Options"
+
+-- PWCollToSet.lua
+"$$$/Piwigo/CollToSet/CantAccessCollection=Can't access collection object for this publish collection - check selection"
+"$$$/Piwigo/CollToSet/AlreadySet=You have selected a Published Collection Set - please select a Published Collection"
+"$$$/Piwigo/CollToSet/CantFindSettings=Can't find publish settings for this publish collection"
+"$$$/Piwigo/CollToSet/ConvertTitle=Convert Publish Collection to Set"
+"$$$/Piwigo/CollToSet/CantCreate=Can't create new collection set"
+
+-- PWExtraOptions.lua
+"$$$/Piwigo/ExtraOptions/NoServices=No Piwigo publish services found."
+"$$$/Piwigo/ExtraOptions/SelectService=Select publish service:"
+"$$$/Piwigo/ExtraOptions/AppliesToSelected=Applies to selected images"
+"$$$/Piwigo/ExtraOptions/SetCoverTooltip=Sets selected image as Piwigo album cover"
+"$$$/Piwigo/ExtraOptions/SetCoverForCollection=Sets selected image as Piwigo album cover for this collection"
+"$$$/Piwigo/ExtraOptions/Title=Piwigo Extra Options"
+"$$$/Piwigo/ExtraOptions/CantFindService=Could not find publish service"
+
+-- PWSendMetadata.lua
+"$$$/Piwigo/SendMetadata/CantFindSettings=Can't find publish settings for this publish collection"
+"$$$/Piwigo/SendMetadata/CantFindPhoto=Can't find this photo in collection set or collections"
+"$$$/Piwigo/SendMetadata/CantFindPhotoId=Can't find Piwigo photo ID for this photo"
+
+-- PWSetAlbumCover.lua
+"$$$/Piwigo/AlbumCover/SelectSinglePhoto=Please select a single photo to set as album cover ("
+"$$$/Piwigo/AlbumCover/CantFindSettings=Can't find publish settings for this publish collection"
+"$$$/Piwigo/AlbumCover/CantFindAlbumId=Can't find Piwigo album ID for remoteId for this publish collection"
+"$$$/Piwigo/AlbumCover/CantFindPhoto=Can't find this photo in collection set or collections"
+"$$$/Piwigo/AlbumCover/CantFindPhotoId=Can't find Piwigo photo ID for this photo"
+"$$$/Piwigo/AlbumCover/UserNeedsWebmaster=User needs webmaster role on piwigo gallery at"
+"$$$/Piwigo/AlbumCover/UnableToSetCover=Unable to set cover photo -"
+
+-- PiwigoAPI.lua - Connection/Login errors
+"$$$/Piwigo/Error/CannotLogin=Cannot log in to Piwigo -"
+"$$$/Piwigo/Error/CannotGetUserStatus=Cannot get user status from Piwigo -"
+"$$$/Piwigo/Error/NotWebmaster=Log in to Piwigo successful but user does not have Webmaster status"
+"$$$/Piwigo/Error/CannotLoginSimple=Cannot log in to Piwigo"
+
+-- PiwigoAPI.lua - Structure/Categories
+"$$$/Piwigo/Progress/CheckStructure=Check Piwigo Structure"
+"$$$/Piwigo/Progress/ImportAlbumStructure=Import album structure..."
+"$$$/Piwigo/Error/CannotGetCategories=Cannot get categories from Piwigo -"
+"$$$/Piwigo/Error/CannotAddCategory=Cannot add new category to Piwigo -"
+
+-- PiwigoAPI.lua - Upload/Comments
+"$$$/Piwigo/Error/CannotUpload=Cannot upload -"
+"$$$/Piwigo/Error/CommentsNotEnabled=Unable to add comment - are comments enabled on"
+"$$$/Piwigo/Error/UnableToAddComment=Unable to add comment -"
+"$$$/Piwigo/Error/FailedToCreateSpecialCollection=Failed to create special collection for"
+"$$$/Piwigo/Error/SelectPhotoInService=Please select a photo in the selected publish service ("
+"$$$/Piwigo/Error/UserNeedsWebmaster=User needs webmaster role on piwigo gallery at"
+"$$$/Piwigo/Error/UnableToSetCover=Unable to set cover photo -"
+
+-- PublishDialogSections.lua
+"$$$/Piwigo/Config/CreateSpecialCollectionsTooltip=Create special publish collections for publish collection sets, allowing images to be published to Piwigo albums that have sub-albums"
+
+-- utils.lua
+"$$$/Piwigo/Status/Busy=Piwigo Publisher is busy. Please try later."

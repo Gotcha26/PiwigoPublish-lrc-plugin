@@ -20,4 +20,5 @@ diagnostic.txt
 copilot-instructions.md
 
 # i18n
-Localize_plugin.py
+localize_plugin.py
+localization_report.txt
