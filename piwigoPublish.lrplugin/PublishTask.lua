@@ -804,7 +804,7 @@ function PublishTask.viewForCollectionSettings(f, publishSettings, info)
         { title = "Copyright only",                       value = "Copyright Only" },
         { title = "Copyright & Contact Info Only",        value = "Copyright & Contact Info Only" },
         { title = "All Except Camera Raw Info",           value = "All Except Camera Raw Info" },
-        { title = "All Except Camera  & Camera Raw Info", value = "All Except Camera  & Camera Raw Info" },
+        { title = "All Except Camera & Camera Raw Info",  value = "All Except Camera & Camera Raw Info" },
     }
 
     local pwAlbumUI = f:group_box {
@@ -1096,7 +1096,7 @@ function PublishTask.viewForCollectionSetSettings(f, publishSettings, info)
         { title = "Copyright only",                       value = "Copyright Only" },
         { title = "Copyright & Contact Info Only",        value = "Copyright & Contact Info Only" },
         { title = "All Except Camera Raw Info",           value = "All Except Camera Raw Info" },
-        { title = "All Except Camera  & Camera Raw Info", value = "All Except Camera  & Camera Raw Info" },
+        { title = "All Except Camera & Camera Raw Info",  value = "All Except Camera & Camera Raw Info" },
     }
 
     local pwAlbumUI = f:group_box {

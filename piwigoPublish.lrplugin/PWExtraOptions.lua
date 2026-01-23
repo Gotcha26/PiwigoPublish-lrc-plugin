@@ -74,7 +74,7 @@ local function main()
                     f:spacer { height = 1 },
                     f:row {
                         f:static_text {
-                            title = "    Piwigo Publisher Plugin",
+                            title = "Piwigo Publisher Plugin",
                             font = "<system/bold>",
                             alignment = 'left',
                             width = share 'labelWidth',
