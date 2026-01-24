@@ -1,4 +1,9 @@
 # Changelog
+## [20260124.28] - 2026-01-24
+### Added
+ - Synchronisation of photos based on the Lr parameter: photoId, and Update system compatible with GitHub RCs. - PR (#40) - thank you @Gotcha26
+
+
 ## [20260122.27] - 2026-01-22
 ### Fixed
 #37 An error occurred while deleting images
