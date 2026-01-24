@@ -28,7 +28,7 @@ PublishTask = {}
 function PublishTask.processRenderedPhotos(functionContext, exportContext)
     -- render photos and upload to Piwigo
 
-    log:info("PublishTask.processRenderedPhotos")
+    log:info("PublishTask.processRenderedPhotos - version: " .. utils.serialiseVar(_PLUGIN.VERSION))
     local callStatus = {}
     local catalog = LrApplication.activeCatalog()
     local exportSession = exportContext.exportSession
@@ -57,7 +57,7 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
         serviceState = PWStatusManager.getServiceState(publishService)
     end
     log:info("PublishTask.processRenderedPhotos - serviceState " .. utils.serialiseVar(serviceState))
-    if serviceState.isCloningSync then
+    if serviceState.isCloningSync and serviceState.isCloningSync == true then
         PWStatusManager.setisCloningSync(publishService, false)
         -- use minimal render photos for smart collection cloning
         PublishTask.processCloneSync(functionContext, exportContext)
@@ -565,10 +565,11 @@ function PublishTask.getCommentsFromPublishedCollection(publishSettings, arrayOf
 end
 
 -- ************************************************
-function PublishTaskcanAddCommentsToService(publishSettings)
+function PublishTask.canAddCommentsToService(publishSettings)
     log:info("PublishTask.canAddCommentToPublishedPhoto")
     -- check if Piwgo has comments enabled
-    local commentsEnabled = PiwigoAPI.pwCheckComments(publishSettings)
+    --local commentsEnabled = PiwigoAPI.pwCheckComments(publishSettings)
+    local commentsEnabled = true
     return commentsEnabled
 end
 
@@ -630,6 +631,65 @@ end
 -- ************************************************
 function PublishTask.shouldDeletePhotosFromServiceOnDeleteFromCatalog(publishSettings, nPhotos)
     return nil -- Show builtin Lightroom dialog.
+end
+
+-- ************************************************
+function PublishTask.imposeSortOrderOnPublishedCollection(publishSettings, info, remoteIdSequence)
+    -- This callback is called by Lightroom for smart collections.
+    -- It allows you to detect published photos that no longer meet the criteria and mark them for
+    -- deletion.
+    log:info("PublishTask.imposeSortOrderOnPublishedCollection")
+    
+    local validSequence = {}
+    local publishedCollection = info.publishedCollection
+    
+    if not publishedCollection then
+        return nil
+    end
+    
+    -- Check if it is a smart collection
+    if not publishedCollection:isSmartCollection() then
+        return nil
+    end
+    
+    -- Retrieve photos currently in the smart collection (according to criteria)
+    local currentPhotos = publishedCollection:getPhotos()
+    local currentPhotoIds = {}
+    for _, photo in ipairs(currentPhotos) do
+        currentPhotoIds[photo.localIdentifier] = true
+    end
+    
+    -- Browse the remoteIds of published photos
+    -- remoteIdSequence contains the remoteIds in the current order
+    local publishedPhotos = publishedCollection:getPublishedPhotos()
+    local remoteIdToPhoto = {}
+    for _, pubPhoto in ipairs(publishedPhotos) do
+        local remoteId = pubPhoto:getRemoteId()
+        if remoteId then
+            remoteIdToPhoto[remoteId] = pubPhoto
+        end
+    end
+    
+    -- Build the valid sequence: only photos that still meet the criteria
+    for _, remoteId in ipairs(remoteIdSequence) do
+        local pubPhoto = remoteIdToPhoto[remoteId]
+        if pubPhoto then
+            local lrPhoto = pubPhoto:getPhoto()
+            if lrPhoto and currentPhotoIds[lrPhoto.localIdentifier] then
+                -- The photo still meets the criteria, keep it.
+                table.insert(validSequence, remoteId)
+            end
+            -- If the photo is no longer in currentPhotoIds, it will be marked for deletion because
+            -- its remoteId will not be in validSequence.
+        end
+    end
+    
+    log:info("PublishTask.imposeSortOrderOnPublishedCollection - " .. 
+             #remoteIdSequence .. " published, " .. 
+             #validSequence .. " still match criteria, " ..
+             (#remoteIdSequence - #validSequence) .. " to delete")
+    
+    return validSequence
 end
 
 -- ************************************************
@@ -745,7 +805,7 @@ function PublishTask.viewForCollectionSettings(f, publishSettings, info)
         { title = "Copyright only",                       value = "Copyright Only" },
         { title = "Copyright & Contact Info Only",        value = "Copyright & Contact Info Only" },
         { title = "All Except Camera Raw Info",           value = "All Except Camera Raw Info" },
-        { title = "All Except Camera  & Camera Raw Info", value = "All Except Camera  & Camera Raw Info" },
+        { title = "All Except Camera & Camera Raw Info",  value = "All Except Camera & Camera Raw Info" },
     }
 
     local pwAlbumUI = f:group_box {
@@ -1037,7 +1097,7 @@ function PublishTask.viewForCollectionSetSettings(f, publishSettings, info)
         { title = "Copyright only",                       value = "Copyright Only" },
         { title = "Copyright & Contact Info Only",        value = "Copyright & Contact Info Only" },
         { title = "All Except Camera Raw Info",           value = "All Except Camera Raw Info" },
-        { title = "All Except Camera  & Camera Raw Info", value = "All Except Camera  & Camera Raw Info" },
+        { title = "All Except Camera & Camera Raw Info",  value = "All Except Camera & Camera Raw Info" },
     }
 
     local pwAlbumUI = f:group_box {
