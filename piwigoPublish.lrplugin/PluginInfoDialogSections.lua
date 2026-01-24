@@ -21,6 +21,9 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ]]
+
+local LrHttp = import 'LrHttp'
+
 PluginInfoDialogSections = {}
 
 -- *************************************************
@@ -28,12 +31,10 @@ local function resetPluginPrefs(prefix)
     log:info("resetPluginPrefs \n" .. utils.serialiseVar(prefs))
     for k, p in prefs:pairs() do
         if prefix then
-            log:info("resetting " .. utils.serialiseVar(k))
             if k:find(prefix, 1, true) == 1 then
                 prefs[k] = nil
             end
         else
-            log:info("resetting " .. utils.serialiseVar(k))
             prefs[k] = nil
         end
     end
@@ -42,6 +43,9 @@ end
 
 -- *************************************************
 function PluginInfoDialogSections.startDialog(propertyTable)
+    -- Initialize update status
+    propertyTable.updateStatus = UpdateChecker.getUpdateStatus()
+    
     if prefs.debugEnabled == nil then
         prefs.debugEnabled = false
     end
@@ -57,6 +61,7 @@ function PluginInfoDialogSections.startDialog(propertyTable)
     else
         log:disable()
     end
+ 
     propertyTable.debugEnabled = prefs.debugEnabled
     propertyTable.debugToFile = prefs.debugToFile
 end
@@ -71,7 +76,44 @@ function PluginInfoDialogSections.sectionsForBottomOfDialog(f, propertyTable)
         {
             bind_to_object = propertyTable,
 
-            title = "Piwigo Publisher Plugin Logging and Preferences",
+            title = "Plugin Updates",
+
+            f:row {
+                f:static_text {
+                    title = "Current version: " .. pluginVersion,
+                    alignment = 'left',
+                },
+            },
+            f:row {
+                f:static_text {
+                    title = bind 'updateStatus',
+                    alignment = 'left',
+                },
+            },
+            f:row {
+                f:push_button {
+                    title = "Check for Updates",
+                    action = function()
+                        UpdateChecker.checkForUpdates(false) -- silent = false
+                    end,
+                },
+                f:push_button {
+                    title = "Visit GitHub Repository",
+                    action = function()
+                        LrHttp.openUrlInBrowser(
+                            "https://github.com/" .. 
+                            UpdateChecker.GITHUB_OWNER .. "/" .. 
+                            UpdateChecker.GITHUB_REPO
+                        )
+                    end,
+                },
+            },
+        },
+
+        {
+            bind_to_object = propertyTable,
+
+            title = "Piwigo Publisher Plugin Logging",
 
             f:row {
                 f:checkbox {

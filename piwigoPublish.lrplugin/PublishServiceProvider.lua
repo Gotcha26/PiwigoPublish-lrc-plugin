@@ -56,19 +56,21 @@ return {
 		{ key = "mdDescription",         default = "{{caption}}" },
 		{ key = "syncAlbumDescriptions", default = false },
 		{ key = "syncCommentsPublish",   default = true },
-		{ key = "syncCommentsPubOnly",   default = false }
-
+		{ key = "syncCommentsPubOnly",   default = false },
 	},
-	--[[
-	metadataThatTriggersRepublish = {
-		default = false,
-		title = true,
-		caption = true,
-		keywords = true,
-		gps = true,
-		dateCreated = true,
-    },
-]]
+
+	metadataThatTriggersRepublish = function(publishSettings, photoId, fieldName)
+		-- This function is called by Lightroom to determine whether a metadata
+		-- change should trigger republishing.
+		local triggerFields = {
+			title = true,
+			caption = true,
+			keywords = true,
+			gps = true,
+			dateCreated = true,
+		}
+		return triggerFields[fieldName] or false
+	end,
 	-- canExportToTemporaryLocation = true
 	-- canExportToTemporaryLocation = true
 	-- showSections = { 'fileNaming', 'fileSettings', etc... }
@@ -107,6 +109,7 @@ return {
 	renamePublishedCollection                        = PublishTask.renamePublishedCollection,
 	reparentPublishedCollection                      = PublishTask.reparentPublishedCollection,
 	deletePublishedCollection                        = PublishTask.deletePublishedCollection,
+	imposeSortOrderOnPublishedCollection			 = PublishTask.imposeSortOrderOnPublishedCollection,
 	validatePublishedCollectionName                  = PublishTask.validatePublishedCollectionName,
 
 	-- view on Piwigo Options
