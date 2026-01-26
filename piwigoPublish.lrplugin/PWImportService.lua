@@ -248,17 +248,21 @@ local function populateCollections(stdColls, smartColls, publishService, propert
             local name = node.name
             local extra = node.extra or nil
             local oldPubPhotos
+            local oldlrPhotos
+            local publishedIds
             if extra then
                 oldPubPhotos = extra.pubphotos or {}
+                oldlrPhotos = extra.lrPhotos or {}
+                publishedIds = extra.publishedIds or {}
             end
 
             log:info("processing collection " .. name .. " with " .. #oldPubPhotos .. " photos")
-
+            local lrPhotosToAdd = {} -- photos to add without piwigo metadata
             if #oldPubPhotos > 0 then
                 local albumUrl = collection:getRemoteUrl()
-                local lrPhotosToAdd = {} -- photos to add without piwigo metadata
                 for pp, pubPhoto in pairs(oldPubPhotos) do
                     local lrPhoto = pubPhoto:getPhoto()
+                    local photoId = lrPhoto.localIdentifier
                     if pwDetails.isPiwigo and pwDetails.isSameHost then
                         -- this is the same Piwigo host then we can copy remote ids etc
                         local pubFlag = false
@@ -299,16 +303,22 @@ local function populateCollections(stdColls, smartColls, publishService, propert
                         table.insert(lrPhotosToAdd, lrPhoto)
                     end
                 end
-
-                if #lrPhotosToAdd > 0 then
-                    catalog:withWriteAccessDo("Add Photos to collection", function()
-                        collection:addPhotos(lrPhotosToAdd)
-                    end)
-                    stats.imagesCloned = stats.imagesCloned + #lrPhotosToAdd
-                    progressScope:setPortionComplete(stats.imagesCloned, stats.images)
-                    progressScope:setCaption("Cloning Images... " ..
-                        stats.imagesCloned .. " of " .. stats.images .. " images")
+            end
+            -- now add any remaining lrPhotos that were not published photos - from oldlrPhotos
+            for _, lrPhoto in pairs(oldlrPhotos) do
+                local photoId = lrPhoto.localIdentifier
+                if not publishedIds[photoId] then
+                    table.insert(lrPhotosToAdd, lrPhoto)
                 end
+            end
+            if #lrPhotosToAdd > 0 then
+                catalog:withWriteAccessDo("Add Photos to collection", function()
+                    collection:addPhotos(lrPhotosToAdd)
+                end)
+                stats.imagesCloned = stats.imagesCloned + #lrPhotosToAdd
+                progressScope:setPortionComplete(stats.imagesCloned, stats.images)
+                progressScope:setCaption("Cloning Images... " ..
+                    stats.imagesCloned .. " of " .. stats.images .. " images")
             end
         end
     end
@@ -578,7 +588,7 @@ local function importServicePrelim(propertyTable, thisService, impService)
         unpublishedCollImages = 0,
         unpublishedSmartCollImages = 0,
     }
-
+    local canClone = true
     for id, collDets in pairs(indexById) do
         local extraCollDets = {}
         local thisColl = catalog:getPublishedCollectionByLocalIdentifier(id)
@@ -586,24 +596,28 @@ local function importServicePrelim(propertyTable, thisService, impService)
             local colType = thisColl:type()
             local info = {}
             local pubphotos = nil
+            local lrPhotos = nil
             local isSmartColl = false
             local searchDesc = {}
             if colType == "LrPublishedCollection" then
                 info = thisColl:getCollectionInfoSummary()
                 pubphotos = thisColl:getPublishedPhotos()
+                lrPhotos = thisColl:getPhotos()
                 -- check for smart collection
                 isSmartColl = thisColl:isSmartCollection()
                 if isSmartColl then
                     -- count number of lrPhotos in collection
                     -- a different to number of published photos indicates un published photos
-                    local numlrPhotos = #thisColl:getPhotos()
-                    local numPubPhotos = #thisColl:getPublishedPhotos()
+                    -- which means we cannot proceed with cloning
+                    local numlrPhotos = #lrPhotos
+                    local numPubPhotos = #pubphotos
                     if numlrPhotos > numPubPhotos then
                         stats.unpublishedSmartCollImages = stats.unpublishedSmartCollImages +
                             (numlrPhotos - numPubPhotos)
                     end
                     searchDesc = thisColl:getSearchDescription()
                     stats.smartCollections = stats.smartCollections + 1
+                    canClone = false
                 else
                     local numlrPhotos = #thisColl:getPhotos()
                     local numPubPhotos = #thisColl:getPublishedPhotos()
@@ -626,11 +640,12 @@ local function importServicePrelim(propertyTable, thisService, impService)
                 collSettings = info.collectionSettings
                 pubSettings = info.publishSettings
             end
-
+            local publishedIds = {}
             if pubphotos then
                 for pp, pubPhoto in pairs(pubphotos) do
                     stats.images = stats.images + 1
                     local lrPhoto = pubPhoto:getPhoto()
+                    publishedIds[lrPhoto.localIdentifier] = true
                     local fileName = ""
                     local remId = pubPhoto:getRemoteId() or ""
                     local remUrl = pubPhoto:getRemoteUrl() or ""
@@ -652,7 +667,9 @@ local function importServicePrelim(propertyTable, thisService, impService)
             extraCollDets.isSmartColl = isSmartColl
             extraCollDets.searchDesc = searchDesc
             extraCollDets.collSettings = collSettings
+            extraCollDets.lrPhotos = lrPhotos
             extraCollDets.pubphotos = pubphotos
+            extraCollDets.publishedIds = publishedIds
             collDets.extra = extraCollDets
         end
     end
@@ -666,23 +683,24 @@ local function importServicePrelim(propertyTable, thisService, impService)
     local text3 = ""
     local text4 = ""
     local text5 = ""
-    local canProceed = true
     if pwDetails.isPiwigo then
         if pwDetails.isSameHost then
             text2 = "The service being cloned is a Piwigo service connected to the same Piwigo host as this service."
-            if stats.unpublishedSmartCollImages > 0 or stats.unpublishedCollImages > 0 then
-                canProceed = false
+            if not canClone then
                 text3 =
-                "** The service being cloned has collections with unpublished images - please fix before cloning **"
-                if stats.unpublishedCollImages > 0 then
-                    text4 = "*** Unpublished Collection Images : " .. stats.unpublishedCollImages .. " ***"
-                end
+                "** The service being cloned has smart collections with unpublished images - please fix before cloning **"
+
                 if stats.unpublishedSmartCollImages > 0 then
                     text5 = "*** Unpublished Smart Collection Images : " .. stats.unpublishedSmartCollImages .. " ***"
                 end
             else
                 text3 = "Collections/Sets will be cloned as will links to Piwigo albums and images if present"
-                text4 = ""
+
+                if stats.unpublishedCollImages > 0 then
+                    text4 = "*** Unpublished Collection Images : " .. stats.unpublishedCollImages .. " ***"
+                else
+                    text4 = ""
+                end
                 text5 = ""
             end
         else
@@ -816,7 +834,7 @@ local function importServicePrelim(propertyTable, thisService, impService)
         },
     }
 
-    if canProceed then
+    if canClone then
         local dialog = LrDialogs.presentModalDialog({
             title = "Confirm details of Publish Service to be cloned",
             contents = c,
@@ -831,7 +849,7 @@ local function importServicePrelim(propertyTable, thisService, impService)
         local dialog = LrDialogs.presentModalDialog({
             title = "Details of Publish Service to be cloned",
             contents = c,
-            actionVerb = "OK",
+            actionVerb = "Cancel Clone",
             cancelVerb = "< exclude >",
         })
     end
