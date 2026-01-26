@@ -1,4 +1,8 @@
 # Changelog
+## [20260126.29] - 2026-01-26
+### Fixed
+Fix #41 Allow clone service to include unpublished photos from standard published collections
+
 ## [20260124.28] - 2026-01-24
 ### Added
  - Synchronisation of photos based on the Lr parameter: photoId, and Update system compatible with GitHub RCs. - PR (#40) - thank you @Gotcha26
