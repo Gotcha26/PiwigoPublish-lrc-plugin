@@ -24,20 +24,6 @@
 local utils = {}
 
 -- *************************************************
-
-function utils.loadStrings()
-    -- Load Strings.lua for the current UI language, fallback to English
-    local uiLang = LrApplication.locale or "en"
-
-    local success, strings = pcall(require, "Resources." .. uiLang .. ".Strings")
-    if success and strings then
-        return strings
-    else
-        return require("Resources.en.Strings")
-    end
-end
-
--- *************************************************
 function utils.serialiseVar(value, indent)
     -- serialises an unknown variable
     indent = indent or ""
