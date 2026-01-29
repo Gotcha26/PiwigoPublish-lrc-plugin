@@ -89,7 +89,7 @@ local function connectionDialog(f, propertyTable, pwInstance)
 					if sanitizedURL == url then
 						return true, url, ''
 					elseif not (sanitizedURL == nil) then
-						LrDialogs.message('Entered URL was autocorrected to ' .. sanitizedURL)
+						LrDialogs.message("Entered URL was autocorrected to " .. sanitizedURL)
 						return true, sanitizedURL, ''
 					end
 					return false, url, 'Entered URL not valid.'
@@ -102,7 +102,7 @@ local function connectionDialog(f, propertyTable, pwInstance)
 				action = function()
 					LrTasks.startAsyncTask(function()
 						if not PiwigoAPI.login(propertyTable) then
-							LrDialogs.message('Connection NOT successful')
+							LrDialogs.message("Connection NOT successful")
 						end
 					end)
 				end,

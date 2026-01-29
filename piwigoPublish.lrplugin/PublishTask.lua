@@ -276,7 +276,7 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
                     rv, propertyTable.tagTable = PiwigoAPI.getTagList(propertyTable)
                 end
                 if not rv then
-                    LrDialogs.message('PiwigoAPI:updateMetadata - cannot get taglist from Piwigo')
+                    LrDialogs.message("PiwigoAPI:updateMetadata - cannot get taglist from Piwigo")
                 end
                 callStatus = PiwigoAPI.updateMetadata(propertyTable, lrPhoto, metaData)
                 if not callStatus.status then
