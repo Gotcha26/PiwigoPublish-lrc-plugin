@@ -15,6 +15,7 @@ piwigoPublish.lrplugin/PiwigoHelper.lua
 
 # Other files
 *.bak
+__i18n_kit__
 cat layout.odt
 deploy.sh
 diagnostic.txt
