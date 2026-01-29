@@ -190,7 +190,7 @@ local function prefsDialog(f, propertyTable)
 						local result = LrDialogs.confirm("Import Piwigo Albums",
 							"Are you sure you want to import the album structure from Piwigo?\nExisting collections will be unaffected.",
 							"Import", "Cancel")
-						if result == 'ok' then
+						if result == "ok" then
 							LrTasks.startAsyncTask(function()
 								PiwigoAPI.importAlbums(propertyTable)
 							end)
@@ -222,7 +222,7 @@ local function prefsDialog(f, propertyTable)
 						local result = LrDialogs.confirm("Check / link Piwigo Structure",
 							"Are you sure you want to check / link Piwigo Structure?\nExisting collections will be unaffected.",
 							"Check", "Cancel")
-						if result == 'ok' then
+						if result == "ok" then
 							LrTasks.startAsyncTask(function()
 								PiwigoAPI.validatePiwigoStructure(propertyTable)
 							end)
@@ -278,7 +278,7 @@ local function prefsDialog(f, propertyTable)
 						local result = LrDialogs.confirm("Create Special Collections",
 							"Are you sure you want to create Special Collections?\nExisting collections may be updated and missing Piwigo albums will be created.",
 							"Create", "Cancel")
-						if result == 'ok' then
+						if result == "ok" then
 							LrTasks.startAsyncTask(function()
 								PiwigoAPI.specialCollections(propertyTable)
 							end)
