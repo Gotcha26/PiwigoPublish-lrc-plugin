@@ -15,8 +15,12 @@ piwigoPublish.lrplugin/PiwigoHelper.lua
 
 # Other files
 *.bak
-__i18n_kit__
+.claude/
+__pycache__/
 cat layout.odt
 deploy.sh
 diagnostic.txt
 copilot-instructions.md
+
+# Temporary folder for localisation tools
+piwigoPublish.lrplugin/__i18n_tmp__/

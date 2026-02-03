@@ -101,7 +101,7 @@ local function processSmartCollectionQueue(smartColls, publishService, propertyT
     if not smartColls or index > #smartColls then
         releasePublishLock(serviceId)
         progressScope:done()
-        LrDialogs.message("Clone completed", "Publish Service Clone omplete.", "info")
+        LrDialogs.message("Clone completed", "Publish Service Clone Complete.", "info")
         return
     end
 
@@ -109,7 +109,7 @@ local function processSmartCollectionQueue(smartColls, publishService, propertyT
     if not entry then
         releasePublishLock(serviceId)
         progressScope:done()
-        LrDialogs.message("Clone completed", "Publish Service Clone omplete.", "info")
+        LrDialogs.message("Clone completed", "Publish Service Clone Complete.", "info")
         return -- done
     end
 
