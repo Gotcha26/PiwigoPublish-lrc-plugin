@@ -356,7 +356,7 @@ local function createTree(nodes, parentSet, publishService, created, childrenInd
         local remoteAlbumId = node.remoteId
         local remoteAlbumUrl
         local comment = ""
-        local status = ""
+        local status = "public" -- ensure default is public
         local isSmartColl = false
         local searchDesc
         if extra then
@@ -391,7 +391,7 @@ local function createTree(nodes, parentSet, publishService, created, childrenInd
                     collectionSettings.albumPrivate = status == "private"
                 else
                     collectionSettings.albumDescription = ""
-                    collectionSettings.albumPrivate = "public"
+                    collectionSettings.albumPrivate = false
                 end
                 if remoteAlbumId then
                     local thisCat = PiwigoAPI.pwCategoriesGetThis(propertyTable, remoteAlbumId)
@@ -458,7 +458,7 @@ local function createTree(nodes, parentSet, publishService, created, childrenInd
                     collectionSettings.albumPrivate = status == "private"
                 else
                     collectionSettings.albumDescription = ""
-                    collectionSettings.albumPrivate = "public"
+                    collectionSettings.albumPrivate = false
                 end
                 if remoteAlbumId then
                     -- check if remoote album exists and add to collection if so
@@ -770,7 +770,7 @@ local function importServicePrelim(propertyTable, thisService, impService)
                 f:row {
                     f:static_text {
                         title = text3,
-                        font = "<system>",
+                        font = "<system/bold>",
                         alignment = 'left',
                         fill_horizontal = 1,
                         height_in_lines = 1,
