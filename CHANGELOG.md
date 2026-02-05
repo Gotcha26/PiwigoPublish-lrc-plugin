@@ -1,4 +1,12 @@
 # Changelog
+
+## [20260205.30] - 2026-02-05
+### Fixed
+Fix #41 Problem with 'Clone Existing Publish Service - public/private setting
+
+### Added
+- Preparation for locatalistion
+
 ## [20260126.29] - 2026-01-26
 ### Fixed
 Fix #41 Allow clone service to include unpublished photos from standard published collections
