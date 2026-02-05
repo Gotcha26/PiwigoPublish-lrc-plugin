@@ -149,8 +149,8 @@ function UpdateChecker.checkForUpdates(silent)
             log:info("UpdateChecker.checkForUpdates - failed to fetch release info")
             if not silent then
                 LrDialogs.message(
-                    "Update Check Failed",
-                    "Could not connect to GitHub to check for updates.\nPlease check your internet connection.",
+                    LOC "$$$/Piwigo/UpdateChecker/UpdateCheckFailed=Update Check Failed",
+                    LOC "$$$/Piwigo/UpdateChecker/CouldConnectGithub=Could not connect to GitHub to check for updates.\nPlease check your internet connection.",
                     "warning"
                 )
             end
@@ -163,8 +163,8 @@ function UpdateChecker.checkForUpdates(silent)
             log:info("UpdateChecker.checkForUpdates - failed to parse JSON response")
             if not silent then
                 LrDialogs.message(
-                    "Update Check Failed",
-                    "Could not parse update information from GitHub.",
+                    LOC "$$$/Piwigo/UpdateChecker/UpdateCheckFailed=Update Check Failed",
+                    LOC "$$$/Piwigo/UpdateChecker/CouldParseUpdateInformation=Could not parse update information from GitHub.",
                     "warning"
                 )
             end
@@ -179,8 +179,8 @@ function UpdateChecker.checkForUpdates(silent)
             log:info("UpdateChecker.checkForUpdates - no tag_name in response")
             if not silent then
                 LrDialogs.message(
-                    "Update Check Failed",
-                    "No release information found on GitHub.",
+                    LOC "$$$/Piwigo/UpdateChecker/UpdateCheckFailed=Update Check Failed",
+                    LOC "$$$/Piwigo/UpdateChecker/NoReleaseInformationFound=No release information found on GitHub.",
                     "warning"
                 )
             end
@@ -241,19 +241,19 @@ function UpdateChecker.checkForUpdates(silent)
             log:info("UpdateChecker.checkForUpdates - new version available!")
             
             local result = LrDialogs.confirm(
-                "Update Available",
+                LOC "$$$/Piwigo/UpdateChecker/UpdateAvailable=Update Available",
                 string.format(
-                    "A new version of Piwigo Publisher is available!\n\n" ..
-                    "Current version: %s\n" ..
-                    "New version: %s\n\n" ..
-                    "Changes:\n%s\n\n" ..
-                    "Would you like to download it now?",
+                    LOC "$$$/Piwigo/UpdateChecker/ANewVersionPiwigo=A new version of Piwigo Publisher is available!\n\n" ..
+                    LOC "$$$/Piwigo/UpdateChecker/CurrentVersionSN=Current version: %s\n" ..
+                    LOC "$$$/Piwigo/UpdateChecker/NewVersionSN=New version: %s\n\n" ..
+                    LOC "$$$/Piwigo/UpdateChecker/ChangesNSN=Changes:\n%s\n\n" ..
+                    LOC "$$$/Piwigo/UpdateChecker/WouldYouLikeDownloadQuestion=Would you like to download it now?",
                     pluginVersion,
                     remoteVersion,
                     changelog
                 ),
-                "Download",
-                "Later"
+                LOC "$$$/Piwigo/UpdateChecker/Download=Download",
+                LOC "$$$/Piwigo/UpdateChecker/Later=Later"
             )
             
             if result == "ok" then
@@ -263,8 +263,8 @@ function UpdateChecker.checkForUpdates(silent)
             log:info("UpdateChecker.checkForUpdates - already up to date")
             if not silent then
                 LrDialogs.message(
-                    "No Updates Available",
-                    string.format("You are running the latest version (%s).", pluginVersion),
+                    LOC "$$$/Piwigo/UpdateChecker/NoUpdatesAvailable=No Updates Available",
+                    string.format(LOC "$$$/Piwigo/UpdateChecker/YouRunningLatestVersion=You are running the latest version (%s).", pluginVersion),
                     "info"
                 )
             end
@@ -278,12 +278,12 @@ function UpdateChecker.openDownloadPage(url)
     LrHttp.openUrlInBrowser(url)
     
     LrDialogs.message(
-        "Download Started",
-        "The download page has been opened in your browser.\n\n" ..
-        "After downloading:\n" ..
-        "1. Quit Lightroom Classic\n" ..
-        "2. Replace the plugin folder with the new version\n" ..
-        "3. Restart Lightroom Classic",
+        LOC "$$$/Piwigo/UpdateChecker/DownloadStarted=Download Started",
+        LOC "$$$/Piwigo/UpdateChecker/DownloadPageOpened=The download page has been opened in your browser.\n\n" ..
+        LOC "$$$/Piwigo/UpdateChecker/AfterDownloadingN=After downloading:\n" ..
+        LOC "$$$/Piwigo/UpdateChecker/QuitLightroomClassicN=1. Quit Lightroom Classic\n" ..
+        LOC "$$$/Piwigo/UpdateChecker/ReplacePluginFolderWith=2. Replace the plugin folder with the new version\n" ..
+        LOC "$$$/Piwigo/UpdateChecker/RestartLightroomClassic=3. Restart Lightroom Classic",
         "info"
     )
 end

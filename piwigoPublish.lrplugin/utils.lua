@@ -1201,7 +1201,7 @@ end
 function utils.pwBusyMessage(callingFunction, displayFunction)
     -- display Piwigo Busy message
 
-    LrDialogs.message("Piwigo Publisher is busy. Please try " .. displayFunction .. " later.")
+    LrDialogs.message(LOC "$$$/Piwigo/utils/PiwigoPublisherBusyPlease=Piwigo Publisher is busy. Please try" .. " " .. displayFunction .. " " .. LOC "$$$/Piwigo/utils/Later=later.")
 end
 
 -- *************************************************

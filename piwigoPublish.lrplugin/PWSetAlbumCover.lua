@@ -31,11 +31,11 @@ local function SetAlbumCover()
     local selPhotos = catalog:getTargetPhotos()
     local sources = catalog:getActiveSources()
     if utils.nilOrEmpty(selPhotos) then
-        LrDialogs.message("Please select a photo to set as album cover", "", "warning")
+        LrDialogs.message(LOC "$$$/Piwigo/API/PleaseSelectPhotoSet=Please select a photo to set as album cover", "", "warning")
         return false
     end
     if #selPhotos > 1 then
-        LrDialogs.message("Please select a single photo to set as album cover (" .. #selPhotos .. " currently selected)",
+        LrDialogs.message(LOC "$$$/Piwigo/API/PleaseSelectSinglePhoto=Please select a single photo to set as album cover (" .. #selPhotos .. " " .. LOC "$$$/Piwigo/API/CurrentlySelected=currently selected)",
             "", "warning")
         return false
     end
@@ -66,20 +66,20 @@ local function SetAlbumCover()
         end
     end
     if not useService then
-        LrDialogs.message("Please select a photo in a Piwigo Publisher service", "", "warning")
+        LrDialogs.message(LOC "$$$/Piwigo/SetAlbumCover/PleaseSelectPhoto=Please select a photo in a Piwigo Publisher service", "", "warning")
         return false
     end
     if not publishSettings then
-        LrDialogs.message("SetAlbumCover - Can't find publish settings for this publish collection", "", "warning")
+        LrDialogs.message(LOC "$$$/Piwigo/SetAlbumCover/SetalbumcoverTFindPublish=SetAlbumCover - Can't find publish settings for this publish collection", "", "warning")
         return false
     end
     if not catId then
-        LrDialogs.message("SetAlbumCover - Can't find Piwigo album ID for remoteId for this publish collection", "",
+        LrDialogs.message(LOC "$$$/Piwigo/SetAlbumCover/SetalbumcoverTFindPiwigo=SetAlbumCover - Can't find Piwigo album ID for remoteId for this publish collection", "",
             "warning")
         return false
     end
     if not catId then
-        LrDialogs.message("SetAlbumCover - Can't find Piwigo album ID for remoteId for this publish collection", "",
+        LrDialogs.message(LOC "$$$/Piwigo/SetAlbumCover/SetalbumcoverTFindPiwigo=SetAlbumCover - Can't find Piwigo album ID for remoteId for this publish collection", "",
             "warning")
         return false
     end
@@ -89,18 +89,18 @@ local function SetAlbumCover()
     local thisPubPhoto = utils.findPhotoInCollectionSet(useSource, selPhoto)
     if not thisPubPhoto then
         LrDialogs.message(
-        "PiwigoAPI.setAlbumCover - Can't find this photo in collection set or collections - has it been published?", "",
+        LOC "$$$/Piwigo/SetAlbumCover/PiwigoapiSetalbumcoverTFindQuestion=PiwigoAPI.setAlbumCover - Can't find this photo in collection set or collections - has it been published?", "",
             "warning")
         return false
     end
     local remoteId = thisPubPhoto:getRemoteId()
     if not remoteId or remoteId == "" then
-        LrDialogs.message("PiwigoAPI.setAlbumCover - Can't find Piwigo photo ID for this photo - has it been published?", "", "warning")
+        LrDialogs.message(LOC "$$$/Piwigo/SetAlbumCover/PiwigoapiSetalbumcoverTFindQuestion2=PiwigoAPI.setAlbumCover - Can't find Piwigo photo ID for this photo - has it been published?", "", "warning")
         return false
     end
 
-    local result = LrDialogs.confirm("Set Piwigo Album Cover",
-        "Set select photo as cover photo for " .. useSource:getName() .. "?", "Ok", "Cancel")
+    local result = LrDialogs.confirm(LOC "$$$/Piwigo/API/SetPiwigoAlbumCover=Set Piwigo Album Cover",
+        LOC "$$$/Piwigo/API/SetSelectPhotoCover=Set select photo as cover photo for" .. " " .. useSource:getName() .. "?", "Ok", "Cancel")
     if result ~= 'ok' then
         return false
     end
@@ -115,15 +115,15 @@ local function SetAlbumCover()
     if not (publishSettings.Connected) then
         rv = PiwigoAPI.login(publishSettings)
         if not rv then
-            LrDialogs.message("SetAlbumCover - cannot connect to piwigo")
+            LrDialogs.message(LOC "$$$/Piwigo/SetAlbumCover/SetalbumcoverCannotConnectPiwigo=SetAlbumCover - cannot connect to piwigo")
             return false
         end
     end
 
     -- check role is admin level
     if publishSettings.userStatus ~= "webmaster" then
-        LrDialogs.message("User needs webmaster role on piwigo gallery at " ..
-        publishSettings.host .. " to set album cover")
+        LrDialogs.message(LOC "$$$/Piwigo/API/UserNeedsWebmasterRole=User needs webmaster role on piwigo gallery at" .. " " ..
+        publishSettings.host .. " " .. LOC "$$$/Piwigo/API/SetAlbumCover=to set album cover")
         return false
     end
 
@@ -136,7 +136,7 @@ local function SetAlbumCover()
     local postResponse = PiwigoAPI.httpPostMultiPart(publishSettings, params)
 
     if not postResponse.status then
-        LrDialogs.message("Unable to set cover photo - " .. postResponse.statusMsg)
+        LrDialogs.message(LOC "$$$/Piwigo/API/UnableSetCoverPhoto=Unable to set cover photo" .. " -" .. postResponse.statusMsg)
         return false
     end
 

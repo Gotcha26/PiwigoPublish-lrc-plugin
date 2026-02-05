@@ -38,7 +38,7 @@ local function main()
 
         local allServices = PiwigoAPI.getPublishServicesForPlugin(_PLUGIN.id)
         if #allServices == 0 then
-            LrDialogs.message("No Piwigo publish services found.")
+            LrDialogs.message(LOC "$$$/Piwigo/ExtraOptions/NoPiwigoPublishServices=No Piwigo publish services found.")
             return
         end
         local serviceItems = {}
@@ -72,7 +72,7 @@ local function main()
                 spacing = f:label_spacing(),
 
                 f:static_text {
-                    title = "Select publish service:",
+                    title = LOC "$$$/Piwigo/ExtraOptions/SelectPublishService=Select publish service:",
                     alignment = 'right',
                     width = 150,
                 },
@@ -87,7 +87,7 @@ local function main()
             f:spacer { height = 20 },
             f:row {
                 f:static_text {
-                    title = "Applies to selected images",
+                    title = LOC "$$$/Piwigo/ExtraOptions/AppliesSelectedImages=Applies to selected images",
                     font = "<system/bold>",
                     alignment = 'left',
                     fill_horizontal = 1,
@@ -97,14 +97,14 @@ local function main()
             f:row {
                 f:push_button {
                     title = 'Set Piwigo Album Cover',
-                    tooltip = "Sets selected image as Piwigo album cover ",
+                    tooltip = LOC "$$$/Piwigo/ExtraOptions/SetsSelectedImagePiwigo=Sets selected image as Piwigo album cover" .. " ",
                     action = function(button)
                         LrTasks.startAsyncTask(function()
                             local serviceNo = props.selectedService
                             -- get service object for selected service
                             local service = serviceItems[serviceNo].value
                             if not service then
-                                LrDialogs.message("Error", "Could not find publish service", "error")
+                                LrDialogs.message("Error", LOC "$$$/Piwigo/ExtraOptions/CouldFindPublishService=Could not find publish service", "error")
                                 return
                             end
                             PiwigoAPI.setAlbumCover(service )
@@ -113,7 +113,7 @@ local function main()
                     end,
                 },
                 f:static_text {
-                    title = "Sets selected image as Piwigo album cover for this collection",
+                    title = LOC "$$$/Piwigo/ExtraOptions/SetsSelectedImagePiwigo2=Sets selected image as Piwigo album cover for this collection",
                     alignment = 'left',
                     -- width = share 'labelWidth',
                     width_in_chars = 50,
@@ -122,7 +122,7 @@ local function main()
         }
 
         dialog = LrDialogs.presentModalDialog({
-            title = "Piwigo Extra Options",
+            title = LOC "$$$/Piwigo/ExtraOptions/PiwigoExtraOptions=Piwigo Extra Options",
             contents = c,
             actionVerb = "Close",
         })

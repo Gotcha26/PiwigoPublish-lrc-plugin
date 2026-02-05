@@ -101,7 +101,7 @@ local function processSmartCollectionQueue(smartColls, publishService, propertyT
     if not smartColls or index > #smartColls then
         releasePublishLock(serviceId)
         progressScope:done()
-        LrDialogs.message("Clone completed", "Publish Service Clone Complete.", "info")
+        LrDialogs.message(LOC "$$$/Piwigo/ImportService/CloneCompleted=Clone completed", LOC "$$$/Piwigo/ImportService/PublishServiceCloneComplete=Publish Service Clone Complete.", "info")
         return
     end
 
@@ -109,7 +109,7 @@ local function processSmartCollectionQueue(smartColls, publishService, propertyT
     if not entry then
         releasePublishLock(serviceId)
         progressScope:done()
-        LrDialogs.message("Clone completed", "Publish Service Clone Complete.", "info")
+        LrDialogs.message(LOC "$$$/Piwigo/ImportService/CloneCompleted=Clone completed", LOC "$$$/Piwigo/ImportService/PublishServiceCloneComplete=Publish Service Clone Complete.", "info")
         return -- done
     end
 
@@ -328,7 +328,7 @@ local function populateCollections(stdColls, smartColls, publishService, propert
         processSmartCollectionQueue(smartColls, publishService, propertyTable, 1, progressScope, stats)
     else
         progressScope:done()
-        LrDialogs.message("Clone completed", "Publish Service Clone Complete.", "info")
+        LrDialogs.message(LOC "$$$/Piwigo/ImportService/CloneCompleted=Clone completed", LOC "$$$/Piwigo/ImportService/PublishServiceCloneComplete=Publish Service Clone Complete.", "info")
     end
 end
 
@@ -376,8 +376,8 @@ local function createTree(nodes, parentSet, publishService, created, childrenInd
                 newCollorSet = publishService:createPublishedCollectionSet(name, parentSet, true)
             end)
             if newCollorSet == nil then
-                LrErrors.throwUserError("Error in createCollection: Failed to create PublishedCollectionSet " ..
-                    name .. " under parent " .. parentSet:getName())
+                LrErrors.throwUserError(LOC "$$$/Piwigo/API/ErrorCreatecollectionFailedCreate2=Error in createCollection: Failed to create PublishedCollectionSet" .. " " ..
+                    name .. " " .. LOC "$$$/Piwigo/API/UnderParent=under parent" .. " " .. parentSet:getName())
                 return
             end
             created[node.id] = newCollorSet
@@ -437,8 +437,8 @@ local function createTree(nodes, parentSet, publishService, created, childrenInd
                     end)
                 end
                 if newCollorSet == nil then
-                    LrErrors.throwUserError("Error in createCollection: Failed to create PublishedCollection " ..
-                        name .. " under parent " .. parentSet:getName())
+                    LrErrors.throwUserError(LOC "$$$/Piwigo/API/ErrorCreatecollectionFailedCreate=Error in createCollection: Failed to create PublishedCollection" .. " " ..
+                        name .. " " .. LOC "$$$/Piwigo/API/UnderParent=under parent" .. " " .. parentSet:getName())
                     return
                 end
                 -- build table of collections for later processing
@@ -721,7 +721,7 @@ local function importServicePrelim(propertyTable, thisService, impService)
                 f:spacer { height = 3 },
                 f:row {
                     f:static_text {
-                        title = "Clone : ",
+                        title = LOC "$$$/Piwigo/ImportService/Clone=Clone :" .. " ",
                         font = "<system>",
                         alignment = 'right',
 
@@ -740,7 +740,7 @@ local function importServicePrelim(propertyTable, thisService, impService)
 
                 f:row {
                     f:static_text {
-                        title = "      to : ",
+                        title = "      " .. LOC "$$$/Piwigo/ImportService/To=to :" .. " ",
                         font = "<system>",
                         alignment = 'right',
 
@@ -780,7 +780,7 @@ local function importServicePrelim(propertyTable, thisService, impService)
                 f:row {
                     f:static_text {
                         alignment = 'center',
-                        title = "Collection Sets to clone : " .. stats.collectionSets,
+                        title = LOC "$$$/Piwigo/ImportService/CollectionSetsClone=Collection Sets to clone :" .. " " .. stats.collectionSets,
                         font = "<system>",
                         fill_horizontal = 1,
                     }
@@ -789,7 +789,7 @@ local function importServicePrelim(propertyTable, thisService, impService)
                 f:row {
                     f:static_text {
                         alignment = 'center',
-                        title = "Collections to clone : " .. stats.collections,
+                        title = LOC "$$$/Piwigo/ImportService/CollectionsClone=Collections to clone :" .. " " .. stats.collections,
                         font = "<system>",
                         fill_horizontal = 1,
                     }
@@ -797,7 +797,7 @@ local function importServicePrelim(propertyTable, thisService, impService)
                 f:row {
                     f:static_text {
                         alignment = 'center',
-                        title = "Smart Collections to clone : " .. stats.smartCollections,
+                        title = LOC "$$$/Piwigo/ImportService/SmartCollectionsClone=Smart Collections to clone :" .. " " .. stats.smartCollections,
                         font = "<system>",
                         fill_horizontal = 1,
                     }
@@ -806,7 +806,7 @@ local function importServicePrelim(propertyTable, thisService, impService)
 
                 f:row {
                     f:static_text {
-                        title = "Images to clone : " .. stats.images,
+                        title = LOC "$$$/Piwigo/ImportService/ImagesClone=Images to clone :" .. " " .. stats.images,
                         font = "<system>",
                         alignment = 'center',
                         fill_horizontal = 1,
@@ -836,9 +836,9 @@ local function importServicePrelim(propertyTable, thisService, impService)
 
     if canClone then
         local dialog = LrDialogs.presentModalDialog({
-            title = "Confirm details of Publish Service to be cloned",
+            title = LOC "$$$/Piwigo/ImportService/ConfirmDetailsPublishService=Confirm details of Publish Service to be cloned",
             contents = c,
-            actionVerb = "Clone",
+            actionVerb = LOC "$$$/Piwigo/ImportService/Clone2=Clone",
             cancelVerb = "Cancel",
         })
         log:info("importServicePrelim - dialog is " .. utils.serialiseVar(dialog))
@@ -847,10 +847,10 @@ local function importServicePrelim(propertyTable, thisService, impService)
         end
     else
         local dialog = LrDialogs.presentModalDialog({
-            title = "Details of Publish Service to be cloned",
+            title = LOC "$$$/Piwigo/ImportService/DetailsPublishService=Details of Publish Service to be cloned",
             contents = c,
-            actionVerb = "Cancel Clone",
-            cancelVerb = "< exclude >",
+            actionVerb = LOC "$$$/Piwigo/ImportService/CancelClone=Cancel Clone",
+            cancelVerb = LOC "$$$/Piwigo/ImportService/Exclude=< exclude >",
         })
     end
 end
@@ -870,7 +870,7 @@ function PWIMportService.selectService(propertyTable)
     local childCollSets = thisService:getChildCollectionSets() or nil
     if not (utils.nilOrEmpty(childColls)) or not (utils.nilOrEmpty(childCollSets)) then
         --if thisService:getChildCollections() or thisService:getChildCollectionSets() then
-        LrDialogs.message("Error", "Cannot clone into this service as it already contains Published Collections or Sets.",
+        LrDialogs.message("Error", LOC "$$$/Piwigo/ImportService/CannotCloneIntoService=Cannot clone into this service as it already contains Published Collections or Sets.",
             "info")
         return
     end
@@ -881,7 +881,7 @@ function PWIMportService.selectService(propertyTable)
 
         local allServices = catalog:getPublishServices() or {}
         if #allServices == 0 then
-            LrDialogs.message("No publish services found.")
+            LrDialogs.message(LOC "$$$/Piwigo/ImportService/NoPublishServicesFound=No publish services found.")
             return
         end
         local serviceItems = {}
@@ -923,7 +923,7 @@ function PWIMportService.selectService(propertyTable)
                     f:spacer { height = 3 },
                     f:row {
                         f:static_text {
-                            title = "    Clone selected Publish Service to " .. thisService:getName() .. " Publish Service",
+                            title = "    " .. LOC "$$$/Piwigo/ImportService/CloneSelectedPublishService=Clone selected Publish Service to" .. " " .. thisService:getName() .. " " .. LOC "$$$/Piwigo/ImportService/PublishService=Publish Service",
                             font = "<system/bold>",
                             alignment = 'left',
                             fill_horizontal = 1,
@@ -942,7 +942,7 @@ function PWIMportService.selectService(propertyTable)
                     alignment = 'left',
                 },
                 f:static_text {
-                    title = "Select Publish Service to clone:",
+                    title = LOC "$$$/Piwigo/ImportService/SelectPublishServiceClone=Select Publish Service to clone:",
                     alignment = 'right',
                     width = 200,
                 },
@@ -957,7 +957,7 @@ function PWIMportService.selectService(propertyTable)
             f:row {
                 f:spacer { height = 2 },
                 f:static_text {
-                    title = "        Please ensure selected service is up to date - i.e. with no outstanding photographs to be published",
+                    title = "        " .. LOC "$$$/Piwigo/ImportService/PleaseEnsureSelectedService=Please ensure selected service is up to date - i.e. with no outstanding photographs to be published",
                     alignment = 'left',
                 },
             }
@@ -965,9 +965,9 @@ function PWIMportService.selectService(propertyTable)
         }
 
         local dialog = LrDialogs.presentModalDialog({
-            title = "Piwigo Publisher - Clone Existing Publish Service",
+            title = LOC "$$$/Piwigo/ImportService/PiwigoPublisherCloneExisting=Piwigo Publisher - Clone Existing Publish Service",
             contents = c,
-            actionVerb = "Next",
+            actionVerb = LOC "$$$/Piwigo/ImportService/Next=Next",
             cancelVerb = "Cancel",
         })
 
@@ -977,7 +977,7 @@ function PWIMportService.selectService(propertyTable)
             -- get service object for selected service
             local selService = serviceItems[serviceNo].value
             if not selService then
-                LrDialogs.message("Error", "Could not find publish service", "error")
+                LrDialogs.message("Error", LOC "$$$/Piwigo/ExtraOptions/CouldFindPublishService=Could not find publish service", "error")
                 return
             end
             LrTasks.startAsyncTask(function()

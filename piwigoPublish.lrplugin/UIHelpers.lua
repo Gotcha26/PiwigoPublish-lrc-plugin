@@ -42,7 +42,7 @@ function UIHelpers.createPluginHeader(f, share, iconPath, pluginVersion)
 			f:row {
 				f:spacer { width = INDENT_PIXELS },
 				f:static_text {
-					title = "Piwigo Publisher Plugin",
+					title = LOC "$$$/Piwigo/UIHelpers/PiwigoPublisherPlugin=Piwigo Publisher Plugin",
 					font = "<system/bold>",
 					alignment = 'left',
 					width = share 'labelWidth',
@@ -51,7 +51,7 @@ function UIHelpers.createPluginHeader(f, share, iconPath, pluginVersion)
 			f:row {
 				f:spacer { width = INDENT_PIXELS },
 				f:static_text {
-					title = "Plugin Version",
+					title = LOC "$$$/Piwigo/UIHelpers/PluginVersion=Plugin Version",
 					alignment = 'left',
 				},
 				f:static_text {

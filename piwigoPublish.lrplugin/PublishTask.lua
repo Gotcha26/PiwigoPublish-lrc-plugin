@@ -71,7 +71,7 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
     -- Set progress title.
     local nPhotos = exportSession:countRenditions()
     local progressScope = exportContext:configureProgress {
-        title = "Publishing " .. nPhotos .. " photos to " .. propertyTable.host
+        title = LOC "$$$/Piwigo/PublishTask/Publishing=Publishing" .. " " .. nPhotos .. " " .. LOC "$$$/Piwigo/PublishTask/Photos=photos to" .. " " .. propertyTable.host
     }
     -- check connection to piwigo
     if not (propertyTable.Connected) then
@@ -124,7 +124,7 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
             albumId = callStatus.newCatId
             exportSession:recordRemoteCollectionId(albumId)
             exportSession:recordRemoteCollectionUrl(callStatus.albumURL)
-            LrDialogs.message("*** Missing Piwigo album ***", albumName .. ", Piwigo Cat ID " .. albumId .. " created")
+            LrDialogs.message(LOC "$$$/Piwigo/PublishTask/MissingPiwigoAlbum=*** Missing Piwigo album ***", albumName .. LOC "$$$/Piwigo/PublishTask/PiwigoCatId=, Piwigo Cat ID" .. " " .. albumId .. " created")
             requestRepub = true
         else
             PWStatusManager.setPiwigoBusy(publishService, false)
@@ -236,10 +236,6 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
             metaData = utils.getPhotoMetadata(propertyTable, lrPhoto)
             metaData.Albumid = albumId
             metaData.Remoteid = remoteId
-            -- run to build missingTags - tags that will be created on upload to Piwigo
-            -- will use this to decide whether to run build tagtable cache
-            -- means we don't have to rebuild after each uploaded photo
-            local tagIdList, missingTags = utils.tagsToIds(propertyTable.tagTable, metaData.tagString)
 
             -- do the upload
             callStatus = PiwigoAPI.updateGallery(propertyTable, filePath, metaData)
@@ -268,19 +264,16 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
 
                 PiwigoAPI.storeMetaData(catalog, lrPhoto, pluginData)
 
-                -- photo was uploaded with keywords included, but existing keywords aren't replaced by this process,
-                -- so force a metadata update using pwg.images.setInfo with single_value_mode set to "replace" to force old metadata/keywords to be replaced
+                -- Queue metadata update for batch processing (Étape 1B optimization)
                 metaData.Remoteid = callStatus.remoteid
-                if missingTags then
-                    -- refresh cached tag list as new tags have been created during updateGallery
-                    rv, propertyTable.tagTable = PiwigoAPI.getTagList(propertyTable)
-                end
-                if not rv then
-                    LrDialogs.message("PiwigoAPI:updateMetadata - cannot get taglist from Piwigo")
-                end
-                callStatus = PiwigoAPI.updateMetadata(propertyTable, lrPhoto, metaData)
-                if not callStatus.status then
-                    LrDialogs.message("Unable to set metadata for uploaded photo - " .. callStatus.statusMsg)
+                MetadataBatcher.queue(propertyTable, lrPhoto, metaData)
+
+                -- Flush batch if threshold reached
+                if MetadataBatcher.shouldFlush() then
+                    local batchResults = MetadataBatcher.flush(propertyTable)
+                    if batchResults.failed > 0 then
+                        log:warn("MetadataBatcher: " .. batchResults.failed .. " updates failed")
+                    end
                 end
             else
                 rendition:uploadFailed(callStatus.message or "Upload failed")
@@ -293,6 +286,16 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
             rendition:uploadFailed(pathOrMessage or "Render failed")
         end
     end
+
+    -- Flush any remaining queued metadata updates (Étape 1B)
+    if MetadataBatcher.size() > 0 then
+        log:info("PublishTask - flushing final " .. MetadataBatcher.size() .. " metadata updates")
+        local batchResults = MetadataBatcher.flush(propertyTable)
+        if batchResults.failed > 0 then
+            log:warn("MetadataBatcher final flush: " .. batchResults.failed .. " updates failed")
+        end
+    end
+
     progressScope:done()
     PWStatusManager.setPiwigoBusy(publishService, false)
 end
@@ -728,8 +731,8 @@ function PublishTask.viewForCollectionSettings(f, publishSettings, info)
     local thisName = info.name or ""
     if string.sub(thisName, 1, 1) == "[" and string.sub(thisName, -1) == "]" then
         LrDialogs.message(
-            "Edit Piwigo Album",
-            "Cannot edit special collection " .. thisName .. " created by Piwigo Publisher plugin",
+            LOC "$$$/Piwigo/PublishTask/EditPiwigoAlbum=Edit Piwigo Album",
+            LOC "$$$/Piwigo/PublishTask/CannotEditSpecialCollection=Cannot edit special collection" .. " " .. thisName .. " " .. LOC "$$$/Piwigo/PublishTask/CreatedByPiwigoPublisher=created by Piwigo Publisher plugin",
             "info"
         )
         return false
@@ -794,22 +797,22 @@ function PublishTask.viewForCollectionSettings(f, publishSettings, info)
     end
     -- build UI
     local reSizeOptions = {
-        { title = "Long Edge",  value = "Long Edge" },
-        { title = "Short Edge", value = "Short Edge" },
-        { title = "Dimensions", value = "Dimensions" },
-        { title = "Megapixels", value = "MegaPixels" },
-        { title = "Percent",    value = "Percent" },
+        { title = LOC "$$$/Piwigo/PublishTask/LongEdge=Long Edge",  value = LOC "$$$/Piwigo/PublishTask/LongEdge=Long Edge" },
+        { title = LOC "$$$/Piwigo/PublishTask/ShortEdge=Short Edge", value = LOC "$$$/Piwigo/PublishTask/ShortEdge=Short Edge" },
+        { title = LOC "$$$/Piwigo/PublishTask/Dimensions=Dimensions", value = LOC "$$$/Piwigo/PublishTask/Dimensions=Dimensions" },
+        { title = LOC "$$$/Piwigo/PublishTask/Megapixels=Megapixels", value = LOC "$$$/Piwigo/PublishTask/Megapixels2=MegaPixels" },
+        { title = LOC "$$$/Piwigo/PublishTask/Percent=Percent",    value = LOC "$$$/Piwigo/PublishTask/Percent=Percent" },
     }
     local metaDataOpts = {
-        { title = "All Metadata",                         value = "All Metadata" },
-        { title = "Copyright only",                       value = "Copyright Only" },
-        { title = "Copyright & Contact Info Only",        value = "Copyright & Contact Info Only" },
-        { title = "All Except Camera Raw Info",           value = "All Except Camera Raw Info" },
-        { title = "All Except Camera & Camera Raw Info",  value = "All Except Camera & Camera Raw Info" },
+        { title = LOC "$$$/Piwigo/PublishTask/AllMetadata=All Metadata",                         value = LOC "$$$/Piwigo/PublishTask/AllMetadata=All Metadata" },
+        { title = LOC "$$$/Piwigo/PublishTask/CopyrightOnly=Copyright only",                       value = LOC "$$$/Piwigo/PublishTask/CopyrightOnly2=Copyright Only" },
+        { title = LOC "$$$/Piwigo/PublishTask/CopyrightContactInfoOnly=Copyright & Contact Info Only",        value = LOC "$$$/Piwigo/PublishTask/CopyrightContactInfoOnly=Copyright & Contact Info Only" },
+        { title = LOC "$$$/Piwigo/PublishTask/AllExceptCameraRaw=All Except Camera Raw Info",           value = LOC "$$$/Piwigo/PublishTask/AllExceptCameraRaw=All Except Camera Raw Info" },
+        { title = LOC "$$$/Piwigo/PublishTask/AllExceptCameraCamera=All Except Camera & Camera Raw Info",  value = LOC "$$$/Piwigo/PublishTask/AllExceptCameraCamera=All Except Camera & Camera Raw Info" },
     }
 
     local pwAlbumUI = f:group_box {
-        title = "Piwigo Album Settings",
+        title = LOC "$$$/Piwigo/PublishTask/PiwigoAlbumSettings=Piwigo Album Settings",
         font = "<system/bold>",
         size = 'regular',
         fill_horizontal = 1,
@@ -820,7 +823,7 @@ function PublishTask.viewForCollectionSettings(f, publishSettings, info)
             f:separator { fill_horizontal = 1 },
 
             f:row {
-                f:static_text { title = "Album Description:", font = "<system>", alignment = 'right', width = share 'label_width', },
+                f:static_text { title = LOC "$$$/Piwigo/PublishTask/AlbumDescription=Album Description:", font = LOC "$$$/Piwigo/PublishTask/System=<system>", alignment = 'right', width = share 'label_width', },
                 f:edit_field {
                     enabled = LrView.bind {
                         key = 'syncAlbumDescriptions',
@@ -837,8 +840,8 @@ function PublishTask.viewForCollectionSettings(f, publishSettings, info)
 
             f:row {
                 f:checkbox {
-                    title = "Album is Private",
-                    tooltip = "If checked, this album will be private on Piwigo",
+                    title = LOC "$$$/Piwigo/PublishTask/AlbumPrivate=Album is Private",
+                    tooltip = LOC "$$$/Piwigo/PublishTask/CheckedAlbum=If checked, this album will be private on Piwigo",
                     value = bind 'albumPrivate',
                 }
             }
@@ -847,7 +850,7 @@ function PublishTask.viewForCollectionSettings(f, publishSettings, info)
     }
 
     local pubSettingsUI = f:group_box {
-        title = "Custom Publish Settings (Overrides defaults set in Publish Settings)",
+        title = LOC "$$$/Piwigo/PublishTask/CustomPublishSettingsOverrides=Custom Publish Settings (Overrides defaults set in Publish Settings)",
         font = "<system/bold>",
         size = 'regular',
         fill_horizontal = 1,
@@ -858,14 +861,14 @@ function PublishTask.viewForCollectionSettings(f, publishSettings, info)
             f:separator { fill_horizontal = 1 },
             f:row {
                 f:checkbox {
-                    title = "Use custom settings for this album",
-                    tooltip = "If checked, these settings will replace the defaults set in Publish Settings",
+                    title = LOC "$$$/Piwigo/PublishTask/UseCustomSettingsAlbum=Use custom settings for this album",
+                    tooltip = LOC "$$$/Piwigo/PublishTask/CheckedTheseSettingsReplace=If checked, these settings will replace the defaults set in Publish Settings",
                     value = bind 'enableCustom',
                 }
             },
             f:row {
                 f:group_box { -- group for export parameters
-                    title = "Export Settings",
+                    title = LOC "$$$/Piwigo/PublishTask/ExportSettings=Export Settings",
                     visible = bind 'enableCustom',
                     font = "<system>",
                     fill_horizontal = 1,
@@ -874,12 +877,12 @@ function PublishTask.viewForCollectionSettings(f, publishSettings, info)
                         spacing = f:label_spacing(),
 
                         f:checkbox {
-                            title = "Resize Image",
-                            tooltip = "If checked, published image will be resized per these settings",
+                            title = LOC "$$$/Piwigo/PublishTask/ResizeImage=Resize Image",
+                            tooltip = LOC "$$$/Piwigo/PublishTask/CheckedPublishedImage=If checked, published image will be resized per these settings",
                             value = bind 'reSize',
                         },
                         f:static_text {
-                            title = "Use :",
+                            title = LOC "$$$/Piwigo/PublishTask/Use=Use :",
                             alignment = 'right',
                             fill_horizontal = 1,
                         },
@@ -890,8 +893,8 @@ function PublishTask.viewForCollectionSettings(f, publishSettings, info)
                             value_equal = valueEqual,
                         },
                         f:checkbox {
-                            title = "Allow Enlarge Image",
-                            tooltip = "If checked, published image will be enlarged if necessary",
+                            title = LOC "$$$/Piwigo/PublishTask/AllowEnlargeImage=Allow Enlarge Image",
+                            tooltip = LOC "$$$/Piwigo/PublishTask/CheckedPublishedImage2=If checked, published image will be enlarged if necessary",
                             value = bind 'reSizeEnlarge',
                         },
 
@@ -902,18 +905,18 @@ function PublishTask.viewForCollectionSettings(f, publishSettings, info)
             },
             f:row {
                 f:group_box { -- group for Metadata parameters
-                    title = "Metadata Settings",
+                    title = LOC "$$$/Piwigo/PublishDialogSections/MetadataSettings=Metadata Settings",
                     visible = bind 'enableCustom',
                     font = "<system>",
                     fill_horizontal = 1,
                     f:spacer { height = 2 },
 
-                    f:checkbox { title = "Include Full Keyword Hierarchy",
-                        tooltip = "If checked, all keywords in a keyword hierarchy will be sent to Piwigo",
+                    f:checkbox { title = LOC "$$$/Piwigo/PublishDialogSections/IncludeFullKeywordHierarchy=Include Full Keyword Hierarchy",
+                        tooltip = LOC "$$$/Piwigo/PublishDialogSections/CheckedAllKeywords=If checked, all keywords in a keyword hierarchy will be sent to Piwigo",
                         value = bind 'KwFullHierarchy',
                     },
-                    f:checkbox { title = "Include Keywords Synonyms",
-                        tooltip = "If checked, keywords synonyms will be sent to Piwigo",
+                    f:checkbox { title = LOC "$$$/Piwigo/PublishTask/IncludeKeywordsSynonyms=Include Keywords Synonyms",
+                        tooltip = LOC "$$$/Piwigo/PublishTask/CheckedKeywordsSynonyms=If checked, keywords synonyms will be sent to Piwigo",
                         value = bind 'KwSynonyms',
                     }
 
@@ -1016,8 +1019,8 @@ function PublishTask.updateCollectionSettings(publishSettings, info)
             Collection:setRemoteUrl(publishSettings.host .. "/index.php?/category/" .. callStatus.newCatId)
         end)
         LrDialogs.message(
-            "New Piwigo Album",
-            "New Piwigo Album " .. metaData.name .. " created with Piwigo Cat Id " .. callStatus.newCatId,
+            LOC "$$$/Piwigo/PublishTask/NewPiwigoAlbum=New Piwigo Album",
+            LOC "$$$/Piwigo/PublishTask/NewPiwigoAlbum=New Piwigo Album" .. " " .. metaData.name .. " " .. LOC "$$$/Piwigo/PublishTask/CreatedWithPiwigoCat=created with Piwigo Cat Id" .. " " .. callStatus.newCatId,
             "info"
         )
     end
@@ -1086,22 +1089,22 @@ function PublishTask.viewForCollectionSetSettings(f, publishSettings, info)
     end
     -- build UI
     local reSizeOptions = {
-        { title = "Long Edge",  value = "Long Edge" },
-        { title = "Short Edge", value = "Short Edge" },
-        { title = "Dimensions", value = "Dimensions" },
-        { title = "Megapixels", value = "MegaPixels" },
-        { title = "Percent",    value = "Percent" },
+        { title = LOC "$$$/Piwigo/PublishTask/LongEdge=Long Edge",  value = LOC "$$$/Piwigo/PublishTask/LongEdge=Long Edge" },
+        { title = LOC "$$$/Piwigo/PublishTask/ShortEdge=Short Edge", value = LOC "$$$/Piwigo/PublishTask/ShortEdge=Short Edge" },
+        { title = LOC "$$$/Piwigo/PublishTask/Dimensions=Dimensions", value = LOC "$$$/Piwigo/PublishTask/Dimensions=Dimensions" },
+        { title = LOC "$$$/Piwigo/PublishTask/Megapixels=Megapixels", value = LOC "$$$/Piwigo/PublishTask/Megapixels2=MegaPixels" },
+        { title = LOC "$$$/Piwigo/PublishTask/Percent=Percent",    value = LOC "$$$/Piwigo/PublishTask/Percent=Percent" },
     }
     local metaDataOpts = {
-        { title = "All Metadata",                         value = "All Metadata" },
-        { title = "Copyright only",                       value = "Copyright Only" },
-        { title = "Copyright & Contact Info Only",        value = "Copyright & Contact Info Only" },
-        { title = "All Except Camera Raw Info",           value = "All Except Camera Raw Info" },
-        { title = "All Except Camera & Camera Raw Info",  value = "All Except Camera & Camera Raw Info" },
+        { title = LOC "$$$/Piwigo/PublishTask/AllMetadata=All Metadata",                         value = LOC "$$$/Piwigo/PublishTask/AllMetadata=All Metadata" },
+        { title = LOC "$$$/Piwigo/PublishTask/CopyrightOnly=Copyright only",                       value = LOC "$$$/Piwigo/PublishTask/CopyrightOnly2=Copyright Only" },
+        { title = LOC "$$$/Piwigo/PublishTask/CopyrightContactInfoOnly=Copyright & Contact Info Only",        value = LOC "$$$/Piwigo/PublishTask/CopyrightContactInfoOnly=Copyright & Contact Info Only" },
+        { title = LOC "$$$/Piwigo/PublishTask/AllExceptCameraRaw=All Except Camera Raw Info",           value = LOC "$$$/Piwigo/PublishTask/AllExceptCameraRaw=All Except Camera Raw Info" },
+        { title = LOC "$$$/Piwigo/PublishTask/AllExceptCameraCamera=All Except Camera & Camera Raw Info",  value = LOC "$$$/Piwigo/PublishTask/AllExceptCameraCamera=All Except Camera & Camera Raw Info" },
     }
 
     local pwAlbumUI = f:group_box {
-        title = "Piwigo Album Settings",
+        title = LOC "$$$/Piwigo/PublishTask/PiwigoAlbumSettings=Piwigo Album Settings",
         font = "<system/bold>",
         size = 'regular',
         fill_horizontal = 1,
@@ -1112,7 +1115,7 @@ function PublishTask.viewForCollectionSetSettings(f, publishSettings, info)
             f:separator { fill_horizontal = 1 },
 
             f:row {
-                f:static_text { title = "Album Description:", font = "<system>", alignment = 'right', width = share 'label_width', },
+                f:static_text { title = LOC "$$$/Piwigo/PublishTask/AlbumDescription=Album Description:", font = LOC "$$$/Piwigo/PublishTask/System=<system>", alignment = 'right', width = share 'label_width', },
                 f:edit_field {
                     enabled = LrView.bind {
                         key = 'syncAlbumDescriptions',
@@ -1128,8 +1131,8 @@ function PublishTask.viewForCollectionSetSettings(f, publishSettings, info)
 
             f:row {
                 f:checkbox {
-                    title = "Album is Private",
-                    tooltip = "If checked, this album will be private on Piwigo",
+                    title = LOC "$$$/Piwigo/PublishTask/AlbumPrivate=Album is Private",
+                    tooltip = LOC "$$$/Piwigo/PublishTask/CheckedAlbum=If checked, this album will be private on Piwigo",
                     value = bind 'albumPrivate',
                 }
             }
@@ -1235,8 +1238,8 @@ function PublishTask.updateCollectionSetSettings(publishSettings, info)
             Collection:setRemoteUrl(publishSettings.host .. "/index.php?/category/" .. callStatus.newCatId)
         end)
         LrDialogs.message(
-            "New Piwigo Album",
-            "New Piwigo Album " .. metaData.name .. " created with id " .. callStatus.newCatId,
+            LOC "$$$/Piwigo/PublishTask/NewPiwigoAlbum=New Piwigo Album",
+            LOC "$$$/Piwigo/PublishTask/NewPiwigoAlbum=New Piwigo Album" .. " " .. metaData.name .. " " .. LOC "$$$/Piwigo/PublishTask/CreatedWithId=created with id" .. " " .. callStatus.newCatId,
             "info"
         )
     end
@@ -1272,7 +1275,7 @@ function PublishTask.reparentPublishedCollection(publishSettings, info)
     -- so just check name format
     local thisName = info.name
     if string.sub(thisName, 1, 1) == "[" and string.sub(thisName, -1) == "]" then
-        LrErrors.throwUserError("Cannot re-parent a special collection")
+        LrErrors.throwUserError(LOC "$$$/Piwigo/PublishTask/CannotReParentSpecial=Cannot re-parent a special collection")
         return false
     end
 
@@ -1289,7 +1292,7 @@ function PublishTask.reparentPublishedCollection(publishSettings, info)
     LrTasks.startAsyncTask(function()
         callStatus = PiwigoAPI.pwCategoriesMove(publishSettings, info, myCat, parentCat, callStatus)
         if not (callStatus.status) then
-            LrErrors.throwUserError("Error moving album: " .. callStatus.statusMsg)
+            LrErrors.throwUserError(LOC "$$$/Piwigo/PublishTask/ErrorMovingAlbum=Error moving album:" .. " " .. callStatus.statusMsg)
             return false
         end
         return true
@@ -1332,13 +1335,13 @@ function PublishTask.renamePublishedCollection(publishSettings, info)
     end
     local serviceId = publishService.localIdentifier
     if string.sub(oldName, 1, 1) == "[" and string.sub(oldName, -1) == "]" then
-        callStatus.statusMsg = "Cannot re-name a special collection"
+        callStatus.statusMsg = LOC "$$$/Piwigo/PublishTask/CannotReNameSpecial=Cannot re-name a special collection"
     else
         if utils.nilOrEmpty(remoteId) then
-            callStatus.statusMsg = "no album found on Piwigo"
+            callStatus.statusMsg = LOC "$$$/Piwigo/PublishTask/NoAlbumFoundPiwigo=no album found on Piwigo"
         else
             if serviceState.PiwigoBusy then
-                callStatus.statusMsg = "Piwigo Publisher is busy. Please try later."
+                callStatus.statusMsg = LOC "$$$/Piwigo/PublishTask/PiwigoPublisherBusyPlease=Piwigo Publisher is busy. Please try later."
             else
                 callStatus = PiwigoAPI.pwCategoriesSetinfo(publishSettings, info, metaData)
             end
@@ -1372,8 +1375,8 @@ function PublishTask.renamePublishedCollection(publishSettings, info)
             end)
         end)
         LrDialogs.message(
-            "Rename Failed",
-            "The Piwigo rename failed (" .. callStatus.statusMsg .. ").\nThe collection name has been reverted.",
+            LOC "$$$/Piwigo/PublishTask/RenameFailed=Rename Failed",
+            LOC "$$$/Piwigo/PublishTask/PiwigoRenameFailed=The Piwigo rename failed (" .. callStatus.statusMsg .. LOC "$$$/Piwigo/PublishTask/NtheCollectionNameReverted=).\nThe collection name has been reverted.",
             "warning"
         )
     end
@@ -1439,7 +1442,7 @@ function PublishTask.deletePublishedCollection(publishSettings, info)
         publishService = publishService
     }
     if utils.nilOrEmpty(catToDelete) then
-        LrDialogs.message("Delete Album", "This collection has no associated Piwigo album to delete.", "warning")
+        LrDialogs.message(LOC "$$$/Piwigo/PublishTask/DeleteAlbum=Delete Album", LOC "$$$/Piwigo/PublishTask/CollectionNoAssociatedPiwigo=This collection has no associated Piwigo album to delete.", "warning")
     else
         rv = PiwigoAPI.pwCategoriesDelete(publishSettings, info, metaData, callStatus)
     end

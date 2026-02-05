@@ -1,0 +1,76 @@
+MEMORY EDITS SETUP INSTRUCTIONS
+================================
+
+Instructions: Copier ces lignes dans l'outil "memory_user_edits" pour que Claude se souvienne du contexte du plan.
+
+COMMANDS TO RUN (in order):
+---------------------------
+
+1. memory_user_edits command="add" control="PiwigoPublish optimization plan: 4 phases, 5 axes. Goal: 87% speed reduction (12 min → 3 min for 50 photos)"
+
+2. memory_user_edits command="add" control="Phase 1 (Week 1): 1A CacheManager HTTP, 1B batch metadata. Est. 2-3h. Gain: -35% publish time"
+
+3. memory_user_edits command="add" control="Phase 2 (Week 2): 2A stream data (-75% memory), 2B ConnectionPool. Est. 2-3h. Gain: stable 1000+ photos"
+
+4. memory_user_edits command="add" control="Phase 3 (Week 3): 3A URL cache index (O(n) lookup), 4A async render/upload pipeline. Est. 3-4h. Gain: -95% multi-album lookups"
+
+5. memory_user_edits command="add" control="Phase 4 (Week 4): 5B lazy tag loading + persistence. Est. 2h. Full integration tests"
+
+6. memory_user_edits command="add" control="Julien's preferences: no verbose 'why' explanations, direct code fixes, concise debugging. Error diagnosis only, not remediation explanation"
+
+7. memory_user_edits command="add" control="Git workflow: dev branch, isolated commits per etape, only merge main after Phase 1 validated"
+
+8. memory_user_edits command="add" control="Key files by etape: 1A→PiwigoAPI, 1B→PublishTask+API, 2A→API, 2B→API, 3A→Task, 4A→Task, 5B→utils+API"
+
+9. memory_user_edits command="add" control="Testing checkpoints: Phase 1 <8min, Phase 2 <40MB memory, Phase 3 multi-album <0.2sec, Phase 4 all tests pass"
+
+10. memory_user_edits command="add" control="Validation post-etape: perf report (before/after metrics), regression test, backward compat check, integration with previous etapes"
+
+
+OPTIONAL ENHANCED TRACKING (if you want even more detail):
+----------------------------------------------------------
+
+11. memory_user_edits command="add" control="Etape 1A state: ⭕ Not started | 🔄 In progress | ⏸️ Blocked by [X] | ✅ Done, perf gain [Y]%"
+
+12. memory_user_edits command="add" control="Etape 1B state: ⭕ Not started | 🔄 In progress | ⏸️ Blocked by [X] | ✅ Done, perf gain [Y]%"
+
+[... repeat for all etapes if desired ...]
+
+
+UPDATING AS WORK PROGRESSES:
+----------------------------
+
+When an etape is completed, use:
+  memory_user_edits command="replace" line_number=[N] replacement="Etape XY state: ✅ Done, perf gain [X]%, validation: [status]"
+
+When moving to next phase, use:
+  memory_user_edits command="view" → show current state
+  
+Then provide Julien with:
+  - Summary of completed etapes
+  - Cumulative gain so far
+  - Next phase objectives & blockers
+
+
+EXAMPLE INTERACTION SEQUENCE:
+-----------------------------
+
+Julien: "Starting Etape 1A"
+→ View memory to confirm plan
+→ Display code snippet from optimization report
+→ Create validation checklist
+→ Update memory: "Etape 1A: 🔄 In progress"
+
+Julien: "1A done, ~50 fewer API calls now"
+→ Generate perf report template
+→ Ask for metrics (before/after)
+→ Validate backward compat
+→ Update memory: "Etape 1A: ✅ Done, -200-400 API calls per session"
+→ Transition checklist for 1B
+
+Julien: "Moving to Phase 2"
+→ View memory to show Phase 1 completion
+→ Summarize cumulative gains
+→ Display Phase 2 overview & dependencies
+→ Initialize 2A checklist
+

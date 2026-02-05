@@ -76,11 +76,11 @@ function PluginInfoDialogSections.sectionsForBottomOfDialog(f, propertyTable)
         {
             bind_to_object = propertyTable,
 
-            title = "Plugin Updates",
+            title = LOC "$$$/Piwigo/PluginInfoDialogSections/PluginUpdates=Plugin Updates",
 
             f:row {
                 f:static_text {
-                    title = "Current version: " .. pluginVersion,
+                    title = LOC "$$$/Piwigo/PluginInfoDialogSections/CurrentVersion=Current version:" .. " " .. pluginVersion,
                     alignment = 'left',
                 },
             },
@@ -92,13 +92,13 @@ function PluginInfoDialogSections.sectionsForBottomOfDialog(f, propertyTable)
             },
             f:row {
                 f:push_button {
-                    title = "Check for Updates",
+                    title = LOC "$$$/Piwigo/PluginInfoDialogSections/CheckUpdates=Check for Updates",
                     action = function()
                         UpdateChecker.checkForUpdates(false) -- silent = false
                     end,
                 },
                 f:push_button {
-                    title = "Visit GitHub Repository",
+                    title = LOC "$$$/Piwigo/PluginInfoDialogSections/VisitGithubRepository=Visit GitHub Repository",
                     action = function()
                         LrHttp.openUrlInBrowser(
                             "https://github.com/" .. 
@@ -113,14 +113,14 @@ function PluginInfoDialogSections.sectionsForBottomOfDialog(f, propertyTable)
         {
             bind_to_object = propertyTable,
 
-            title = "Piwigo Publisher Plugin Logging",
+            title = LOC "$$$/Piwigo/PluginInfoDialogSections/PiwigoPublisherPluginLogging=Piwigo Publisher Plugin Logging",
 
             f:row {
                 f:checkbox {
                     value = bind 'debugEnabled',
                 },
                 f:static_text {
-                    title = "Enable debug logging",
+                    title = LOC "$$$/Piwigo/PluginInfoDialogSections/EnableDebugLogging=Enable debug logging",
                     alignment = 'left',
                     width = share 'labelWidth'
                 },
@@ -131,12 +131,12 @@ function PluginInfoDialogSections.sectionsForBottomOfDialog(f, propertyTable)
                     enabled = LrView.bind("debugEnabled"), -- only allow if debug is enabled
                 },
                 f:static_text {
-                    title = "Log to file instead of console",
+                    title = LOC "$$$/Piwigo/PluginInfoDialogSections/LogFileInsteadConsole=Log to file instead of console",
                     alignment = 'right',
                     width = share 'labelWidth'
                 },
                 f:push_button {
-                    title = "Show logfile",
+                    title = LOC "$$$/Piwigo/PluginInfoDialogSections/ShowLogfile=Show logfile",
                     enabled = LrView.bind("debugEnabled"), -- only allow if debug is enabled
                     action = function(button)
                         LrShell.revealInShell(utils.getLogfilePath())
@@ -153,12 +153,12 @@ function PluginInfoDialogSections.sectionsForBottomOfDialog(f, propertyTable)
                 spacing = f:control_spacing(),
 
                 f:push_button {
-                    title = "Reset Plugin Preferences…",
+                    title = LOC "$$$/Piwigo/PluginInfoDialogSections/ResetPluginPreferences=Reset Plugin Preferences…",
 
                     action = function()
                         local result = LrDialogs.confirm(
-                            "Reset Plugin Preferences",
-                            "This will delete all saved settings for this plugin.\n\nThis cannot be undone.",
+                            LOC "$$$/Piwigo/PluginInfoDialogSections/ResetPluginPreferences2=Reset Plugin Preferences",
+                            LOC "$$$/Piwigo/PluginInfoDialogSections/DeleteAllSavedSettings=This will delete all saved settings for this plugin.\n\nThis cannot be undone.",
                             "Reset",
                             "Cancel"
                         )
@@ -166,8 +166,8 @@ function PluginInfoDialogSections.sectionsForBottomOfDialog(f, propertyTable)
                         if result == "ok" then
                             resetPluginPrefs()
                             LrDialogs.message(
-                                "Preferences Reset",
-                                "Plugin preferences have been cleared.",
+                                LOC "$$$/Piwigo/PluginInfoDialogSections/PreferencesReset=Preferences Reset",
+                                LOC "$$$/Piwigo/PluginInfoDialogSections/PluginPreferencesCleared=Plugin preferences have been cleared.",
                                 "info"
                             )
                         end

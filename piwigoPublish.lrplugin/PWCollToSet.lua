@@ -53,20 +53,20 @@ local function CollToSet()
     end
 
     if not selectedCollection then
-        LrDialogs.message("CollToSet - Can't access collection object for this publish collection - check selection","","warning")
+        LrDialogs.message(LOC "$$$/Piwigo/CollToSet/ColltosetTAccessCollection=CollToSet - Can't access collection object for this publish collection - check selection","","warning")
         return false
     end
     if selectedCollection:type() == "LrPublishedCollectionSet" then
-        LrDialogs.message("CollToSet - You have selected a Published Collection Set - please select a Published Collection","","warning")
+        LrDialogs.message(LOC "$$$/Piwigo/CollToSet/ColltosetYouSelectedPublished=CollToSet - You have selected a Published Collection Set - please select a Published Collection","","warning")
         return false   
     end
 
     if not useService then
-        LrDialogs.message("Please select a Collection within a Piwigo Publisher service","","warning")
+        LrDialogs.message(LOC "$$$/Piwigo/CollToSet/PleaseSelectCollectionWithin=Please select a Collection within a Piwigo Publisher service","","warning")
         return false
     end
     if not publishSettings then
-        LrDialogs.message("CollToSet - Can't find publish settings for this publish collection","","warning")
+        LrDialogs.message(LOC "$$$/Piwigo/CollToSet/ColltosetTFindPublish=CollToSet - Can't find publish settings for this publish collection","","warning")
         return false
     end
     local selCollName = selectedCollection:getName()
@@ -77,12 +77,12 @@ local function CollToSet()
     -- check that selected collection is not already a special collection
     if selColParent then
         if selCollName == PiwigoAPI.buildSpecialCollectionName(selColParent:getName()) then
-            LrDialogs.message("Special Collections cannot be converted to Collection Sets","","warning")
+            LrDialogs.message(LOC "$$$/Piwigo/CollToSet/SpecialCollectionsCannotConverted=Special Collections cannot be converted to Collection Sets","","warning")
             return false
         end
     end
 
-    local result = LrDialogs.confirm("Covert Publish Collection to Set","Convert " ..selCollName .." to a Publish Collection Set?", "Ok","Cancel")
+    local result = LrDialogs.confirm(LOC "$$$/Piwigo/CollToSet/CovertPublishCollectionSet=Covert Publish Collection to Set",LOC "$$$/Piwigo/CollToSet/Convert=Convert" .. " " ..selCollName .." " .. LOC "$$$/Piwigo/CollToSet/PublishCollectionSetQuestion=to a Publish Collection Set?", "Ok","Cancel")
     if result ~= 'ok' then
         return false
     end
@@ -95,7 +95,7 @@ local function CollToSet()
     -- Set parent and remote id same as selected collection parent
     local newCollSet = PiwigoAPI.createPublishCollectionSet(catalog, useService, publishSettings, selCollName, catId, selColParent)
     if not newCollSet then
-        LrDialogs.message("CollToSet - Can't create new collection set " .. selCollName,"","warning")
+        LrDialogs.message(LOC "$$$/Piwigo/CollToSet/ColltosetTCreateNew=CollToSet - Can't create new collection set" .. " " .. selCollName,"","warning")
         return false 
     end
     

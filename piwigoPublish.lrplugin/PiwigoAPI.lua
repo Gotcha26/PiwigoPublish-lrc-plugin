@@ -142,7 +142,7 @@ local function httpPost(propertyTable, params, headers)
             propertyTable.cookieHeader = table.concat(propertyTable.cookies, "; ")
             propertyTable.Connected = true
         else
-            LrDialogs.message("Cannot log in to Piwigo - ", rtnBody.err .. ", " .. rtnBody.message)
+            LrDialogs.message(LOC "$$$/Piwigo/API/CannotLogPiwigo=Cannot log in to Piwigo" .. " -", rtnBody.err .. ", " .. rtnBody.message)
             return false
         end
     else
@@ -153,7 +153,7 @@ local function httpPost(propertyTable, params, headers)
             statusDes = httpHeaders.statusDes
             status = httpHeaders.status
         end
-        LrDialogs.message("Cannot log in to Piwigo - ", status .. ", " .. statusDes)
+        LrDialogs.message(LOC "$$$/Piwigo/API/CannotLogPiwigo=Cannot log in to Piwigo" .. " -", status .. ", " .. statusDes)
         return false
     end
 end
@@ -212,7 +212,7 @@ local function pwGetSessionStatus(propertyTable)
     end
     local getResponse = httpGet(propertyTable.pwurl, Params, headers)
     if getResponse.errorMessage or (not getResponse.response) then
-        LrDialogs.message("Cannot get user status from Piwigo - " .. (getResponse.errorMessage or "Unknown error"))
+        LrDialogs.message(LOC "$$$/Piwigo/API/CannotGetUserStatus=Cannot get user status from Piwigo" .. " -" .. (getResponse.errorMessage or LOC "$$$/Piwigo/API/UnknownError=Unknown error"))
         return false
     end
     if getResponse.status == "ok" then
@@ -228,11 +228,11 @@ local function pwGetSessionStatus(propertyTable)
         else
             propertyTable.Connected = false
             propertyTable.ConCheck = true
-            LrDialogs.message("Log in to Piwigo successful but user does not have Webmaster status")
+            LrDialogs.message(LOC "$$$/Piwigo/API/LogPiwigoSuccessfulBut=Log in to Piwigo successful but user does not have Webmaster status")
             return false
         end
     else
-        LrDialogs.message("Cannot log in to Piwigo - ", (getResponse.errorMessage or "Unknown error"))
+        LrDialogs.message(LOC "$$$/Piwigo/API/CannotLogPiwigo=Cannot log in to Piwigo" .. " -", (getResponse.errorMessage or LOC "$$$/Piwigo/API/UnknownError=Unknown error"))
         return false
     end
 end
@@ -721,12 +721,12 @@ function PiwigoAPI.createCollection(propertyTable, node, parentNode, isLeafNode,
 
     local rv, publishService = PiwigoAPI.getPublishService(propertyTable)
     if not rv then
-        LrErrors.throwUserError("Error in createCollection: Cannot find Piwigo publish service for host/user.")
+        LrErrors.throwUserError(LOC "$$$/Piwigo/API/ErrorCreatecollectionCannotFind=Error in createCollection: Cannot find Piwigo publish service for host/user.")
         return false
     end
     -- local publishService = propertyTable._service
     if not publishService then
-        LrErrors.throwUserError("Error in createCollection: Piwigo publish service is nil.")
+        LrErrors.throwUserError(LOC "$$$/Piwigo/API/ErrorCreatecollectionPiwigoPublish=Error in createCollection: Piwigo publish service is nil.")
         return false
     end
     -- get parent collection or collection set
@@ -738,7 +738,7 @@ function PiwigoAPI.createCollection(propertyTable, node, parentNode, isLeafNode,
         parentColl = utils.recursivePubCollectionSearchByRemoteID(publishService, parentNode.id)
     end
     if not (parentColl) then
-        LrErrors.throwUserError("Error in createCollection: No parent collection for " .. node.name)
+        LrErrors.throwUserError(LOC "$$$/Piwigo/API/ErrorCreatecollectionNoParent=Error in createCollection: No parent collection for" .. " " .. node.name)
         stat.errors = stat.errors + 1
     else
         local remoteId = node.id
@@ -752,8 +752,8 @@ function PiwigoAPI.createCollection(propertyTable, node, parentNode, isLeafNode,
             -- not an existing collection/set for this node and we have got the parent collection/set
             if parentColl:type() ~= "LrPublishedCollectionSet" and parentColl:type() ~= "LrPublishService" then
                 -- parentColl is not of type that can accept child collections - need to handle
-                LrErrors.throwUserError("Error in createCollection: Parent collection for " .. collName .. " is " ..
-                    parentColl:type() .. " - can't create child collection")
+                LrErrors.throwUserError(LOC "$$$/Piwigo/API/ErrorCreatecollectionParentCollection=Error in createCollection: Parent collection for" .. " " .. collName .. " is " ..
+                    parentColl:type() .. " " .. LOC "$$$/Piwigo/API/TCreateChildCollection=- can't create child collection")
                 stat.errors = stat.errors + 1
             else
                 local collectionSettings = {}
@@ -770,8 +770,8 @@ function PiwigoAPI.createCollection(propertyTable, node, parentNode, isLeafNode,
 
                     -- now add remoteids and urls to collections and collection sets, and description and status
                     if newColl == nil then
-                        LrErrors.throwUserError("Error in createCollection: Failed to create PublishedCollection " ..
-                            collName .. " under parent " .. parentColl:getName())
+                        LrErrors.throwUserError(LOC "$$$/Piwigo/API/ErrorCreatecollectionFailedCreate=Error in createCollection: Failed to create PublishedCollection" .. " " ..
+                            collName .. " " .. LOC "$$$/Piwigo/API/UnderParent=under parent" .. " " .. parentColl:getName())
                         stat.errors = stat.errors + 1
                     else
                         collectionSettings = newColl:getCollectionInfoSummary().collectionSettings or {}
@@ -798,8 +798,8 @@ function PiwigoAPI.createCollection(propertyTable, node, parentNode, isLeafNode,
                         newColl = publishService:createPublishedCollectionSet(collName, parentColl, true)
                     end)
                     if newColl == nil then
-                        LrErrors.throwUserError("Error in createCollection: Failed to create PublishedCollectionSet " ..
-                            collName .. " under parent " .. parentColl:getName())
+                        LrErrors.throwUserError(LOC "$$$/Piwigo/API/ErrorCreatecollectionFailedCreate2=Error in createCollection: Failed to create PublishedCollectionSet" .. " " ..
+                            collName .. " " .. LOC "$$$/Piwigo/API/UnderParent=under parent" .. " " .. parentColl:getName())
                         stat.errors = stat.errors + 1
                         return stat
                     else
@@ -994,12 +994,12 @@ function PiwigoAPI.validatePiwigoStructure(propertyTable)
     local rv, publishService = PiwigoAPI.getPublishService(propertyTable)
     --if not PiwigoAPI.getPublishService(propertyTable) then
     if not rv then
-        LrErrors.throwUserError("Error in validatePiwigoStructure: Cannot find Piwigo publish service for host/user.")
+        LrErrors.throwUserError(LOC "$$$/Piwigo/API/ErrorValidatepiwigostructureCannotFind=Error in validatePiwigoStructure: Cannot find Piwigo publish service for host/user.")
         return false
     end
     publishService = propertyTable._service
     if not publishService then
-        LrErrors.throwUserError("Error in validatePiwigoStructure: Piwigo publish service is nil.")
+        LrErrors.throwUserError(LOC "$$$/Piwigo/API/ErrorValidatepiwigostructurePiwigoPublish=Error in validatePiwigoStructure: Piwigo publish service is nil.")
         return false
     end
 
@@ -1042,8 +1042,8 @@ function PiwigoAPI.validatePiwigoStructure(propertyTable)
         lrIndexById, pwIndexByPath, issues)
     local numSpecial = vps_fixSpecialCollections(catalog, propertyTable, publishService, lrIndexByPath, lrIndexById,
         pwIndexByPath, issues)
-    LrDialogs.message("Check Piwigo Structure", string.format(
-        "Albums created on Piwigo: %s, Piwigo links updated: %s, Albums unable to create: %s (check log file for details)",
+    LrDialogs.message(LOC "$$$/Piwigo/API/CheckPiwigoStructure=Check Piwigo Structure", string.format(
+        LOC "$$$/Piwigo/API/AlbumsCreatedPiwigoS=Albums created on Piwigo: %s, Piwigo links updated: %s, Albums unable to create: %s (check log file for details)",
         numCreated, numFixed, numFailed))
 end
 
@@ -1302,7 +1302,7 @@ function PiwigoAPI.pwConnect(propertyTable)
             log:info("PiwigoAPI.pwConnect - body:\n" .. utils.serialiseVar(body))
             log:info("PiwigoAPI.pwConnect - response headers:\n" .. utils.serialiseVar(httpHeaders))
             log:info("PiwigoAPI.pwConnect - response body:\n" .. tostring(httpResponse))
-            LrDialogs.message("Cannot log in to Piwigo", "Invalid or unreadable server response")
+            LrDialogs.message(LOC "$$$/Piwigo/API/CannotLogPiwigo=Cannot log in to Piwigo", LOC "$$$/Piwigo/API/InvalidUnreadableServerResponse=Invalid or unreadable server response")
             return false
         end
         if rtnBody.stat == "ok" then
@@ -1330,7 +1330,7 @@ function PiwigoAPI.pwConnect(propertyTable)
         else
             log:info("PiwigoAPI.pwConnect - connecting to " .. propertyTable.pwurl)
             log:info("PiwigoAPI.pwConnect - body:\n" .. utils.serialiseVar(body))
-            LrDialogs.message("Cannot log in to Piwigo", tostring(rtnBody.err or "Unknown error") ..
+            LrDialogs.message(LOC "$$$/Piwigo/API/CannotLogPiwigo=Cannot log in to Piwigo", tostring(rtnBody.err or LOC "$$$/Piwigo/API/UnknownError=Unknown error") ..
                 (rtnBody.message and (", " .. rtnBody.message) or ""))
             return false
         end
@@ -1349,7 +1349,7 @@ function PiwigoAPI.pwConnect(propertyTable)
             statusDesc = (httpHeaders and (httpHeaders.statusDes or httpHeaders.statusDesc)) or ""
         end
 
-        LrDialogs.message("Cannot log in to Piwigo",
+        LrDialogs.message(LOC "$$$/Piwigo/API/CannotLogPiwigo=Cannot log in to Piwigo",
             tostring(statusCode) .. (statusDesc ~= "" and (", " .. statusDesc) or ""))
         return false
     end
@@ -1365,7 +1365,7 @@ function PiwigoAPI.pwConnect(propertyTable)
     -- get list of all tagIDs
     rv, propertyTable.tagTable = PiwigoAPI.getTagList(propertyTable)
     if not rv then
-        LrDialogs.message("PiwigoAPI.pwConnect - cannot get taglist from Piwigo")
+        LrDialogs.message(LOC "$$$/Piwigo/API/PiwigoapiPwconnectCannotGet=PiwigoAPI.pwConnect - cannot get taglist from Piwigo")
         return false
     end
 
@@ -1413,15 +1413,15 @@ function PiwigoAPI.getInfos(propertyTable)
     end
     local getResponse = httpGet(propertyTable.pwurl, Params, headers)
     if getResponse.errorMessage or (not getResponse.response) then
-        LrDialogs.message("Cannot get user status from Piwigo - " .. (getResponse.errorMessage or "Unknown error"))
+        LrDialogs.message(LOC "$$$/Piwigo/API/CannotGetUserStatus=Cannot get user status from Piwigo" .. " -" .. (getResponse.errorMessage or LOC "$$$/Piwigo/API/UnknownError=Unknown error"))
         return false
     end
     if getResponse.stat == "ok" then
         rtnStatus.status = true
         rtnStatus.result = getResponse.result.infos
     else
-        rtnStatus.message = "Cannot get host information from  Piwigo - " ..
-            ((getResponse.stat .. " - Error" .. getResponse.err .. "- " .. getResponse.errorMessage) or "Unknown error")
+        rtnStatus.message = LOC "$$$/Piwigo/API/CannotGetHostInformation=Cannot get host information from  Piwigo" .. " -" ..
+            ((getResponse.stat .. " " .. LOC "$$$/Piwigo/API/Error=- Error" .. getResponse.err .. "- " .. getResponse.errorMessage) or LOC "$$$/Piwigo/API/UnknownError=Unknown error")
     end
     return rtnStatus
 end
@@ -1451,7 +1451,7 @@ function PiwigoAPI.getCommentInfos(propertyTable)
         log:info("PiwigoAPI.getCommentInfos - Params\n" .. utils.serialiseVar(Params))
         log:info("PiwigoAPI.getCommentInfos - headers\n" .. utils.serialiseVar(headers))
         log:info("PiwigoAPI.getCommentInfos - getResponse\n" .. utils.serialiseVar(getResponse))
-        LrDialogs.message("Cannot get comments information from  Piwigo - Unknown error")
+        LrDialogs.message(LOC "$$$/Piwigo/API/CannotGetCommentsInformation=Cannot get comments information from  Piwigo - Unknown error")
         return rtnStatus
     end
     if getResponse.stat == "ok" then
@@ -1461,15 +1461,15 @@ function PiwigoAPI.getCommentInfos(propertyTable)
         rtnStatus.comments = getResponse.result.comments
         log:info("PiwigoAPI.getComments - comments are enabled")
     else
-        if getResponse.stat == "fail" and getResponse.err == 403 and getResponse.message == "Comments are disabled" then
+        if getResponse.stat == "fail" and getResponse.err == 403 and getResponse.message == LOC "$$$/Piwigo/API/CommentsDisabled=Comments are disabled" then
             rtnStatus.message = getResponse.message
             log:info("PiwigoAPI.getComments - comments are disabled")
         else
             log:info("PiwigoAPI.getComments - Params\n" .. utils.serialiseVar(Params))
             log:info("PiwigoAPI.getComments - headers\n" .. utils.serialiseVar(headers))
             log:info("PiwigoAPI.getComments - getResponse\n" .. utils.serialiseVar(getResponse))
-            rtnStatus.message = "Cannot get comments information from  Piwigo - " ..
-                ((getResponse.stat .. " - Error" .. getResponse.err .. "- " .. getResponse.errorMessage) or "Unknown error")
+            rtnStatus.message = LOC "$$$/Piwigo/API/CannotGetCommentsInformation2=Cannot get comments information from  Piwigo" .. " -" ..
+                ((getResponse.stat .. " " .. LOC "$$$/Piwigo/API/Error=- Error" .. getResponse.err .. "- " .. getResponse.errorMessage) or LOC "$$$/Piwigo/API/UnknownError=Unknown error")
         end
     end
     return rtnStatus
@@ -1548,8 +1548,8 @@ function PiwigoAPI.importAlbums(propertyTable)
     end
     progressScope:done()
 
-    LrDialogs.message("Import Piwigo Albums",
-        string.format("%s new collections, %s new collection sets, %s existing, %s errors", statusData.collections,
+    LrDialogs.message(LOC "$$$/Piwigo/API/ImportPiwigoAlbums=Import Piwigo Albums",
+        string.format(LOC "$$$/Piwigo/API/SNewCollectionsS=%s new collections, %s new collection sets, %s existing, %s errors", statusData.collections,
             statusData.collectionSets, statusData.existing, statusData.errors))
 end
 
@@ -1562,14 +1562,14 @@ function PiwigoAPI.pwCategoriesGetThis(propertyTable, thisCat)
     if not (propertyTable.Connected) then
         rv = PiwigoAPI.login(propertyTable)
         if not rv then
-            LrDialogs.message("PiwigoAPI.pwCategoriesGetThis - cannot connect to piwigo - ")
+            LrDialogs.message(LOC "$$$/Piwigo/API/PiwigoapiPwcategoriesgetthisCannotConnect=PiwigoAPI.pwCategoriesGetThis - cannot connect to piwigo" .. " -")
             return nil
         end
     end
 
     -- check role is admin level
     if propertyTable.userStatus ~= "webmaster" then
-        LrDialogs.message("PiwigoAPI.pwCategoriesGetThis - user needs webmaster role ")
+        LrDialogs.message(LOC "$$$/Piwigo/API/PiwigoapiPwcategoriesgetthisUserNeeds=PiwigoAPI.pwCategoriesGetThis - user needs webmaster role" .. " ")
         return nil
     end
 
@@ -1600,10 +1600,22 @@ function PiwigoAPI.pwCategoriesGetThis(propertyTable, thisCat)
 end
 
 -- *************************************************
-function PiwigoAPI.pwCategoriesGet(propertyTable, thisCat)
+function PiwigoAPI.pwCategoriesGet(propertyTable, thisCat, forceRefresh)
     -- get list of categories from Piwigo
     -- if thisCat is set then return this category and children, otherwise all categories
+    -- forceRefresh: if true, bypass cache and fetch fresh data
     log:info("PiwigoAPI.pwCategoriesGet")
+
+    -- Check cache first (unless forceRefresh)
+    local cacheKey = CacheManager.makeKey("pwCategoriesGet", propertyTable, thisCat or "all")
+    if not forceRefresh then
+        local cached, found = CacheManager.get(cacheKey)
+        if found then
+            log:info("PiwigoAPI.pwCategoriesGet - returning cached categories")
+            return true, cached
+        end
+    end
+
     local Params = { {
         name = "method",
         value = "pwg.categories.getAdminList"
@@ -1628,14 +1640,17 @@ function PiwigoAPI.pwCategoriesGet(propertyTable, thisCat)
     end
     local getResponse = httpGet(propertyTable.pwurl, Params, headers)
     if getResponse.errorMessage or (not getResponse.response) then
-        LrDialogs.message("Cannot get categories from Piwigo - ", (getResponse.errorMessage or "Unknown error"))
+        LrDialogs.message(LOC "$$$/Piwigo/API/CannotGetCategoriesFrom=Cannot get categories from Piwigo" .. " -", (getResponse.errorMessage or LOC "$$$/Piwigo/API/UnknownError=Unknown error"))
         return false
     end
     if getResponse.status == "ok" then
         local allCats = getResponse.response.result.categories
+        -- Store in cache (TTL 5 minutes)
+        CacheManager.set(cacheKey, allCats, 300)
+        log:info("PiwigoAPI.pwCategoriesGet - cached " .. #allCats .. " categories")
         return true, allCats
     else
-        LrDialogs.message("Cannot get categories from Piwigo - ", (getResponse.errorMessage or "Unknown error"))
+        LrDialogs.message(LOC "$$$/Piwigo/API/CannotGetCategoriesFrom=Cannot get categories from Piwigo" .. " -", (getResponse.errorMessage or LOC "$$$/Piwigo/API/UnknownError=Unknown error"))
         return false
     end
 end
@@ -1659,8 +1674,8 @@ function PiwigoAPI.pwCategoriesMove(propertyTable, info, thisCat, newCat, callSt
 
     -- check role is admin level
     if propertyTable.userStatus ~= "webmaster" then
-        callStatus.statusMsg = "PiwigoAPI:pwCategoriesMove - User needs webmaster role on piwigo gallery at " ..
-            propertyTable.host .. " to reorder albums"
+        callStatus.statusMsg = LOC "$$$/Piwigo/API/PiwigoapiPwcategoriesmoveUserNeeds=PiwigoAPI:pwCategoriesMove - User needs webmaster role on piwigo gallery at" .. " " ..
+            propertyTable.host .. " " .. LOC "$$$/Piwigo/API/ReorderAlbums=to reorder albums"
         return callStatus
     end
 
@@ -1670,7 +1685,7 @@ function PiwigoAPI.pwCategoriesMove(propertyTable, info, thisCat, newCat, callSt
         local checkCats
         rv, checkCats = PiwigoAPI.pwCategoriesGet(propertyTable, tostring(newCat))
         if utils.nilOrEmpty(checkCats) then
-            callStatus.statusMsg = "PiwigoAPI:pwCategoriesMove - Cannot find parent category " .. newCat .. " in Piwigo"
+            callStatus.statusMsg = LOC "$$$/Piwigo/API/PiwigoapiPwcategoriesmoveCannotFind=PiwigoAPI:pwCategoriesMove - Cannot find parent category" .. " " .. newCat .. " " .. LOC "$$$/Piwigo/API/Piwigo=in Piwigo"
             return callStatus
         end
     end
@@ -1739,8 +1754,8 @@ function PiwigoAPI.pwCategoriesAdd(propertyTable, info, metaData, callStatus)
 
     -- check role is admin level
     if propertyTable.userStatus ~= "webmaster" then
-        callStatus.statusMsg = "PiwigoAPI:pwCategoriesAdd - User needs webmaster role on piwigo gallery at " ..
-            propertyTable.host .. " to reorder albums"
+        callStatus.statusMsg = LOC "$$$/Piwigo/API/PiwigoapiPwcategoriesaddUserNeeds=PiwigoAPI:pwCategoriesAdd - User needs webmaster role on piwigo gallery at" .. " " ..
+            propertyTable.host .. " " .. LOC "$$$/Piwigo/API/ReorderAlbums=to reorder albums"
         return callStatus
     end
 
@@ -1787,7 +1802,7 @@ function PiwigoAPI.pwCategoriesAdd(propertyTable, info, metaData, callStatus)
     local getResponse = httpGet(propertyTable.pwurl, Params, headers)
 
     if getResponse.errorMessage or (not getResponse.response) then
-        LrDialogs.message("Cannot add new category to Piwigo - ", getResponse.errorMessage)
+        LrDialogs.message(LOC "$$$/Piwigo/API/CannotAddNewCategory=Cannot add new category to Piwigo" .. " -", getResponse.errorMessage)
         callStatus.status = false
         return callStatus
     end
@@ -1795,8 +1810,10 @@ function PiwigoAPI.pwCategoriesAdd(propertyTable, info, metaData, callStatus)
         callStatus.newCatId = getResponse.response.result.id
         callStatus.albumURL = propertyTable.host .. "/index.php?/category/" .. callStatus.newCatId
         callStatus.status = true
+        -- Invalidate categories cache since we added a new one
+        CacheManager.invalidatePrefix("pwCategoriesGet")
     else
-        LrDialogs.message("Cannot add new category to Piwigo - ", getResponse.errorMessage)
+        LrDialogs.message(LOC "$$$/Piwigo/API/CannotAddNewCategory=Cannot add new category to Piwigo" .. " -", getResponse.errorMessage)
         callStatus.status = false
     end
     return callStatus
@@ -1822,8 +1839,8 @@ function PiwigoAPI.pwCategoriesDelete(propertyTable, info, metaData, callStatus)
 
     -- check role is admin level
     if propertyTable.userStatus ~= "webmaster" then
-        callStatus.statusMsg = "PiwigoAPI:pwCategoriesDelete - User needs webmaster role on piwigo gallery at " ..
-            propertyTable.host .. " to reorder albums"
+        callStatus.statusMsg = LOC "$$$/Piwigo/API/PiwigoapiPwcategoriesdeleteUserNeeds=PiwigoAPI:pwCategoriesDelete - User needs webmaster role on piwigo gallery at" .. " " ..
+            propertyTable.host .. " " .. LOC "$$$/Piwigo/API/ReorderAlbums=to reorder albums"
         return callStatus
     end
 
@@ -1878,6 +1895,8 @@ function PiwigoAPI.pwCategoriesDelete(propertyTable, info, metaData, callStatus)
         if parseResp.stat == "ok" then
             callStatus.status = true
             callStatus.statusMsg = ""
+            -- Invalidate categories cache since we deleted one
+            CacheManager.invalidatePrefix("pwCategoriesGet")
         else
             callStatus.status = false
             callStatus.statusMsg = parseResp.message or ""
@@ -1910,8 +1929,8 @@ function PiwigoAPI.pwCategoriesSetinfo(propertyTable, info, metaData)
 
     -- check role is admin level
     if propertyTable.userStatus ~= "webmaster" then
-        callStatus.statusMsg = "PiwigoAPI:pwCategoriesMove - User needs webmaster role on piwigo gallery at " ..
-            propertyTable.host .. " to reorder albums"
+        callStatus.statusMsg = LOC "$$$/Piwigo/API/PiwigoapiPwcategoriesmoveUserNeeds=PiwigoAPI:pwCategoriesMove - User needs webmaster role on piwigo gallery at" .. " " ..
+            propertyTable.host .. " " .. LOC "$$$/Piwigo/API/ReorderAlbums=to reorder albums"
         return callStatus
     end
 
@@ -1965,14 +1984,14 @@ function PiwigoAPI.pwCategoriesSetinfo(propertyTable, info, metaData)
             log:info("PiwigoAPI.pwCategoriesSetinfo - httpHeaders\n" .. utils.serialiseVar(httpHeaders))
             log:info("PiwigoAPI.pwCategoriesSetinfo - httpResponse\n" .. utils.serialiseVar(httpResponse))
             callStatus.status = false
-            callStatus.statusMsg = "Category " .. tostring(remoteId) .. " - " .. (body.message or "")
+            callStatus.statusMsg = LOC "$$$/Piwigo/API/Category=Category" .. " " .. tostring(remoteId) .. " - " .. (body.message or "")
         end
     else
         log:info("PiwigoAPI.pwCategoriesSetinfo - params \n" .. utils.serialiseVar(params))
         log:info("PiwigoAPI.pwCategoriesSetinfo - httpHeaders\n" .. utils.serialiseVar(httpHeaders))
         log:info("PiwigoAPI.pwCategoriesSetinfo - httpResponse\n" .. utils.serialiseVar(httpResponse))
         callStatus.status = false
-        callStatus.statusMsg = "Category " .. tostring(remoteId) .. " - " .. (body.message or "")
+        callStatus.statusMsg = LOC "$$$/Piwigo/API/Category=Category" .. " " .. tostring(remoteId) .. " - " .. (body.message or "")
     end
 
     return callStatus
@@ -2035,7 +2054,7 @@ function PiwigoAPI.associateImageToCategory(propertyTable, imageId, categoryId)
     if not propertyTable.Connected then
         rv = PiwigoAPI.login(propertyTable)
         if not rv then
-            callStatus.statusMsg = "Cannot connect to Piwigo"
+            callStatus.statusMsg = LOC "$$$/Piwigo/API/CannotConnectPiwigo=Cannot connect to Piwigo"
             return callStatus
         end
     end
@@ -2055,7 +2074,7 @@ function PiwigoAPI.associateImageToCategory(propertyTable, imageId, categoryId)
         callStatus.remoteid = imageId
         callStatus.remoteurl = string.format("%s/picture.php?/%s/category/%s", propertyTable.host, imageId, categoryId)
     else
-        callStatus.statusMsg = postResponse.statusMsg or "Association failed"
+        callStatus.statusMsg = postResponse.statusMsg or LOC "$$$/Piwigo/API/AssociationFailed=Association failed"
     end
     
     return callStatus
@@ -2074,7 +2093,7 @@ function PiwigoAPI.dissociateImageFromCategory(propertyTable, imageId, categoryI
     if not propertyTable.Connected then
         rv = PiwigoAPI.login(propertyTable)
         if not rv then
-            callStatus.statusMsg = "Cannot connect to Piwigo"
+            callStatus.statusMsg = LOC "$$$/Piwigo/API/CannotConnectPiwigo=Cannot connect to Piwigo"
             return callStatus
         end
     end
@@ -2082,7 +2101,7 @@ function PiwigoAPI.dissociateImageFromCategory(propertyTable, imageId, categoryI
     -- First, get current categories for this image
     local checkStatus = PiwigoAPI.checkPhoto(propertyTable, imageId)
     if not checkStatus.status then
-        callStatus.statusMsg = "Cannot find image " .. tostring(imageId) .. " on Piwigo"
+        callStatus.statusMsg = LOC "$$$/Piwigo/API/CannotFindImage=Cannot find image" .. " " .. tostring(imageId) .. " " .. LOC "$$$/Piwigo/API/Piwigo2=on Piwigo"
         return callStatus
     end
     
@@ -2126,7 +2145,7 @@ function PiwigoAPI.dissociateImageFromCategory(propertyTable, imageId, categoryI
         callStatus.status = true
         log:info("PiwigoAPI.dissociateImageFromCategory - success")
     else
-        callStatus.statusMsg = postResponse.statusMsg or "Dissociation failed"
+        callStatus.statusMsg = postResponse.statusMsg or LOC "$$$/Piwigo/API/DissociationFailed=Dissociation failed"
         log:info("PiwigoAPI.dissociateImageFromCategory - failed: " .. callStatus.statusMsg)
     end
     
@@ -2192,9 +2211,9 @@ function PiwigoAPI.updateGallery(propertyTable, exportFilename, metaData)
     elseif fileType == "jpg" or fileType == "jpeg" then
         contentType = "image/jpeg"
     else
-        callStatus.statusMsg = "Upload failed - forbidden file type"
-        LrDialogs.message("Cannot upload " .. LrPathUtils.leafName(exportFilename) ..
-            " to Piwigo - forbidden file type. Check file settings in Publishing Manager.")
+        callStatus.statusMsg = LOC "$$$/Piwigo/API/UploadFailedForbiddenFile=Upload failed - forbidden file type"
+        LrDialogs.message(LOC "$$$/Piwigo/API/CannotUpload=Cannot upload" .. " " .. LrPathUtils.leafName(exportFilename) ..
+            " " .. LOC "$$$/Piwigo/API/PiwigoForbiddenFileType=to Piwigo - forbidden file type. Check file settings in Publishing Manager.")
         return callStatus
     end
     table.insert(params, {
@@ -2225,9 +2244,9 @@ function PiwigoAPI.updateGallery(propertyTable, exportFilename, metaData)
             log:info("PiwigoAPI.updateGallery - params \n" .. utils.serialiseVar(params))
             log:info("PiwigoAPI.updateGallery - httpHeaders\n" .. utils.serialiseVar(httpHeaders))
             log:info("PiwigoAPI.updateGallery - httpResponse\n" .. utils.serialiseVar(httpResponse))
-            callStatus.statusMsg = "Upload failed - Invalid JSON response - " .. tostring(httpResponse)
-            LrDialogs.message("Cannot upload " .. LrPathUtils.leafName(exportFilename) ..
-                " to Piwigo - Invalid JSON response - " .. tostring(httpResponse))
+            callStatus.statusMsg = LOC "$$$/Piwigo/API/UploadFailedInvalidJson=Upload failed - Invalid JSON response" .. " -" .. tostring(httpResponse)
+            LrDialogs.message(LOC "$$$/Piwigo/API/CannotUpload=Cannot upload" .. " " .. LrPathUtils.leafName(exportFilename) ..
+                " " .. LOC "$$$/Piwigo/API/PiwigoInvalidJsonResponse=to Piwigo - Invalid JSON response" .. " -" .. tostring(httpResponse))
             return callStatus
         end
         if response.stat == "ok" then
@@ -2260,8 +2279,8 @@ function PiwigoAPI.updateGallery(propertyTable, exportFilename, metaData)
             if getResponse.errorMessage or (not getResponse.response) then
                 log:info("PiwigoAPI.updateGallery - params \n" .. utils.serialiseVar(params))
                 log:info("PiwigoAPI.updateGallery - getResponse\n" .. utils.serialiseVar(getResponse))
-                callStatus.statusMsg = "Cannot finalise upload - " .. metaData.fileName .. " to Piwigo - " ..
-                    (getResponse.errorMessage or "Unknown error")
+                callStatus.statusMsg = LOC "$$$/Piwigo/API/CannotFinaliseUpload=Cannot finalise upload" .. " -" .. metaData.fileName .. " " .. LOC "$$$/Piwigo/API/Piwigo3=to Piwigo" .. " -" ..
+                    (getResponse.errorMessage or LOC "$$$/Piwigo/API/UnknownError=Unknown error")
                 LrDialogs.message(callStatus.statusMsg)
                 return callStatus
             else
@@ -2270,8 +2289,8 @@ function PiwigoAPI.updateGallery(propertyTable, exportFilename, metaData)
                     uploadSuccess = true
                 else
                     log:info("PiwigoAPI.updateGallery - params \n" .. utils.serialiseVar(params))
-                    callStatus.statusMsg = "Cannot finalise upload - " .. metaData.fileName .. " to Piwigo - " ..
-                        (getResponse.errorMessage or "Unknown error")
+                    callStatus.statusMsg = LOC "$$$/Piwigo/API/CannotFinaliseUpload=Cannot finalise upload" .. " -" .. metaData.fileName .. " " .. LOC "$$$/Piwigo/API/Piwigo3=to Piwigo" .. " -" ..
+                        (getResponse.errorMessage or LOC "$$$/Piwigo/API/UnknownError=Unknown error")
                     LrDialogs.message(callStatus.statusMsg)
                     return callStatus
                 end
@@ -2290,8 +2309,8 @@ function PiwigoAPI.updateGallery(propertyTable, exportFilename, metaData)
             statusDes = httpHeaders.statusDes
             status = httpHeaders.status
         end
-        LrDialogs.message("Cannot upload - " .. metaData.fileName .. " to Piwigo - " .. status, statusDes)
-        callStatus.statusMsg = "Cannot upload - " .. metaData.fileName .. " to Piwigo - " .. status .. ", " .. statusDes
+        LrDialogs.message(LOC "$$$/Piwigo/API/CannotUpload=Cannot upload" .. " -" .. metaData.fileName .. " " .. LOC "$$$/Piwigo/API/Piwigo3=to Piwigo" .. " -" .. status, statusDes)
+        callStatus.statusMsg = LOC "$$$/Piwigo/API/CannotUpload=Cannot upload" .. " -" .. metaData.fileName .. " " .. LOC "$$$/Piwigo/API/Piwigo3=to Piwigo" .. " -" .. status .. ", " .. statusDes
     end
     return callStatus
 end
@@ -2312,21 +2331,21 @@ function PiwigoAPI.updateMetadata(propertyTable, lrPhoto, metaData)
     end
     -- check role is admin level
     if propertyTable.userStatus ~= "webmaster" then
-        callStatus.statusMsg = "User needs webmaster role on piwigo gallery at " .. propertyTable.host ..
-            " to update metadata"
+        callStatus.statusMsg = LOC "$$$/Piwigo/API/UserNeedsWebmasterRole=User needs webmaster role on piwigo gallery at" .. " " .. propertyTable.host ..
+            " " .. LOC "$$$/Piwigo/API/UpdateMetadata=to update metadata"
         return callStatus
     end
     if metaData.Remoteid ~= "" then
         local rtnStatus = PiwigoAPI.checkPhoto(propertyTable, metaData.Remoteid)
         if not rtnStatus.status then
             log:info("PiwigoAPI.updateMetadata - checking for existing photo with remoteid " .. metaData.Remoteid)
-            callStatus.statusMsg = "PiwigoAPI.updateMetadata - cannot locate image " .. metaData.Remoteid ..
-                " on Piwigo - cannot update metadata"
+            callStatus.statusMsg = LOC "$$$/Piwigo/API/PiwigoapiUpdatemetadataCannotLocate=PiwigoAPI.updateMetadata - cannot locate image" .. " " .. metaData.Remoteid ..
+                " " .. LOC "$$$/Piwigo/API/PiwigoCannotUpdateMetadata=on Piwigo - cannot update metadata"
             return callStatus
         end
     else
         log:info("PiwigoAPI.updateMetadata - checking for existing photo with remoteid " .. metaData.Remoteid)
-        callStatus.statusMsg = "PiwigoAPI.updateMetadata - missing Piwigo image ID - cannot update metadata"
+        callStatus.statusMsg = LOC "$$$/Piwigo/API/PiwigoapiUpdatemetadataMissingPiwigo=PiwigoAPI.updateMetadata - missing Piwigo image ID - cannot update metadata"
         return callStatus
     end
 
@@ -2415,7 +2434,7 @@ function PiwigoAPI.updateMetadata(propertyTable, lrPhoto, metaData)
     -- now update Piwigo
     local postResponse = PiwigoAPI.httpPostMultiPart(propertyTable, params)
     if not postResponse.status then
-        callStatus.statusMsg = "Unable to set metadata - " .. postResponse.statusMsg
+        callStatus.statusMsg = LOC "$$$/Piwigo/API/UnableSetMetadata=Unable to set metadata" .. " -" .. postResponse.statusMsg
         return callStatus
     end
     callStatus.status = true
@@ -2436,7 +2455,7 @@ function PiwigoAPI.deletePhoto(propertyTable, pwCatID, pwImageID, callStatus)
         end
     end
     if pwImageID == "" then
-        callStatus.statusMsg = "PiwigoAPI:deletePhoto - missing Piwigo image ID - cannot delete photo"
+        callStatus.statusMsg = LOC "$$$/Piwigo/API/PiwigoapiDeletephotoMissingPiwigo=PiwigoAPI:deletePhoto - missing Piwigo image ID - cannot delete photo"
         return callStatus
     end
     local params = { {
@@ -2505,14 +2524,14 @@ function PiwigoAPI.pwCheckComments(publishSettings)
     if not (publishSettings.Connected) then
         rv = PiwigoAPI.login(publishSettings)
         if not rv then
-            LrDialogs.message("PiwigoAPI.pwCheckComments - cannot connect to piwigo")
+            LrDialogs.message(LOC "$$$/Piwigo/API/PiwigoapiPwcheckcommentsCannotConnect=PiwigoAPI.pwCheckComments - cannot connect to piwigo")
             return nil
         end
     end
 
     -- check role is admin level
     if publishSettings.userStatus ~= "webmaster" then
-        LrDialogs.message("PiwigoAPI.pwCheckComments - user needs webmaster role ")
+        LrDialogs.message(LOC "$$$/Piwigo/API/PiwigoapiPwcheckcommentsUserNeeds=PiwigoAPI.pwCheckComments - user needs webmaster role" .. " ")
         return nil
     end
 
@@ -2538,14 +2557,14 @@ function PiwigoAPI.getComments(publishSettings, metaData)
     if not (publishSettings.Connected) then
         rv = PiwigoAPI.login(publishSettings)
         if not rv then
-            LrDialogs.message("PiwigoAPI.getComments - cannot connect to piwigo")
+            LrDialogs.message(LOC "$$$/Piwigo/API/PiwigoapiGetcommentsCannotConnect=PiwigoAPI.getComments - cannot connect to piwigo")
             return nil
         end
     end
 
     -- check role is admin level
     if publishSettings.userStatus ~= "webmaster" then
-        LrDialogs.message("PiwigoAPI.getComments - user needs webmaster role ")
+        LrDialogs.message(LOC "$$$/Piwigo/API/PiwigoapiGetcommentsUserNeeds=PiwigoAPI.getComments - user needs webmaster role" .. " ")
         return nil
     end
 
@@ -2572,7 +2591,7 @@ function PiwigoAPI.addComment(publishSettings, metaData)
     log:info("PiwigoAPI.addComment - PiwigoAPI.login")
     rv = PiwigoAPI.login(publishSettings)
     if not rv then
-        LrDialogs.message("PiwigoAPI.addComment - cannot connect to piwigo")
+        LrDialogs.message(LOC "$$$/Piwigo/API/PiwigoapiAddcommentCannotConnect=PiwigoAPI.addComment - cannot connect to piwigo")
         return false
     end
     --end
@@ -2587,7 +2606,7 @@ function PiwigoAPI.addComment(publishSettings, metaData)
 
     if (not imageDets.comment_post) then
         log:info("PiwigoAPI.addComment - metaData\n" .. utils.serialiseVar(imageDets))
-        LrDialogs.message("Unable to add comment - are comments enabled on " .. publishSettings.host .. "?")
+        LrDialogs.message(LOC "$$$/Piwigo/API/UnableAddCommentComments=Unable to add comment - are comments enabled on" .. " " .. publishSettings.host .. "?")
         return false
     end
     local author = imageDets.comment_post.author or ""
@@ -2632,10 +2651,10 @@ function PiwigoAPI.addComment(publishSettings, metaData)
 
     local postResponse = PiwigoAPI.httpPostMultiPart(publishSettings, params)
     if not postResponse.status then
-        LrDialogs.message("Unable to add comment - " .. postResponse.statusMsg)
+        LrDialogs.message(LOC "$$$/Piwigo/API/UnableAddComment=Unable to add comment" .. " -" .. postResponse.statusMsg)
         return false
     end
-    LrDialogs.message("Comment added to Piwigo" .. postResponse.statusMsg)
+    LrDialogs.message(LOC "$$$/Piwigo/API/CommentAddedPiwigo=Comment added to Piwigo" .. postResponse.statusMsg)
     return true
 end
 
@@ -2655,19 +2674,19 @@ function PiwigoAPI.specialCollections(propertyTable)
     local rv, publishService = PiwigoAPI.getPublishService(propertyTable)
     if not rv then
         LrErrors.throwUserError(
-            "Error in PiwigoAPI.specialCollections: Cannot find Piwigo publish service for host/user.")
+            LOC "$$$/Piwigo/API/ErrorPiwigoapiSpecialcollectionsCannot=Error in PiwigoAPI.specialCollections: Cannot find Piwigo publish service for host/user.")
         return false
     end
     publishService = propertyTable._service
     if not publishService then
-        LrErrors.throwUserError("PiwigoAPI.specialCollections: Piwigo publish service is nil.")
+        LrErrors.throwUserError(LOC "$$$/Piwigo/API/PiwigoapiSpecialcollectionsPiwigoPublish=PiwigoAPI.specialCollections: Piwigo publish service is nil.")
         return false
     end
 
     -- get all publishedcollectionsets in this publish service
     utils.recursePubCollectionSets(publishService, allSets)
     if #allSets == 0 then
-        LrDialogs.message("Create Special Collections", "No collection sets found so no special collections created")
+        LrDialogs.message(LOC "$$$/Piwigo/API/CreateSpecialCollections=Create Special Collections", LOC "$$$/Piwigo/API/NoCollectionSetsFound=No collection sets found so no special collections created")
         return false
     end
     local progressScope = LrProgressScope {
@@ -2687,12 +2706,12 @@ function PiwigoAPI.specialCollections(propertyTable)
         local scColl = PiwigoAPI.createPublishCollection(catalog, publishService, propertyTable, scName, remoteId,
             thisSet)
         if scColl == nil then
-            LrDialogs.message("Failed to create special collection for " .. name, "", "warning")
+            LrDialogs.message(LOC "$$$/Piwigo/API/FailedCreateSpecialCollection=Failed to create special collection for" .. " " .. name, "", "warning")
         end
     end
 
     progressScope:done()
-    LrDialogs.message("Create Special Collections", string.format("%s collection sets processed", #allSets))
+    LrDialogs.message(LOC "$$$/Piwigo/API/CreateSpecialCollections=Create Special Collections", string.format(LOC "$$$/Piwigo/API/SCollectionSetsProcessed=%s collection sets processed", #allSets))
     return true
 end
 
@@ -2707,19 +2726,19 @@ function PiwigoAPI.setAlbumCover(publishService)
     log:info("publishSettings\n" .. utils.serialiseVar(publishSettings))
 
     if not publishSettings then
-        LrDialogs.message("PiwigoAPI.setAlbumCover - Can't find PublishSettings for this publish collection", "",
+        LrDialogs.message(LOC "$$$/Piwigo/API/PiwigoapiSetalbumcoverTFind=PiwigoAPI.setAlbumCover - Can't find PublishSettings for this publish collection", "",
             "warning")
         return false
     end
     local selPhotos = catalog:getTargetPhotos()
     local sources = catalog:getActiveSources()
     if utils.nilOrEmpty(selPhotos) then
-        LrDialogs.message("Please select a photo to set as album cover", "", "warning")
+        LrDialogs.message(LOC "$$$/Piwigo/API/PleaseSelectPhotoSet=Please select a photo to set as album cover", "", "warning")
         return false
     end
     if #selPhotos > 1 then
         LrDialogs.message(
-            "Please select a single photo to set as album cover (" .. #selPhotos .. " currently selected)", "",
+            LOC "$$$/Piwigo/API/PleaseSelectSinglePhoto=Please select a single photo to set as album cover (" .. #selPhotos .. " " .. LOC "$$$/Piwigo/API/CurrentlySelected=currently selected)", "",
             "warning")
         return false
     end
@@ -2745,18 +2764,18 @@ function PiwigoAPI.setAlbumCover(publishService)
         end
     end
     if not useService then
-        LrDialogs.message("Please select a photo in the selected publish service (" .. publishService:getName() .. ")",
+        LrDialogs.message(LOC "$$$/Piwigo/API/PleaseSelectPhoto=Please select a photo in the selected publish service (" .. publishService:getName() .. ")",
             "", "warning")
         return false
     end
     if not useSource then
-        LrDialogs.message("Please select a photo in the selected publish service (" .. publishService:getName() .. ")",
+        LrDialogs.message(LOC "$$$/Piwigo/API/PleaseSelectPhoto=Please select a photo in the selected publish service (" .. publishService:getName() .. ")",
             "", "warning")
         return false
     end
     if not catId then
         LrDialogs.message(
-            "PiwigoAPI.setAlbumCover - Can't find Piwigo album ID for remoteId for this publish collection", "",
+            LOC "$$$/Piwigo/API/PiwigoapiSetalbumcoverTFind2=PiwigoAPI.setAlbumCover - Can't find Piwigo album ID for remoteId for this publish collection", "",
             "warning")
         return false
     end
@@ -2766,20 +2785,20 @@ function PiwigoAPI.setAlbumCover(publishService)
     -- find publised photo in this collection / set
     local thisPubPhoto = utils.findPhotoInCollectionSet(useSource, selPhoto)
     if not thisPubPhoto then
-        LrDialogs.message("PiwigoAPI.setAlbumCover - Can't find this photo in collection set or collections", "",
+        LrDialogs.message(LOC "$$$/Piwigo/API/PiwigoapiSetalbumcoverTFind3=PiwigoAPI.setAlbumCover - Can't find this photo in collection set or collections", "",
             "warning")
         return false
     end
     local remoteId = thisPubPhoto:getRemoteId()
     if not remoteId then
-        LrDialogs.message("PiwigoAPI.setAlbumCover - Can't find Piwigo photo ID for this photo", "", "warning")
+        LrDialogs.message(LOC "$$$/Piwigo/API/PiwigoapiSetalbumcoverTFind4=PiwigoAPI.setAlbumCover - Can't find Piwigo photo ID for this photo", "", "warning")
         return false
     end
     -- get reference to this photo in useSource to get remoteId
 
     log:info("useService is " .. useService:getName())
-    local result = LrDialogs.confirm("Set Piwigo Album Cover",
-        "Set select photo as cover photo for " .. useSource:getName() .. "?", "Ok", "Cancel")
+    local result = LrDialogs.confirm(LOC "$$$/Piwigo/API/SetPiwigoAlbumCover=Set Piwigo Album Cover",
+        LOC "$$$/Piwigo/API/SetSelectPhotoCover=Set select photo as cover photo for" .. " " .. useSource:getName() .. "?", "Ok", "Cancel")
     if result ~= 'ok' then
         return false
     end
@@ -2795,15 +2814,15 @@ function PiwigoAPI.setAlbumCover(publishService)
     if not (publishSettings.Connected) then
         rv = PiwigoAPI.login(publishSettings)
         if not rv then
-            LrDialogs.message("PiwigoAPI.setAlbumCover - cannot connect to piwigo")
+            LrDialogs.message(LOC "$$$/Piwigo/API/PiwigoapiSetalbumcoverCannotConnect=PiwigoAPI.setAlbumCover - cannot connect to piwigo")
             return false
         end
     end
 
     -- check role is admin level
     if publishSettings.userStatus ~= "webmaster" then
-        LrDialogs.message("User needs webmaster role on piwigo gallery at " .. publishSettings.host ..
-            " to set album cover")
+        LrDialogs.message(LOC "$$$/Piwigo/API/UserNeedsWebmasterRole=User needs webmaster role on piwigo gallery at" .. " " .. publishSettings.host ..
+            " " .. LOC "$$$/Piwigo/API/SetAlbumCover=to set album cover")
         return false
     end
 
@@ -2821,7 +2840,7 @@ function PiwigoAPI.setAlbumCover(publishService)
     local postResponse = PiwigoAPI.httpPostMultiPart(publishSettings, params)
 
     if not postResponse.status then
-        LrDialogs.message("Unable to set cover photo - " .. postResponse.statusMsg)
+        LrDialogs.message(LOC "$$$/Piwigo/API/UnableSetCoverPhoto=Unable to set cover photo" .. " -" .. postResponse.statusMsg)
         return false
     end
 
@@ -2829,23 +2848,34 @@ function PiwigoAPI.setAlbumCover(publishService)
 end
 
 -- *************************************************
-function PiwigoAPI.getTagList(propertyTable)
+function PiwigoAPI.getTagList(propertyTable, forceRefresh)
     -- return table of all tags on Piwigo
     -- return as allTags
+    -- forceRefresh: if true, bypass cache and fetch fresh data
+
+    -- Check cache first (unless forceRefresh)
+    local cacheKey = CacheManager.makeKey("getTagList", propertyTable)
+    if not forceRefresh then
+        local cached, found = CacheManager.get(cacheKey)
+        if found then
+            log:info("PiwigoAPI.getTagList - returning cached tags")
+            return true, cached
+        end
+    end
 
     local rv
     -- check connection to piwigo
     if not (propertyTable.Connected) then
         rv = PiwigoAPI.login(propertyTable)
         if not rv then
-            LrDialogs.message("PiwigoAPI.getTagList - cannot connect to piwigo")
+            LrDialogs.message(LOC "$$$/Piwigo/API/PiwigoapiGettaglistCannotConnect=PiwigoAPI.getTagList - cannot connect to piwigo")
             return false
         end
     end
     local callStatus = PiwigoAPI.checkAdmin(propertyTable)
     if not callStatus.status then
-        callStatus.statusMsg = "User needs webmaster role on piwigo gallery at " ..
-            propertyTable.host .. " to download all tags"
+        callStatus.statusMsg = LOC "$$$/Piwigo/API/UserNeedsWebmasterRole=User needs webmaster role on piwigo gallery at" .. " " ..
+            propertyTable.host .. " " .. LOC "$$$/Piwigo/API/DownloadAllTags=to download all tags"
         return false
     end
     local Params = { -- { name = "method", value = "pwg.tags.getList"},
@@ -2862,16 +2892,19 @@ function PiwigoAPI.getTagList(propertyTable)
     end
     local getResponse = httpGet(propertyTable.pwurl, Params, headers)
     if getResponse.errorMessage or (not getResponse.response) then
-        LrDialogs.message("PiwigoAPI.getTagList - cannot get tag list from Piwigo - ",
-            (getResponse.errorMessage or "Unknown error"))
+        LrDialogs.message(LOC "$$$/Piwigo/API/PiwigoapiGettaglistCannotGet=PiwigoAPI.getTagList - cannot get tag list from Piwigo" .. " -",
+            (getResponse.errorMessage or LOC "$$$/Piwigo/API/UnknownError=Unknown error"))
         return false
     end
     if getResponse.status == "ok" then
         local allTags = getResponse.response.result.tags
+        -- Store in cache (TTL 5 minutes)
+        CacheManager.set(cacheKey, allTags, 300)
+        log:info("PiwigoAPI.getTagList - cached " .. #allTags .. " tags")
         return true, allTags
     else
-        LrDialogs.message("PiwigoAPI.getTagList - cannot get tag list from Piwigo - ",
-            (getResponse.errorMessage or "Unknown error"))
+        LrDialogs.message(LOC "$$$/Piwigo/API/PiwigoapiGettaglistCannotGet=PiwigoAPI.getTagList - cannot get tag list from Piwigo" .. " -",
+            (getResponse.errorMessage or LOC "$$$/Piwigo/API/UnknownError=Unknown error"))
         return false
     end
 end
@@ -2889,7 +2922,7 @@ function PiwigoAPI.createTags(propertyTable, missingTags)
     end
     local callStatus = PiwigoAPI.checkAdmin(propertyTable)
     if not callStatus.status then
-        callStatus.statusMsg = "User needs webmaster role on piwigo gallery at " .. propertyTable.host .. " to add tags"
+        callStatus.statusMsg = LOC "$$$/Piwigo/API/UserNeedsWebmasterRole=User needs webmaster role on piwigo gallery at" .. " " .. propertyTable.host .. " " .. LOC "$$$/Piwigo/API/AddTags=to add tags"
         return false, createdTagIds
     end
 
@@ -2911,21 +2944,21 @@ function PiwigoAPI.createTags(propertyTable, missingTags)
         end
         local getResponse = httpGet(propertyTable.pwurl, Params, headers)
         if getResponse.errorMessage or (not getResponse.response) then
-            LrDialogs.message("Cannot add tag " .. tagString .. " to Piwigo - ",
-                (getResponse.errorMessage or "Unknown error"))
+            LrDialogs.message(LOC "$$$/Piwigo/API/CannotAddTag=Cannot add tag" .. " " .. tagString .. " " .. LOC "$$$/Piwigo/API/Piwigo3=to Piwigo" .. " -",
+                (getResponse.errorMessage or LOC "$$$/Piwigo/API/UnknownError=Unknown error"))
         else
             if getResponse.status == "ok" then
                 local tagID = getResponse.response.result.id
                 table.insert(createdTagIds, tagID)
             else
-                LrDialogs.message("Cannot add tag " .. tagString .. " to Piwigo - ",
-                    (getResponse.errorMessage or "Unknown error"))
+                LrDialogs.message(LOC "$$$/Piwigo/API/CannotAddTag=Cannot add tag" .. " " .. tagString .. " " .. LOC "$$$/Piwigo/API/Piwigo3=to Piwigo" .. " -",
+                    (getResponse.errorMessage or LOC "$$$/Piwigo/API/UnknownError=Unknown error"))
             end
         end
     end
 
-    -- refresh cached tag list
-    rv, propertyTable.tagTable = PiwigoAPI.getTagList(propertyTable)
+    -- refresh cached tag list (force refresh since we just added tags)
+    rv, propertyTable.tagTable = PiwigoAPI.getTagList(propertyTable, true)
 
     return true, createdTagIds
 end

@@ -29,7 +29,7 @@ local function SendMetadata()
     local selPhotos = catalog:getTargetPhotos()
     local sources = catalog:getActiveSources()
     if utils.nilOrEmpty(selPhotos) then
-        LrDialogs.message("Please select photos to resend metadata", "", "warning")
+        LrDialogs.message(LOC "$$$/Piwigo/SendMetadata/PleaseSelectPhotosResend=Please select photos to resend metadata", "", "warning")
         return false
     end
 
@@ -57,16 +57,16 @@ local function SendMetadata()
         end
     end
     if not useService then
-        LrDialogs.message("Please select photos in a Piwigo Publisher service", "", "warning")
+        LrDialogs.message(LOC "$$$/Piwigo/SendMetadata/PleaseSelectPhotosPiwigo=Please select photos in a Piwigo Publisher service", "", "warning")
         return false
     end
     if not publishSettings then
-        LrDialogs.message("SendMetadata - Can't find publish settings for this publish collection", "", "warning")
+        LrDialogs.message(LOC "$$$/Piwigo/SendMetadata/SendmetadataTFindPublish=SendMetadata - Can't find publish settings for this publish collection", "", "warning")
         return false
     end
 
-    local result = LrDialogs.confirm("Send Metadata to Piwigo",
-        "Send metadata to Piwigo for " .. #selPhotos .. " photo(s) in album " .. useSource:getName() .. "?", "Ok",
+    local result = LrDialogs.confirm(LOC "$$$/Piwigo/SendMetadata/SendMetadataPiwigo=Send Metadata to Piwigo",
+        LOC "$$$/Piwigo/SendMetadata/SendMetadataPiwigo2=Send metadata to Piwigo for" .. " " .. #selPhotos .. " " .. LOC "$$$/Piwigo/SendMetadata/PhotoSAlbum=photo(s) in album" .. " " .. useSource:getName() .. "?", "Ok",
         "Cancel")
     if result ~= 'ok' then
         return false
@@ -88,14 +88,14 @@ local function SendMetadata()
         local thisPubPhoto = utils.findPhotoInCollectionSet(useSource, lrPhoto)
         if not thisPubPhoto then
             LrDialogs.message(
-            "SendMetadata - Can't find this photo in collection set or collections - has it been published?", "",
+            LOC "$$$/Piwigo/SendMetadata/SendmetadataTFindPhotoQuestion=SendMetadata - Can't find this photo in collection set or collections - has it been published?", "",
                 "warning")
             progressScope:done()
             return false
         end
         local remoteId = thisPubPhoto:getRemoteId()
         if not remoteId then
-            LrDialogs.message("SendMetadata - Can't find Piwigo photo ID for this photo - has it been published?", "",
+            LrDialogs.message(LOC "$$$/Piwigo/SendMetadata/SendmetadataTFindPiwigoQuestion=SendMetadata - Can't find Piwigo photo ID for this photo - has it been published?", "",
                 "warning")
             progressScope:done()
             return false
@@ -109,7 +109,7 @@ local function SendMetadata()
 
         callStatus = PiwigoAPI.updateMetadata(publishSettings, lrPhoto, metaData)
         if not callStatus.status then
-            LrDialogs.message("Unable to set metadata for uploaded photo - " .. callStatus.statusMsg)
+            LrDialogs.message(LOC "$$$/Piwigo/PublishTask/UnableSetMetadataUploaded=Unable to set metadata for uploaded photo" .. " -" .. callStatus.statusMsg)
         end
     end
     progressScope:done()

@@ -59,7 +59,7 @@ local function connectionDialog(f, propertyTable, pwInstance)
 	local share = LrView.share
 
 	return {
-		title = "Piwigo Host Settings",
+		title = LOC "$$$/Piwigo/PublishDialogSections/PiwigoHostSettings=Piwigo Host Settings",
 		bind_to_object = propertyTable,
 
 		-- TOP: icon + version block
@@ -75,7 +75,7 @@ local function connectionDialog(f, propertyTable, pwInstance)
 			},
 
 			f:static_text {
-				title = "Piwigo Host:",
+				title = LOC "$$$/Piwigo/PublishDialogSections/PiwigoHost=Piwigo Host:",
 				font = "<system/bold>",
 				alignment = 'left',
 				width_in_chars = 8,
@@ -89,20 +89,20 @@ local function connectionDialog(f, propertyTable, pwInstance)
 					if sanitizedURL == url then
 						return true, url, ''
 					elseif not (sanitizedURL == nil) then
-						LrDialogs.message("Entered URL was autocorrected to " .. sanitizedURL)
+						LrDialogs.message(LOC "$$$/Piwigo/PublishDialogSections/EnteredUrlAutocorrected=Entered URL was autocorrected to" .. " " .. sanitizedURL)
 						return true, sanitizedURL, ''
 					end
 					return false, url, 'Entered URL not valid.'
 				end,
 			},
 			f:push_button {
-				title = "Check Connection",
+				title = LOC "$$$/Piwigo/PublishDialogSections/CheckConnection=Check Connection",
 				enabled = bind('ConCheck', propertyTable),
 				font = "<system/bold>",
 				action = function()
 					LrTasks.startAsyncTask(function()
 						if not PiwigoAPI.login(propertyTable) then
-							LrDialogs.message("Connection NOT successful")
+							LrDialogs.message(LOC "$$$/Piwigo/PublishDialogSections/ConnectionNotSuccessful=Connection NOT successful")
 						end
 					end)
 				end,
@@ -118,7 +118,7 @@ local function connectionDialog(f, propertyTable, pwInstance)
 				width_in_chars = 7,
 			},
 			f:static_text {
-				title = "User Name:",
+				title = LOC "$$$/Piwigo/PublishDialogSections/UserName=User Name:",
 				font = "<system/bold>",
 				alignment = 'left',
 				width_in_chars = 8,
@@ -140,7 +140,7 @@ local function connectionDialog(f, propertyTable, pwInstance)
 				width_in_chars = 7,
 			},
 			f:static_text {
-				title = "Password:",
+				title = LOC "$$$/Piwigo/PublishDialogSections/Password=Password:",
 				font = "<system/bold>",
 				alignment = 'left',
 				width_in_chars = 8,
@@ -172,10 +172,10 @@ local function prefsDialog(f, propertyTable)
 	local share = LrView.share
 
 	return {
-		title = "Piwigo Publish Service Configuration and Settings",
+		title = LOC "$$$/Piwigo/PublishDialogSections/PiwigoPublishServiceConfiguration=Piwigo Publish Service Configuration and Settings",
 		bind_to_object = propertyTable,
 		f:group_box {
-			title = "Publish Service Set Up",
+			title = LOC "$$$/Piwigo/PublishDialogSections/PublishServiceSetUp=Publish Service Set Up",
 			font = "<system/bold>",
 			fill_horizontal = 1,
 			f:spacer { height = 2 },
@@ -185,10 +185,10 @@ local function prefsDialog(f, propertyTable)
 					font = "<system>",
 					width = share 'buttonwidth',
 					enabled = bind('Connected', propertyTable),
-					tooltip = "Click to fetch the current album structure from the Piwigo Host above. Only albums the user has permission to see will be included",
+					tooltip = LOC "$$$/Piwigo/PublishDialogSections/ClickFetchCurrentAlbum=Click to fetch the current album structure from the Piwigo Host above. Only albums the user has permission to see will be included",
 					action = function(button)
-						local result = LrDialogs.confirm("Import Piwigo Albums",
-							"Are you sure you want to import the album structure from Piwigo?\nExisting collections will be unaffected.",
+						local result = LrDialogs.confirm(LOC "$$$/Piwigo/API/ImportPiwigoAlbums=Import Piwigo Albums",
+							LOC "$$$/Piwigo/PublishDialogSections/YouSureYouWant=Are you sure you want to import the album structure from Piwigo?\nExisting collections will be unaffected.",
 							"Import", "Cancel")
 						if result == "ok" then
 							LrTasks.startAsyncTask(function()
@@ -198,12 +198,12 @@ local function prefsDialog(f, propertyTable)
 					end,
 				},
 				f:static_text {
-					title = "Import existing albums from Piwigo",
+					title = LOC "$$$/Piwigo/PublishDialogSections/ImportExistingAlbumsFrom=Import existing albums from Piwigo",
 					font = "<system>",
 					alignment = 'left',
 					-- width = share 'labelWidth',
 					width_in_chars = 50,
-					tooltip = "Click to fetch the current album structure from the Piwigo Host above. Only albums the user has permission to see will be included",
+					tooltip = LOC "$$$/Piwigo/PublishDialogSections/ClickFetchCurrentAlbum=Click to fetch the current album structure from the Piwigo Host above. Only albums the user has permission to see will be included",
 				},
 			},
 
@@ -217,10 +217,10 @@ local function prefsDialog(f, propertyTable)
 					width = share 'buttonwidth',
 					enabled = bind('Connected', propertyTable),
 					--enabled = false, -- temporary disabled
-					tooltip = "Check Piwigo album structure against local collection / set structure",
+					tooltip = LOC "$$$/Piwigo/PublishDialogSections/CheckPiwigoAlbumStructure=Check Piwigo album structure against local collection / set structure",
 					action = function(button)
-						local result = LrDialogs.confirm("Check / link Piwigo Structure",
-							"Are you sure you want to check / link Piwigo Structure?\nExisting collections will be unaffected.",
+						local result = LrDialogs.confirm(LOC "$$$/Piwigo/PublishDialogSections/CheckLinkPiwigoStructure=Check / link Piwigo Structure",
+							LOC "$$$/Piwigo/PublishDialogSections/YouSureYouWant2=Are you sure you want to check / link Piwigo Structure?\nExisting collections will be unaffected.",
 							"Check", "Cancel")
 						if result == "ok" then
 							LrTasks.startAsyncTask(function()
@@ -230,12 +230,12 @@ local function prefsDialog(f, propertyTable)
 					end,
 				},
 				f:static_text {
-					title = "Piwigo structure will be checked against local collection / set structure. Missing Piwigo albums will be created and links checked / updated",
+					title = LOC "$$$/Piwigo/PublishDialogSections/PiwigoStructureCheckedAgainst=Piwigo structure will be checked against local collection / set structure. Missing Piwigo albums will be created and links checked / updated",
 					font = "<system>",
 					alignment = 'left',
 					-- width = share 'labelWidth',
 					-- width_in_chars = 50,
-					tooltip = "Piwigo structure will be checked against local collection / set structure. Missing Piwigo albums will be created and links checked / updated"
+					tooltip = LOC "$$$/Piwigo/PublishDialogSections/PiwigoStructureCheckedAgainst=Piwigo structure will be checked against local collection / set structure. Missing Piwigo albums will be created and links checked / updated"
 				},
 			},
 
@@ -247,7 +247,7 @@ local function prefsDialog(f, propertyTable)
 					width = share 'buttonwidth',
 					enabled = bind('Connected', propertyTable),
 					--enabled = false, -- temporary disabled
-					tooltip = "Clone existing publish service (collections/sets and links to Piwigo)",
+					tooltip = LOC "$$$/Piwigo/PublishDialogSections/CloneExistingPublishService=Clone existing publish service (collections/sets and links to Piwigo)",
 					action = function(button)
 						LrTasks.startAsyncTask(function()
 							PWImportService.selectService(propertyTable)
@@ -255,12 +255,12 @@ local function prefsDialog(f, propertyTable)
 					end,
 				},
 				f:static_text {
-					title = "Collection/Set structure and images of selected Publish Service will be cloned to this one.",
+					title = LOC "$$$/Piwigo/PublishDialogSections/CollectionSetStructureImages=Collection/Set structure and images of selected Publish Service will be cloned to this one.",
 					font = "<system>",
 					alignment = 'left',
 					-- width = share 'labelWidth',
 					-- width_in_chars = 50,
-					tooltip = "Selected Collection/Set structure and images of selected Publish Service will be cloned to this one."
+					tooltip = LOC "$$$/Piwigo/PublishDialogSections/SelectedCollectionSetStructure=Selected Collection/Set structure and images of selected Publish Service will be cloned to this one."
 				},
 			},
 
@@ -273,11 +273,11 @@ local function prefsDialog(f, propertyTable)
 					width = share 'buttonwidth',
 					enabled = bind('Connected', propertyTable),
 					--enabled = false, -- temporary disabled
-					tooltip = "Create special publish collections for publish collection sets, allowing images to be published to Piwigo albums with sub-albums",
+					tooltip = LOC "$$$/Piwigo/PublishDialogSections/CreateSpecialPublishCollections=Create special publish collections for publish collection sets, allowing images to be published to Piwigo albums with sub-albums",
 					action = function(button)
-						local result = LrDialogs.confirm("Create Special Collections",
-							"Are you sure you want to create Special Collections?\nExisting collections may be updated and missing Piwigo albums will be created.",
-							"Create", "Cancel")
+						local result = LrDialogs.confirm(LOC "$$$/Piwigo/API/CreateSpecialCollections=Create Special Collections",
+							LOC "$$$/Piwigo/PublishDialogSections/YouSureYouWant3=Are you sure you want to create Special Collections?\nExisting collections may be updated and missing Piwigo albums will be created.",
+							LOC "$$$/Piwigo/PublishDialogSections/Create=Create", "Cancel")
 						if result == "ok" then
 							LrTasks.startAsyncTask(function()
 								PiwigoAPI.specialCollections(propertyTable)
@@ -286,12 +286,12 @@ local function prefsDialog(f, propertyTable)
 					end,
 				},
 				f:static_text {
-					title = "Create special publish collections to allow images to be published to albums with sub-albums on Piwigo",
+					title = LOC "$$$/Piwigo/PublishDialogSections/CreateSpecialPublishCollections2=Create special publish collections to allow images to be published to albums with sub-albums on Piwigo",
 					alignment = 'left',
 					font = "<system>",
 					-- width = share 'labelWidth',
 					-- width_in_chars = 50,
-					tooltip = "Create special collections to allow images to be published to Piwigo albums with sub-albums - which is not natively supported on LrC"
+					tooltip = LOC "$$$/Piwigo/PublishDialogSections/CreateSpecialCollectionsAllow=Create special collections to allow images to be published to Piwigo albums with sub-albums - which is not natively supported on LrC"
 				},
 			},
 			f:spacer { height = 1 },
@@ -299,7 +299,7 @@ local function prefsDialog(f, propertyTable)
 		},
 
 		f:group_box {
-			title = "Metadata Settings",
+			title = LOC "$$$/Piwigo/PublishDialogSections/MetadataSettings=Metadata Settings",
 			font = "<system/bold>",
 			fill_horizontal = 1,
 
@@ -307,7 +307,7 @@ local function prefsDialog(f, propertyTable)
 
 			f:row {
 				f:static_text {
-					title = "Title: ",
+					title = LOC "$$$/Piwigo/PublishDialogSections/Title=Title:" .. " ",
 					font = "<system>",
 					alignment = 'right',
 					width_in_chars = 8,
@@ -323,7 +323,7 @@ local function prefsDialog(f, propertyTable)
 
 			f:row {
 				f:static_text {
-					title = "Description: ",
+					title = LOC "$$$/Piwigo/PublishDialogSections/Description=Description:" .. " ",
 					font = "<system>",
 					alignment = 'right',
 					width_in_chars = 8,
@@ -341,7 +341,7 @@ local function prefsDialog(f, propertyTable)
 		f:spacer { height = 2 },
 
 		f:group_box {
-			title = "Keyword Settings",
+			title = LOC "$$$/Piwigo/PublishDialogSections/KeywordSettings=Keyword Settings",
 			font = "<system/bold>",
 			fill_horizontal = 1,
 			f:spacer { height = 2 },
@@ -354,8 +354,8 @@ local function prefsDialog(f, propertyTable)
 				},
 				f:checkbox {
 					font = "<system>",
-					title = "Include Full Keyword Hierarchy",
-					tooltip = "If checked, all keywords in a keyword hierarchy will be sent to Piwigo",
+					title = LOC "$$$/Piwigo/PublishDialogSections/IncludeFullKeywordHierarchy=Include Full Keyword Hierarchy",
+					tooltip = LOC "$$$/Piwigo/PublishDialogSections/CheckedAllKeywords=If checked, all keywords in a keyword hierarchy will be sent to Piwigo",
 					value = bind 'KwFullHierarchy',
 				}
 			},
@@ -371,15 +371,15 @@ local function prefsDialog(f, propertyTable)
 				},
 				f:checkbox {
 					font = "<system>",
-					title = "Include Keyword Synonyms",
-					tooltip = "If checked, keyword synonyms will be sent to Piwigo",
+					title = LOC "$$$/Piwigo/PublishDialogSections/IncludeKeywordSynonyms=Include Keyword Synonyms",
+					tooltip = LOC "$$$/Piwigo/PublishDialogSections/CheckedKeywordSynonyms=If checked, keyword synonyms will be sent to Piwigo",
 					value = bind 'KwSynonyms',
 				}
 			},
 		},
 		f:spacer { height = 2 },
 		f:group_box {
-			title = "Other Settings",
+			title = LOC "$$$/Piwigo/PublishDialogSections/OtherSettings=Other Settings",
 			font = "<system/bold>",
 			fill_horizontal = 1,
 			f:spacer { height = 1 },
@@ -395,9 +395,9 @@ local function prefsDialog(f, propertyTable)
 					width_in_chars = 7,
 				},
 				f:checkbox {
-					title = "Synchronise Album Descriptions",
+					title = LOC "$$$/Piwigo/PublishDialogSections/SynchroniseAlbumDescriptions=Synchronise Album Descriptions",
 					font = "<system>",
-					tooltip = "If checked, Album descriptions will be maintainable in Lightroom and sent to Piwigo",
+					tooltip = LOC "$$$/Piwigo/PublishDialogSections/CheckedAlbumDescriptions=If checked, Album descriptions will be maintainable in Lightroom and sent to Piwigo",
 					value = bind 'syncAlbumDescriptions',
 				},
 			},
@@ -411,9 +411,9 @@ local function prefsDialog(f, propertyTable)
 					width_in_chars = 7,
 				},
 				f:checkbox {
-					title = "Synchronise comments as part of a Publish Process",
+					title = LOC "$$$/Piwigo/PublishDialogSections/SynchroniseCommentsPart=Synchronise comments as part of a Publish Process",
 					font = "<system>",
-					tooltip = "When checked, comments will be synchronised for all photos in a collection during a publish operation",
+					tooltip = LOC "$$$/Piwigo/PublishDialogSections/WhenCheckedCommentsSynchronised=When checked, comments will be synchronised for all photos in a collection during a publish operation",
 					value = bind 'syncCommentsPublish',
 				},
 			},
@@ -425,10 +425,10 @@ local function prefsDialog(f, propertyTable)
 					width_in_chars = 7,
 				},
 				f:checkbox {
-					title = "Only include Published Photos",
+					title = LOC "$$$/Piwigo/PublishDialogSections/OnlyIncludePublishedPhotos=Only include Published Photos",
 					enabled = bind('syncCommentsPublish', propertyTable),
 					font = "<system>",
-					tooltip = "When checked, only photos being published will have comments synchronised",
+					tooltip = LOC "$$$/Piwigo/PublishDialogSections/WhenCheckedOnlyPhotos=When checked, only photos being published will have comments synchronised",
 					value = bind 'syncCommentsPubOnly',
 				},
 			},
@@ -457,11 +457,11 @@ end
 function PublishDialogSections.viewForCollectionSettings(f, propertyTable, info)
 	return {
 
-		title = "Piwigo Service View for Collection Settings",
+		title = LOC "$$$/Piwigo/PublishDialogSections/PiwigoServiceViewCollection=Piwigo Service View for Collection Settings",
 		bind_to_object = propertyTable,
 		f:row {
 			f:static_text {
-				title = "For entire Piwigo Publish Service",
+				title = LOC "$$$/Piwigo/PublishDialogSections/EntirePiwigoPublishService=For entire Piwigo Publish Service",
 				alignment = 'left',
 				fill_horizontal = 1,
 			},

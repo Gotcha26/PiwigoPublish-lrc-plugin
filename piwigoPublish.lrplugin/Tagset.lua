@@ -32,7 +32,7 @@ items = {
         'com.adobe.separator',
 
         
-        { formatter = 'com.adobe.label', label = "Most Recent Upload",},
+        { formatter = 'com.adobe.label', label = LOC "$$$/Piwigo/Tagset/MostRecentUpload=Most Recent Upload",},
         'fiona.boston.PwigoPublish.pwHostURL',
         'fiona.boston.PwigoPublish.pwAlbumName',
         'fiona.boston.PwigoPublish.pwAlbumURL', 

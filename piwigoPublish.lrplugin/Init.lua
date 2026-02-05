@@ -48,6 +48,8 @@ _G.LrExportSettings = import "LrExportSettings"
 -- Global requires
 _G.JSON = require "JSON"
 _G.utils = require "utils"
+_G.CacheManager = require "CacheManager"
+_G.MetadataBatcher = require "MetadataBatcher"
 _G.PiwigoAPI = require "PiwigoAPI"
 _G.PWImportService = require "PWImportService"
 _G.PWStatusManager = require "PWStatusManager"
