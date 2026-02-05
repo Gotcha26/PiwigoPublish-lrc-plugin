@@ -404,44 +404,49 @@ function utils.checkTagUnique(tag, tagTable)
 end
 
 -- *************************************************
+-- Internal: Build index of normalizedTagName → tagId for O(1) lookups
+local function buildTagIndex(pwTagTable)
+    local index = {}
+    for _, pwTag in pairs(pwTagTable or {}) do
+        local pwTagName = pwTag.name_raw or pwTag.name or ""
+        local normalized = utils.normaliseWord(pwTagName)
+        if normalized ~= "" then
+            index[normalized] = pwTag.id
+        end
+    end
+    return index
+end
+
+-- Cache key for tag index
+local _tagIndexCache = nil
+local _tagIndexSource = nil
+
 function utils.tagsToIds(pwTagTable, tagString)
-    -- convert tagString to list of assoiciated tag ids via lookup on pwTagTable (tag table returned from pwg.tags.getList)
+    -- convert tagString to list of associated tag ids via lookup on pwTagTable
+    -- Étape 5B: O(1) lookup via cached index instead of O(n²) nested loops
 
     local tagIdList = ""
     local missingTags = {}
     local tagTable = utils.stringtoTable(tagString, ",")
 
-    for _, thisTag in pairs(tagTable) do
-        local tagId = ""
-        local foundTag = false
-        for _, pwTag in pairs(pwTagTable) do
-            local pwTagName = ""
-            if pwTag.name_raw then
-                -- Piwigo v16 and above returns name_raw
-                pwTagName = pwTag.name_raw
-            else
-                -- Piwigo <= v15 returns name
-                pwTagName = pwTag.name
-            end
-            -- need to normalise thisTag and pwTagName for comparison
-            local n_thisTag = utils.normaliseWord(thisTag)
-            local n_pwTagName = utils.normaliseWord(pwTagName)
-            if n_thisTag == n_pwTagName then
-                --if thisTag:lower() == pwTagName:lower() then
+    -- Build or reuse tag index (rebuild if pwTagTable changed)
+    if _tagIndexSource ~= pwTagTable then
+        _tagIndexCache = buildTagIndex(pwTagTable)
+        _tagIndexSource = pwTagTable
+    end
 
-                tagIdList = tagIdList .. pwTag.id .. ","
-                foundTag = true
-            end
-        end
-        if not (foundTag) then
+    local tagIds = {}
+    for _, thisTag in pairs(tagTable) do
+        local normalized = utils.normaliseWord(thisTag)
+        local tagId = _tagIndexCache and _tagIndexCache[normalized]
+        if tagId then
+            table.insert(tagIds, tagId)
+        else
             table.insert(missingTags, thisTag)
         end
     end
-    if string.sub(tagIdList, -1) == "," then
-        -- remove trailing , if present
-        tagIdList = string.sub(tagIdList, 1, -2)
-    end
 
+    tagIdList = table.concat(tagIds, ",")
     return tagIdList, missingTags
 end
 
@@ -1216,50 +1221,73 @@ function utils.extractPwImageIdFromUrl(url, expectedHost)
 end
 
 -- *************************************************
-function utils.findExistingPwImageId(publishService, lrPhoto)
-    -- Searches if this LR photo is already published in another collection of the same service
-    -- Returns the Piwigo remoteId if found, nil otherwise
-    
-    local foundRemoteId = nil
-    
-    local function searchInCollection(collection)
-        if foundRemoteId then return end
+-- Internal: Build index of lrPhotoId → pwRemoteId for a publish service
+local function buildPublishedPhotoIndex(publishService)
+    local index = {}
+
+    local function indexCollection(collection)
         local pubPhotos = collection:getPublishedPhotos()
         for _, pubPhoto in ipairs(pubPhotos) do
-            if pubPhoto:getPhoto().localIdentifier == lrPhoto.localIdentifier then
+            local photo = pubPhoto:getPhoto()
+            if photo then
                 local rid = pubPhoto:getRemoteId()
                 if rid and rid ~= "" then
-                    foundRemoteId = rid
-                    return
+                    index[photo.localIdentifier] = rid
                 end
             end
         end
     end
-    
-    local function searchInSet(collectionSet)
-        if foundRemoteId then return end
-        -- Search in child collections
+
+    local function indexSet(collectionSet)
         local childColls = collectionSet:getChildCollections()
         if childColls then
             for _, coll in ipairs(childColls) do
-                searchInCollection(coll)
-                if foundRemoteId then return end
+                indexCollection(coll)
             end
         end
-        -- Search in child sets (recursive)
         local childSets = collectionSet:getChildCollectionSets()
         if childSets then
             for _, childSet in ipairs(childSets) do
-                searchInSet(childSet)
-                if foundRemoteId then return end
+                indexSet(childSet)
             end
         end
     end
-    
-    -- Start search from service root
-    searchInSet(publishService)
-    
-    return foundRemoteId
+
+    indexSet(publishService)
+    return index
+end
+
+function utils.findExistingPwImageId(publishService, lrPhoto)
+    -- Searches if this LR photo is already published in another collection of the same service
+    -- Returns the Piwigo remoteId if found, nil otherwise
+    -- Étape 3A: Uses cached index for O(1) lookup instead of O(n) search
+
+    local serviceId = publishService.localIdentifier
+    local cacheKey = "publishedPhotoIndex::" .. tostring(serviceId)
+
+    -- Try to get cached index
+    local index, found = CacheManager.get(cacheKey)
+
+    if not found then
+        -- Build index and cache it (TTL 2 minutes - short because photos can be published/unpublished)
+        log:info("utils.findExistingPwImageId - building photo index for service " .. tostring(serviceId))
+        index = buildPublishedPhotoIndex(publishService)
+        CacheManager.set(cacheKey, index, 120)
+        log:info("utils.findExistingPwImageId - indexed " .. utils.tableCount(index) .. " photos")
+    end
+
+    -- O(1) lookup
+    if index and lrPhoto then
+        return index[lrPhoto.localIdentifier]
+    end
+    return nil
+end
+
+-- Helper: count table entries
+function utils.tableCount(t)
+    local count = 0
+    for _ in pairs(t) do count = count + 1 end
+    return count
 end
 
 return utils
