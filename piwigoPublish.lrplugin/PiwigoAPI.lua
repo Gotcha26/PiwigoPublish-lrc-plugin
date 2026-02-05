@@ -1251,6 +1251,25 @@ function PiwigoAPI.login(propertyTable)
         propertyTable.LR_publish_connectionName = propertyTable.userName .. "@" .. propertyTable.host
     end
 
+    -- Try to restore cached session first (Étape 2B optimization)
+    if ConnectionPool.restoreSession(propertyTable) then
+        log:info("PiwigoAPI.login - reusing cached session")
+        -- Ensure tagTable is loaded (may have been cleared)
+        if not propertyTable.tagTable then
+            local rv
+            rv, propertyTable.tagTable = PiwigoAPI.getTagList(propertyTable)
+            if not rv then
+                -- Session might be invalid, force new login
+                ConnectionPool.invalidate(propertyTable.host, propertyTable.userName)
+                propertyTable.Connected = false
+            else
+                return true
+            end
+        else
+            return true
+        end
+    end
+
     local rv = PiwigoAPI.pwConnect(propertyTable)
     return rv
 end
@@ -1368,6 +1387,9 @@ function PiwigoAPI.pwConnect(propertyTable)
         LrDialogs.message(LOC "$$$/Piwigo/API/PiwigoapiPwconnectCannotGet=PiwigoAPI.pwConnect - cannot get taglist from Piwigo")
         return false
     end
+
+    -- Store session in ConnectionPool for reuse (Étape 2B)
+    ConnectionPool.storeSession(propertyTable)
 
     return rv
 end
