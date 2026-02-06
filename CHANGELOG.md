@@ -1,6 +1,6 @@
 # Changelog
 
-## [20260205.30] - 2026-02-05
+## [20260206.30] - 2026-02-06
 ### Fixed
 Fix #41 Problem with 'Clone Existing Publish Service - public/private setting
 

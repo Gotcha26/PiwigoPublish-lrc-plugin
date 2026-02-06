@@ -346,6 +346,7 @@ local function createTree(nodes, parentSet, publishService, created, childrenInd
         local extra = node.extra or nil
         local isSpecialColl = false
         -- Special collection renaming
+
         if isSpecialCollection(node.name) and parentSet then
             -- Use the parent collection/set name
             name = "[Photos in " .. parentSet:getName() .. " ]"
@@ -354,7 +355,6 @@ local function createTree(nodes, parentSet, publishService, created, childrenInd
         end
 
         local remoteAlbumId = node.remoteId
-        local remoteAlbumUrl
         local comment = ""
         local status = "public" -- ensure default is public
         local isSmartColl = false
@@ -366,7 +366,6 @@ local function createTree(nodes, parentSet, publishService, created, childrenInd
             end
             isSmartColl = extra.isSmartColl
             searchDesc = extra.searchDesc
-            remoteAlbumUrl = extra.remoteUrl
         end
 
         local newCollorSet
@@ -386,6 +385,7 @@ local function createTree(nodes, parentSet, publishService, created, childrenInd
             local albumUrl = ""
             if pwDetails.isPiwigo then
                 local collectionSettings = newCollorSet:getCollectionSetInfoSummary().collectionSettings or {}
+                -- album settings set to correspond to service being cloned
                 if propertyTable.syncAlbumDescriptions then
                     collectionSettings.albumDescription = comment
                 else
@@ -400,6 +400,7 @@ local function createTree(nodes, parentSet, publishService, created, childrenInd
                 if remoteAlbumId then
                     local thisCat = PiwigoAPI.pwCategoriesGetThis(propertyTable, remoteAlbumId)
                     if thisCat then
+                        -- use settings directly from Piwigo, overriding local settings
                         if propertyTable.syncAlbumDescriptions then
                             if thisCat.description then
                                 collectionSettings.albumDescription = thisCat.description
@@ -469,9 +470,12 @@ local function createTree(nodes, parentSet, publishService, created, childrenInd
                 local collectionSettings = newCollorSet:getCollectionInfoSummary().collectionSettings or {}
                 if propertyTable.syncAlbumDescriptions then
                     collectionSettings.albumDescription = comment
-                    collectionSettings.albumPrivate = status == "private"
                 else
                     collectionSettings.albumDescription = ""
+                end
+                if status == "private" then
+                    collectionSettings.albumPrivate = true
+                else
                     collectionSettings.albumPrivate = false
                 end
                 if remoteAlbumId then
