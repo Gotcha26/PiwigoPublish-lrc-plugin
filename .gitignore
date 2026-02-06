@@ -14,12 +14,13 @@ piwigoPublish.lrplugin/lrcUtils.lua
 piwigoPublish.lrplugin/PiwigoHelper.lua 
 
 # Other files
+*.bak
+.claude/
+__pycache__/
 cat layout.odt
 deploy.sh
 diagnostic.txt
 copilot-instructions.md
 
-# i18n
-localize_plugin.py
-extract_localizable_strings.py
-localization_report.txt
+# Temporary folder for localisation tools
+piwigoPublish.lrplugin/__i18n_tmp__/

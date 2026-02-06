@@ -101,7 +101,7 @@ local function processSmartCollectionQueue(smartColls, publishService, propertyT
     if not smartColls or index > #smartColls then
         releasePublishLock(serviceId)
         progressScope:done()
-        LrDialogs.message("Clone completed", "Publish Service Clone omplete.", "info")
+        LrDialogs.message("Clone completed", "Publish Service Clone Complete.", "info")
         return
     end
 
@@ -109,7 +109,7 @@ local function processSmartCollectionQueue(smartColls, publishService, propertyT
     if not entry then
         releasePublishLock(serviceId)
         progressScope:done()
-        LrDialogs.message("Clone completed", "Publish Service Clone omplete.", "info")
+        LrDialogs.message("Clone completed", "Publish Service Clone Complete.", "info")
         return -- done
     end
 
@@ -362,7 +362,7 @@ local function createTree(nodes, parentSet, publishService, created, childrenInd
         if extra then
             if extra.collSettings then
                 comment = extra.collSettings.comment or ""
-                status = extra.collSettings.status or ""
+                status = extra.collSettings.status or "public"
             end
             isSmartColl = extra.isSmartColl
             searchDesc = extra.searchDesc
@@ -388,22 +388,36 @@ local function createTree(nodes, parentSet, publishService, created, childrenInd
                 local collectionSettings = newCollorSet:getCollectionSetInfoSummary().collectionSettings or {}
                 if propertyTable.syncAlbumDescriptions then
                     collectionSettings.albumDescription = comment
-                    collectionSettings.albumPrivate = status == "private"
                 else
                     collectionSettings.albumDescription = ""
+                end
+                if status == "private" then
+                    collectionSettings.albumPrivate = true
+                else
                     collectionSettings.albumPrivate = false
                 end
+
                 if remoteAlbumId then
                     local thisCat = PiwigoAPI.pwCategoriesGetThis(propertyTable, remoteAlbumId)
                     if thisCat then
-                        if thisCat.name == name then
-                            albumUrl = propertyTable.host .. "/index.php?/category/" .. remoteAlbumId
-                            catalog:withWriteAccessDo("Add Piwigo details to collections", function()
-                                newCollorSet:setRemoteId(remoteAlbumId)
-                                newCollorSet:setRemoteUrl(albumUrl)
-                                newCollorSet:setCollectionSetSettings(collectionSettings)
-                            end)
+                        if propertyTable.syncAlbumDescriptions then
+                            if thisCat.description then
+                                collectionSettings.albumDescription = thisCat.description
+                            else
+                                collectionSettings.albumDescription = ""
+                            end
                         end
+                        if thisCat.status == "public" then
+                            collectionSettings.albumPrivate = false
+                        else
+                            collectionSettings.albumPrivate = true
+                        end
+                        albumUrl = propertyTable.host .. "/index.php?/category/" .. remoteAlbumId
+                        catalog:withWriteAccessDo("Add Piwigo details to collections", function()
+                            newCollorSet:setRemoteId(remoteAlbumId)
+                            newCollorSet:setRemoteUrl(albumUrl)
+                            newCollorSet:setCollectionSetSettings(collectionSettings)
+                        end)
                     end
                 end
             end
@@ -464,6 +478,18 @@ local function createTree(nodes, parentSet, publishService, created, childrenInd
                     -- check if remoote album exists and add to collection if so
                     local thisCat = PiwigoAPI.pwCategoriesGetThis(propertyTable, remoteAlbumId)
                     if thisCat then
+                        if propertyTable.syncAlbumDescriptions then
+                            if thisCat.description then
+                                collectionSettings.albumDescription = thisCat.description
+                            else
+                                collectionSettings.albumDescription = ""
+                            end
+                        end
+                        if thisCat.status == "public" then
+                            collectionSettings.albumPrivate = false
+                        else
+                            collectionSettings.albumPrivate = true
+                        end
                         albumUrl = propertyTable.host .. "/index.php?/category/" .. remoteAlbumId
                         catalog:withWriteAccessDo("Add Piwigo details to collections", function()
                             newCollorSet:setRemoteId(remoteAlbumId)

@@ -79,7 +79,7 @@ _G.iconPath = _PLUGIN:resourceId("icons/icon_med.png")
 -- _PLUGIN.VERSION is nil here for some reason, so hardcoding for now
 -- just need to ensure both places are updated together
 
-_G.versionInfo = { major=20260126, minor=29, revision=0 }
+_G.versionInfo = { major=20260205, minor=30, revision=0 }
 
 _G.pluginVersion = string.format("%d.%d", versionInfo.major, versionInfo.minor)
 -- Auto-update checker
@@ -96,5 +96,4 @@ LrTasks.startAsyncTask(function()
         UpdateChecker.checkForUpdates(true) -- silent = true
     end
 end)
-
 

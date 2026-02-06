@@ -66,5 +66,5 @@ return {
     
 	LrPluginInfoProvider = 'PluginInfo.lua',
 
-    VERSION = { major=20260126, minor=29, revision=0 },
+    VERSION = { major=20260205, minor=30, revision=0 },
 }

@@ -115,7 +115,7 @@ local function SetAlbumCover()
     if not (publishSettings.Connected) then
         rv = PiwigoAPI.login(publishSettings)
         if not rv then
-            LrDialogs.message('SetAlbumCover - cannot connect to piwigo')
+            LrDialogs.message("SetAlbumCover - cannot connect to piwigo")
             return false
         end
     end

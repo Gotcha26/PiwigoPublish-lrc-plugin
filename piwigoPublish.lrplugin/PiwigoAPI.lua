@@ -1365,7 +1365,7 @@ function PiwigoAPI.pwConnect(propertyTable)
     -- get list of all tagIDs
     rv, propertyTable.tagTable = PiwigoAPI.getTagList(propertyTable)
     if not rv then
-        LrDialogs.message('PiwigoAPI.pwConnect - cannot get taglist from Piwigo')
+        LrDialogs.message("PiwigoAPI.pwConnect - cannot get taglist from Piwigo")
         return false
     end
 
@@ -2795,7 +2795,7 @@ function PiwigoAPI.setAlbumCover(publishService)
     if not (publishSettings.Connected) then
         rv = PiwigoAPI.login(publishSettings)
         if not rv then
-            LrDialogs.message('PiwigoAPI.setAlbumCover - cannot connect to piwigo')
+            LrDialogs.message("PiwigoAPI.setAlbumCover - cannot connect to piwigo")
             return false
         end
     end

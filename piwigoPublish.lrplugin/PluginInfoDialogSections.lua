@@ -163,7 +163,7 @@ function PluginInfoDialogSections.sectionsForBottomOfDialog(f, propertyTable)
                             "Cancel"
                         )
 
-                        if result == 'ok' then
+                        if result == "ok" then
                             resetPluginPrefs()
                             LrDialogs.message(
                                 "Preferences Reset",
