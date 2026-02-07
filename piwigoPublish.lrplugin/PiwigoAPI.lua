@@ -1374,7 +1374,7 @@ function PiwigoAPI.pwConnect(propertyTable)
         LrDialogs.message("PiwigoAPI.pwConnect - cannot get taglist from Piwigo")
         return false
     end
-
+    utils.buildTagIndex(propertyTable)
     return rv
 end
 
@@ -2400,8 +2400,9 @@ function PiwigoAPI.updateMetadata(propertyTable, lrPhoto, metaData)
                 callStatus.statusMsg = 'PiwigoAPI:updateMetadata - cannot get taglist from Piwigo'
                 return callStatus
             end
+            utils.buildTagIndex(propertyTable)
         end
-        local tagIdList, missingTags = utils.tagsToIds(propertyTable.tagTable, metaData.tagString)
+        local tagIdList, missingTags = utils.tagsToIds(propertyTable, metaData.tagString)
 
         if #missingTags > 0 then
             -- need to create tags for missingTags
@@ -2876,6 +2877,7 @@ function PiwigoAPI.getTagList(propertyTable)
     end
     if getResponse.status == "ok" then
         local allTags = getResponse.response.result.tags
+        propertyTable.tagTable = allTags
         return true, allTags
     else
         LrDialogs.message("PiwigoAPI.getTagList - cannot get tag list from Piwigo - ",
@@ -2934,7 +2936,7 @@ function PiwigoAPI.createTags(propertyTable, missingTags)
 
     -- refresh cached tag list
     rv, propertyTable.tagTable = PiwigoAPI.getTagList(propertyTable)
-
+    utils.buildTagIndex(propertyTable)
     return true, createdTagIds
 end
 

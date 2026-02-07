@@ -161,23 +161,23 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
 
         local lrPhoto = rendition.photo
         local remoteId = rendition.publishedPhotoId or ""
-        
+
         -- Detect photo already published in this service (multi-album support)
         local existingPwImageId = nil
         if remoteId == "" then
             -- Method 1: Via custom metadata (photos published with plugin >= 20251224.16)
             local storedImageUrl = lrPhoto:getPropertyForPlugin(_PLUGIN, "pwImageURL")
             local storedHost = lrPhoto:getPropertyForPlugin(_PLUGIN, "pwHostURL")
-            
+
             log:info("DEBUG multi-album: remoteId vide, checking metadata...")
             log:info("DEBUG storedHost: " .. tostring(storedHost))
             log:info("DEBUG storedImageUrl: " .. tostring(storedImageUrl))
             log:info("DEBUG propertyTable.host: " .. tostring(propertyTable.host))
-            
+
             if storedHost == propertyTable.host and storedImageUrl then
                 existingPwImageId = utils.extractPwImageIdFromUrl(storedImageUrl, propertyTable.host)
             end
-            
+
             -- Method 2: Search in other collections of the service (fallback)
             if not existingPwImageId then
                 log:info("DEBUG multi-album: metadata vides, recherche cross-collection...")
@@ -187,7 +187,7 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
                     log:info("DEBUG multi-album: trouvé via cross-collection, ID = " .. tostring(existingPwImageId))
                 end
             end
-            
+
             -- Verify the image still exists on Piwigo
             if existingPwImageId then
                 local checkStatus = PiwigoAPI.checkPhoto(propertyTable, existingPwImageId)
@@ -197,7 +197,7 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
                 end
             end
         end
-        
+
         -- Wait for next photo to render.
         local success, pathOrMessage = rendition:waitForRender()
         -- Check for cancellation again after photo has been rendered.
@@ -212,12 +212,12 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
             -- upload to Piwigo
             callStatus = {}
             local filePath = pathOrMessage
-            
+
             -- If photo already exists on Piwigo, associate instead of uploading
             if existingPwImageId then
                 log:info("Photo exists on Piwigo (ID " .. existingPwImageId .. "), associating to album " .. albumId)
                 callStatus = PiwigoAPI.associateImageToCategory(propertyTable, existingPwImageId, albumId)
-                
+
                 if callStatus.status then
                     rendition:recordPublishedPhotoId(callStatus.remoteid)
                     rendition:recordPublishedPhotoUrl(callStatus.remoteurl)
@@ -228,66 +228,68 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
                     existingPwImageId = nil
                 end
             end
-            
+
             if not existingPwImageId then
-            -- Begin existing upload block (indent all upload code until end of if success)
-            local metaData = {}
-            -- build metadata structure
-            metaData = utils.getPhotoMetadata(propertyTable, lrPhoto)
-            metaData.Albumid = albumId
-            metaData.Remoteid = remoteId
-            -- run to build missingTags - tags that will be created on upload to Piwigo
-            -- will use this to decide whether to run build tagtable cache
-            -- means we don't have to rebuild after each uploaded photo
-            local tagIdList, missingTags = utils.tagsToIds(propertyTable.tagTable, metaData.tagString)
+                -- Begin existing upload block (indent all upload code until end of if success)
+                local metaData = {}
+                -- build metadata structure
+                metaData = utils.getPhotoMetadata(propertyTable, lrPhoto)
+                metaData.Albumid = albumId
+                metaData.Remoteid = remoteId
+                -- run to build missingTags - tags that will be created on upload to Piwigo
+                -- will use this to decide whether to run build tagtable cache
+                -- means we don't have to rebuild after each uploaded photo
+                local tagIdList, missingTags = utils.tagsToIds(propertyTable, metaData.tagString)
 
-            -- do the upload
-            callStatus = PiwigoAPI.updateGallery(propertyTable, filePath, metaData)
-            -- check status and complete rendition
-            if callStatus.status then
-                rendition:recordPublishedPhotoId(callStatus.remoteid or "")
-                rendition:recordPublishedPhotoUrl(callStatus.remoteurl or "")
-                rendition:renditionIsDone(true)
-                -- set metadata for photo
-                local pluginData = {
-                    pwHostURL = propertyTable.host,
-                    albumName = albumName,
-                    albumUrl = albumUrl,
-                    imageUrl = callStatus.remoteurl,
-                    pwUploadDate = os.date("%Y-%m-%d"),
-                    pwUploadTime = os.date("%H:%M:%S"),
-                    pwCommentSync = ""
-                }
-                if propertyTable.syncCommentsPublish then
-                    -- set to allow comments to sync for this photo if flag set
-                    pluginData.pwCommentSync = "YES"
+                -- do the upload
+                callStatus = PiwigoAPI.updateGallery(propertyTable, filePath, metaData)
+                -- check status and complete rendition
+                if callStatus.status then
+                    rendition:recordPublishedPhotoId(callStatus.remoteid or "")
+                    rendition:recordPublishedPhotoUrl(callStatus.remoteurl or "")
+                    rendition:renditionIsDone(true)
+                    -- set metadata for photo
+                    local pluginData = {
+                        pwHostURL = propertyTable.host,
+                        albumName = albumName,
+                        albumUrl = albumUrl,
+                        imageUrl = callStatus.remoteurl,
+                        pwUploadDate = os.date("%Y-%m-%d"),
+                        pwUploadTime = os.date("%H:%M:%S"),
+                        pwCommentSync = ""
+                    }
+                    if propertyTable.syncCommentsPublish then
+                        -- set to allow comments to sync for this photo if flag set
+                        pluginData.pwCommentSync = "YES"
+                    end
+
+                    -- store / update custom metadata
+
+
+                    PiwigoAPI.storeMetaData(catalog, lrPhoto, pluginData)
+
+                    -- photo was uploaded with keywords included, but existing keywords aren't replaced by this process,
+                    -- so force a metadata update using pwg.images.setInfo with single_value_mode set to "replace" to force old metadata/keywords to be replaced
+                    metaData.Remoteid = callStatus.remoteid
+                    if missingTags then
+                        -- refresh cached tag list as new tags have been created during updateGallery
+                        rv, propertyTable.tagTable = PiwigoAPI.getTagList(propertyTable)
+                        if not rv then
+                            LrDialogs.message("PiwigoAPI:updateMetadata - cannot get taglist from Piwigo")
+                        else
+                            utils.buildTagIndex(propertyTable)
+                        end
+                    end
+                    callStatus = PiwigoAPI.updateMetadata(propertyTable, lrPhoto, metaData)
+                    if not callStatus.status then
+                        LrDialogs.message("Unable to set metadata for uploaded photo - " .. callStatus.statusMsg)
+                    end
+                else
+                    rendition:uploadFailed(callStatus.message or "Upload failed")
                 end
 
-                -- store / update custom metadata
-
-
-                PiwigoAPI.storeMetaData(catalog, lrPhoto, pluginData)
-
-                -- photo was uploaded with keywords included, but existing keywords aren't replaced by this process,
-                -- so force a metadata update using pwg.images.setInfo with single_value_mode set to "replace" to force old metadata/keywords to be replaced
-                metaData.Remoteid = callStatus.remoteid
-                if missingTags then
-                    -- refresh cached tag list as new tags have been created during updateGallery
-                    rv, propertyTable.tagTable = PiwigoAPI.getTagList(propertyTable)
-                end
-                if not rv then
-                    LrDialogs.message("PiwigoAPI:updateMetadata - cannot get taglist from Piwigo")
-                end
-                callStatus = PiwigoAPI.updateMetadata(propertyTable, lrPhoto, metaData)
-                if not callStatus.status then
-                    LrDialogs.message("Unable to set metadata for uploaded photo - " .. callStatus.statusMsg)
-                end
-            else
-                rendition:uploadFailed(callStatus.message or "Upload failed")
-            end
-
-            -- When done with photo, delete temp file.
-            LrFileUtils.delete(pathOrMessage)
+                -- When done with photo, delete temp file.
+                LrFileUtils.delete(pathOrMessage)
             end -- end if not existingPwImageId
         else
             rendition:uploadFailed(pathOrMessage or "Render failed")
@@ -422,19 +424,21 @@ function PublishTask.deletePhotosFromPublishedCollection(publishSettings, arrayO
             local thisLrPhoto = thisPhotoToUnpublish[1]
             local thispwImageID = thisPhotoToUnpublish[2]
             local thisPubPhoto = thisPhotoToUnpublish[3]
-            
+
             -- Use dissociate instead of delete to preserve multi-album associations
-            log:info("PublishTask.deletePhotosFromPublishedCollection - dissociating photo " .. thispwImageID .. " from category " .. pwCatID)
+            log:info("PublishTask.deletePhotosFromPublishedCollection - dissociating photo " ..
+                thispwImageID .. " from category " .. pwCatID)
             callStatus = PiwigoAPI.dissociateImageFromCategory(publishSettings, thispwImageID, pwCatID)
             if callStatus.status then
                 -- Only clear metadata if photo is no longer in any other published collection
                 -- Check if photo exists in other collections of this service
                 local publishService = publishedCollection:getService()
                 local stillPublished = utils.findExistingPwImageId(publishService, thisLrPhoto)
-                
+
                 if not stillPublished then
                     -- Photo is no longer published anywhere, clear all metadata
-                    log:info("PublishTask.deletePhotosFromPublishedCollection - photo " .. thispwImageID .. " orphaned, clearing metadata")
+                    log:info("PublishTask.deletePhotosFromPublishedCollection - photo " ..
+                        thispwImageID .. " orphaned, clearing metadata")
                     catalog:withWriteAccessDo("Updating " .. thisLrPhoto:getFormattedMetadata("fileName"),
                         function()
                             thisLrPhoto:setPropertyForPlugin(_PLUGIN, "pwHostURL", "")
@@ -446,7 +450,8 @@ function PublishTask.deletePhotosFromPublishedCollection(publishSettings, arrayO
                             thisLrPhoto:setPropertyForPlugin(_PLUGIN, "pwCommentSync", "")
                         end)
                 else
-                    log:info("PublishTask.deletePhotosFromPublishedCollection - photo " .. thispwImageID .. " still in other collections, keeping metadata")
+                    log:info("PublishTask.deletePhotosFromPublishedCollection - photo " ..
+                        thispwImageID .. " still in other collections, keeping metadata")
                 end
                 thisPhotoToUnpublish[4] = true
             else
@@ -639,26 +644,26 @@ function PublishTask.imposeSortOrderOnPublishedCollection(publishSettings, info,
     -- It allows you to detect published photos that no longer meet the criteria and mark them for
     -- deletion.
     log:info("PublishTask.imposeSortOrderOnPublishedCollection")
-    
+
     local validSequence = {}
     local publishedCollection = info.publishedCollection
-    
+
     if not publishedCollection then
         return nil
     end
-    
+
     -- Check if it is a smart collection
     if not publishedCollection:isSmartCollection() then
         return nil
     end
-    
+
     -- Retrieve photos currently in the smart collection (according to criteria)
     local currentPhotos = publishedCollection:getPhotos()
     local currentPhotoIds = {}
     for _, photo in ipairs(currentPhotos) do
         currentPhotoIds[photo.localIdentifier] = true
     end
-    
+
     -- Browse the remoteIds of published photos
     -- remoteIdSequence contains the remoteIds in the current order
     local publishedPhotos = publishedCollection:getPublishedPhotos()
@@ -669,7 +674,7 @@ function PublishTask.imposeSortOrderOnPublishedCollection(publishSettings, info,
             remoteIdToPhoto[remoteId] = pubPhoto
         end
     end
-    
+
     -- Build the valid sequence: only photos that still meet the criteria
     for _, remoteId in ipairs(remoteIdSequence) do
         local pubPhoto = remoteIdToPhoto[remoteId]
@@ -683,12 +688,12 @@ function PublishTask.imposeSortOrderOnPublishedCollection(publishSettings, info,
             -- its remoteId will not be in validSequence.
         end
     end
-    
-    log:info("PublishTask.imposeSortOrderOnPublishedCollection - " .. 
-             #remoteIdSequence .. " published, " .. 
-             #validSequence .. " still match criteria, " ..
-             (#remoteIdSequence - #validSequence) .. " to delete")
-    
+
+    log:info("PublishTask.imposeSortOrderOnPublishedCollection - " ..
+        #remoteIdSequence .. " published, " ..
+        #validSequence .. " still match criteria, " ..
+        (#remoteIdSequence - #validSequence) .. " to delete")
+
     return validSequence
 end
 
@@ -801,11 +806,11 @@ function PublishTask.viewForCollectionSettings(f, publishSettings, info)
         { title = "Percent",    value = "Percent" },
     }
     local metaDataOpts = {
-        { title = "All Metadata",                         value = "All Metadata" },
-        { title = "Copyright only",                       value = "Copyright Only" },
-        { title = "Copyright & Contact Info Only",        value = "Copyright & Contact Info Only" },
-        { title = "All Except Camera Raw Info",           value = "All Except Camera Raw Info" },
-        { title = "All Except Camera & Camera Raw Info",  value = "All Except Camera & Camera Raw Info" },
+        { title = "All Metadata",                        value = "All Metadata" },
+        { title = "Copyright only",                      value = "Copyright Only" },
+        { title = "Copyright & Contact Info Only",       value = "Copyright & Contact Info Only" },
+        { title = "All Except Camera Raw Info",          value = "All Except Camera Raw Info" },
+        { title = "All Except Camera & Camera Raw Info", value = "All Except Camera & Camera Raw Info" },
     }
 
     local pwAlbumUI = f:group_box {
@@ -1093,11 +1098,11 @@ function PublishTask.viewForCollectionSetSettings(f, publishSettings, info)
         { title = "Percent",    value = "Percent" },
     }
     local metaDataOpts = {
-        { title = "All Metadata",                         value = "All Metadata" },
-        { title = "Copyright only",                       value = "Copyright Only" },
-        { title = "Copyright & Contact Info Only",        value = "Copyright & Contact Info Only" },
-        { title = "All Except Camera Raw Info",           value = "All Except Camera Raw Info" },
-        { title = "All Except Camera & Camera Raw Info",  value = "All Except Camera & Camera Raw Info" },
+        { title = "All Metadata",                        value = "All Metadata" },
+        { title = "Copyright only",                      value = "Copyright Only" },
+        { title = "Copyright & Contact Info Only",       value = "Copyright & Contact Info Only" },
+        { title = "All Except Camera Raw Info",          value = "All Except Camera Raw Info" },
+        { title = "All Except Camera & Camera Raw Info", value = "All Except Camera & Camera Raw Info" },
     }
 
     local pwAlbumUI = f:group_box {

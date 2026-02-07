@@ -123,7 +123,7 @@ function utils.timeStamp(dateStrISO)
     end
     -- check for ISO
     if dateStrISO:match("^%d%d%d%d%-%d%d%-%d%d %d%d:%d%d:%d%d$") then
-        local year, month, day, hour, min, sec =  dateStrISO:match("(%d+)%-(%d+)%-(%d+) (%d+):(%d+):(%d+)")
+        local year, month, day, hour, min, sec = dateStrISO:match("(%d+)%-(%d+)%-(%d+) (%d+):(%d+):(%d+)")
         local timestamp = os.time({
             year  = year,
             month = month,
@@ -136,7 +136,6 @@ function utils.timeStamp(dateStrISO)
     end
     return nil
 end
-
 
 -- *************************************************
 function utils.formattedToISO(dateStr)
@@ -404,44 +403,47 @@ function utils.checkTagUnique(tag, tagTable)
 end
 
 -- *************************************************
-function utils.tagsToIds(pwTagTable, tagString)
-    -- convert tagString to list of assoiciated tag ids via lookup on pwTagTable (tag table returned from pwg.tags.getList)
+function utils.buildTagIndex(propertyTable)
+    -- build reverse index of tagIds to speed up tag processing
+    local pwTagTable = propertyTable.tagTable or {}
+    local index = {}
+    for _, pwTag in pairs(pwTagTable or {}) do
+        local pwTagName = pwTag.name_raw or pwTag.name or ""
+        local normalized = utils.normaliseWord(pwTagName)
+        if normalized ~= "" then
+            index[normalized] = pwTag.id
+        end
+    end
+    propertyTable._tagIndex = index
+end
 
+-- *************************************************
+function utils.tagsToIds(propertyTable, tagString)
+    -- convert tagString to list of assoiciated tag ids 
+    -- use _tagIndex which is a reverse lookup table created in utils.buildTagIndex(propertyTable) when tagTable is refreshed via PiwigoAPI.getTagList(propertyTable)
+    -- tagString = comma delimted list of tags for which we want the associated Piwigo Tag ID
+
+    local pwTagTable = propertyTable.tagTable or {}
+    local pwTagIndex = propertyTable._tagIndex or {}
     local tagIdList = ""
     local missingTags = {}
-    local tagTable = utils.stringtoTable(tagString, ",")
 
+    -- convert tagString to table
+    local tagTable = utils.stringtoTable(tagString, ",")
+    local tagIds = {}
     for _, thisTag in pairs(tagTable) do
         local tagId = ""
         local foundTag = false
-        for _, pwTag in pairs(pwTagTable) do
-            local pwTagName = ""
-            if pwTag.name_raw then
-                -- Piwigo v16 and above returns name_raw
-                pwTagName = pwTag.name_raw
-            else
-                -- Piwigo <= v15 returns name
-                pwTagName = pwTag.name
-            end
-            -- need to normalise thisTag and pwTagName for comparison
-            local n_thisTag = utils.normaliseWord(thisTag)
-            local n_pwTagName = utils.normaliseWord(pwTagName)
-            if n_thisTag == n_pwTagName then
-                --if thisTag:lower() == pwTagName:lower() then
-
-                tagIdList = tagIdList .. pwTag.id .. ","
-                foundTag = true
-            end
-        end
-        if not (foundTag) then
+        -- look for thisTag in pwTagTable - use pwTagIndex
+        local n_thisTag = utils.normaliseWord(thisTag)
+        local thisTagId = pwTagIndex[n_thisTag]
+        if thisTagId then
+            table.insert(tagIds, thisTagId)
+        else
             table.insert(missingTags, thisTag)
         end
     end
-    if string.sub(tagIdList, -1) == "," then
-        -- remove trailing , if present
-        tagIdList = string.sub(tagIdList, 1, -2)
-    end
-
+    tagIdList = table.concat(tagIds, ",")
     return tagIdList, missingTags
 end
 
@@ -1210,7 +1212,7 @@ function utils.extractPwImageIdFromUrl(url, expectedHost)
     -- Verifies that the URL matches the expected host
     if not url or url == "" then return nil end
     if expectedHost and not url:find(expectedHost, 1, true) then return nil end
-    
+
     local imageId = url:match("picture%.php%?/(%d+)")
     return imageId
 end
@@ -1219,9 +1221,9 @@ end
 function utils.findExistingPwImageId(publishService, lrPhoto)
     -- Searches if this LR photo is already published in another collection of the same service
     -- Returns the Piwigo remoteId if found, nil otherwise
-    
+
     local foundRemoteId = nil
-    
+
     local function searchInCollection(collection)
         if foundRemoteId then return end
         local pubPhotos = collection:getPublishedPhotos()
@@ -1235,7 +1237,7 @@ function utils.findExistingPwImageId(publishService, lrPhoto)
             end
         end
     end
-    
+
     local function searchInSet(collectionSet)
         if foundRemoteId then return end
         -- Search in child collections
@@ -1255,10 +1257,10 @@ function utils.findExistingPwImageId(publishService, lrPhoto)
             end
         end
     end
-    
+
     -- Start search from service root
     searchInSet(publishService)
-    
+
     return foundRemoteId
 end
 
