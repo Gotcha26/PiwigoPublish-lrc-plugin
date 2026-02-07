@@ -1,7 +1,8 @@
 -- =============================================================================
 -- Plugin Localization - EN
--- Generated: 2026-02-05 16:46:53
--- Total keys: 272
+-- Generated: 2026-02-06 15:12:19
+-- Total keys: 271
+-- SOURCE: Extractor
 -- =============================================================================
 
 -- -----------------------------------------------------------------------------
@@ -263,7 +264,6 @@
 "$$$/Piwigo/PublishTask/PiwigoCatId=, Piwigo Cat ID"
 "$$$/Piwigo/PublishTask/PiwigoPublisherBusyPlease=Piwigo Publisher is busy. Please try later."
 "$$$/Piwigo/PublishTask/PiwigoRenameFailed=The Piwigo rename failed ("
-"$$$/Piwigo/PublishTask/PiwigoapiUpdatemetadataCannotGet=PiwigoAPI:updateMetadata - cannot get taglist from Piwigo"
 "$$$/Piwigo/PublishTask/Publishing=Publishing"
 "$$$/Piwigo/PublishTask/RenameFailed=Rename Failed"
 "$$$/Piwigo/PublishTask/ResizeImage=Resize Image"

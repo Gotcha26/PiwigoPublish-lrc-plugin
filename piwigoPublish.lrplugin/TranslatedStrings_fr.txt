@@ -1,31 +1,32 @@
 -- =============================================================================
 -- Plugin Localization - FR
--- Generated: 2026-02-05 16:46:53
--- Total keys: 272
+-- Generated: 2026-02-06 15:12:19
+-- Total keys: 271
+-- Source: SYNC
 -- =============================================================================
 
 -- -----------------------------------------------------------------------------
--- NOTES IMPORTANTES POUR LES TRADUCTEURS :
+-- IMPORTANT NOTES FOR TRANSLATORS:
 -- -----------------------------------------------------------------------------
--- 1. NE PAS traduire les motifs suivants (les garder tels quels) :
---    - %s, %d, %f, %i, %u, %x, %X, %o, %c, %e, %E, %g, %G (spécificateurs de format)
---    - %1, %2, %3... (espaces réservés numérotés)
---    - \n (caractère de nouvelle ligne)
---    - \t (caractère de tabulation)
---    - \" (guillemet échappé)
---    - \\ (barre oblique inversée échappée)
---    - ... (points de suspension utilisés comme espace réservé)
---    - Termes techniques en MAJUSCULES (API, URL, HTTP, JSON, etc.)
+-- 1. DO NOT translate the following patterns (keep them exactly as-is):
+--    - %s, %d, %f, %i, %u, %x, %X, %o, %c, %e, %E, %g, %G (format specifiers)
+--    - %1, %2, %3... (numbered placeholders)
+--    - \n (newline character)
+--    - \t (tab character)
+--    - \" (escaped quote)
+--    - \\ (escaped backslash)
+--    - ... (ellipsis used as placeholder)
+--    - Technical terms in UPPERCASE (API, URL, HTTP, JSON, etc.)
 --
--- 2. PRÉSERVER les espaces autour du texte exactement comme ils apparaissent :
---    - Espaces en début (avant le texte) utilisés pour la mise en page/alignement
---    - Espaces en fin (après le texte) utilisés pour la concaténation
---    - Exemple : "  Bonjour  " doit conserver les espaces en début et fin
+-- 2. PRESERVE spaces around text exactly as they appear:
+--    - Leading spaces (before text) are used for layout/alignment
+--    - Trailing spaces (after text) are used for concatenation
+--    - Example: "  Hello  " must keep both leading and trailing spaces
 --
--- 3. Conserver le même style de ponctuation (deux-points, points, etc.)
+-- 3. Keep the same punctuation style (colons, periods, etc.)
 -- -----------------------------------------------------------------------------
 
--- API
+-- Piwigo
 "$$$/Piwigo/API/AddTags=pour ajouter des tags"
 "$$$/Piwigo/API/AlbumsCreatedPiwigoS=Albums créés sur Piwigo : %s, Liens Piwigo mis à jour : %s, Albums impossibles à créer : %s (vérifier le fichier journal pour les détails)"
 "$$$/Piwigo/API/AssociationFailed=Échec de l'association"
@@ -89,7 +90,7 @@
 "$$$/Piwigo/API/PiwigoapiSetalbumcoverTFind=PiwigoAPI.setAlbumCover - Impossible de trouver PublishSettings pour cette collection de publication"
 "$$$/Piwigo/API/PiwigoapiSetalbumcoverTFind2=PiwigoAPI.setAlbumCover - Impossible de trouver l'ID d'album Piwigo pour remoteId de cette collection de publication"
 "$$$/Piwigo/API/PiwigoapiSetalbumcoverTFind3=PiwigoAPI.setAlbumCover - Impossible de trouver cette photo dans l'ensemble de collections ou les collections"
-"$$$/Piwigo/API/PiwigoapiSetalbumcoverTFind4=PiwigoAPI.setAlbumCover - Impossible de trouver l'ID de photo Piwigo pour cette photo"
+"$$$/Piwigo/API/PiwigoapiSetalbumcoverTFind4=PiwigoAPI.setAlbumCover - Can"
 "$$$/Piwigo/API/PiwigoapiSpecialcollectionsPiwigoPublish=PiwigoAPI.specialCollections : Le service de publication Piwigo est nil."
 "$$$/Piwigo/API/PiwigoapiUpdatemetadataCannotLocate=PiwigoAPI.updateMetadata - impossible de localiser l'image"
 "$$$/Piwigo/API/PiwigoapiUpdatemetadataMissingPiwigo=PiwigoAPI.updateMetadata - ID d'image Piwigo manquant - impossible de mettre à jour les métadonnées"
@@ -115,9 +116,9 @@
 "$$$/Piwigo/API/UserNeedsWebmasterRole=L'utilisateur a besoin du rôle webmaster sur la galerie piwigo à"
 
 -- CollToSet
-"$$$/Piwigo/CollToSet/ColltosetTAccessCollection=CollToSet - Impossible d'accéder à l'objet collection pour cette collection de publication - vérifier la sélection"
-"$$$/Piwigo/CollToSet/ColltosetTCreateNew=CollToSet - Impossible de créer un nouvel ensemble de collections"
-"$$$/Piwigo/CollToSet/ColltosetTFindPublish=CollToSet - Impossible de trouver les paramètres de publication pour cette collection de publication"
+"$$$/Piwigo/CollToSet/ColltosetTAccessCollection=CollToSet - Can"
+"$$$/Piwigo/CollToSet/ColltosetTCreateNew=CollToSet - Can"
+"$$$/Piwigo/CollToSet/ColltosetTFindPublish=CollToSet - Can"
 "$$$/Piwigo/CollToSet/ColltosetYouSelectedPublished=CollToSet - Vous avez sélectionné un ensemble de collections publiées - veuillez sélectionner une collection publiée"
 "$$$/Piwigo/CollToSet/Convert=Convertir"
 "$$$/Piwigo/CollToSet/CovertPublishCollectionSet=Convertir la collection de publication en ensemble"
@@ -221,7 +222,7 @@
 "$$$/Piwigo/PublishDialogSections/YouSureYouWant2=Êtes-vous sûr de vouloir vérifier / lier la structure Piwigo ?\nLes collections existantes ne seront pas affectées."
 "$$$/Piwigo/PublishDialogSections/YouSureYouWant3=Êtes-vous sûr de vouloir créer des collections spéciales ?\nLes collections existantes peuvent être mises à jour et les albums Piwigo manquants seront créés."
 
--- PublishTask
+- PublishTask
 "$$$/Piwigo/PublishTask/AlbumDescription=Description de l'album :"
 "$$$/Piwigo/PublishTask/AlbumPrivate=Album privé"
 "$$$/Piwigo/PublishTask/AllExceptCameraCamera=Tout sauf les informations Camera & Camera Raw"
@@ -263,7 +264,6 @@
 "$$$/Piwigo/PublishTask/PiwigoCatId=, ID de catégorie Piwigo"
 "$$$/Piwigo/PublishTask/PiwigoPublisherBusyPlease=Piwigo Publisher est occupé. Veuillez réessayer plus tard."
 "$$$/Piwigo/PublishTask/PiwigoRenameFailed=Le renommage Piwigo a échoué ("
-"$$$/Piwigo/PublishTask/PiwigoapiUpdatemetadataCannotGet=PiwigoAPI:updateMetadata - impossible d'obtenir la liste des tags de Piwigo"
 "$$$/Piwigo/PublishTask/Publishing=Publication"
 "$$$/Piwigo/PublishTask/RenameFailed=Échec du renommage"
 "$$$/Piwigo/PublishTask/ResizeImage=Redimensionner l'image"
@@ -281,21 +281,21 @@
 "$$$/Piwigo/SendMetadata/SendMetadataPiwigo2=Envoyer les métadonnées vers Piwigo pour"
 "$$$/Piwigo/SendMetadata/SendmetadataTFindPhotoQuestion=SendMetadata - Impossible de trouver cette photo dans l'ensemble de collections ou les collections - a-t-elle été publiée ?"
 "$$$/Piwigo/SendMetadata/SendmetadataTFindPiwigoQuestion=SendMetadata - Impossible de trouver l'ID de photo Piwigo pour cette photo - a-t-elle été publiée ?"
-"$$$/Piwigo/SendMetadata/SendmetadataTFindPublish=SendMetadata - Impossible de trouver les paramètres de publication pour cette collection de publication"
+"$$$/Piwigo/SendMetadata/SendmetadataTFindPublish=SendMetadata - Can"
 
 -- SetAlbumCover
 "$$$/Piwigo/SetAlbumCover/PiwigoapiSetalbumcoverTFindQuestion=PiwigoAPI.setAlbumCover - Impossible de trouver cette photo dans l'ensemble de collections ou les collections - a-t-elle été publiée ?"
-"$$$/Piwigo/SetAlbumCover/PiwigoapiSetalbumcoverTFindQuestion2=PiwigoAPI.setAlbumCover - Impossible de trouver l'ID de photo Piwigo pour cette photo - a-t-elle été publiée ?"
+"$$$/Piwigo/SetAlbumCover/PiwigoapiSetalbumcoverTFindQuestion2=PiwigoAPI.setAlbumCover - Can"
 "$$$/Piwigo/SetAlbumCover/PleaseSelectPhoto=Veuillez sélectionner une photo dans un service Piwigo Publisher"
 "$$$/Piwigo/SetAlbumCover/SetalbumcoverCannotConnectPiwigo=SetAlbumCover - impossible de se connecter à piwigo"
 "$$$/Piwigo/SetAlbumCover/SetalbumcoverTFindPiwigo=SetAlbumCover - Impossible de trouver l'ID d'album Piwigo pour remoteId de cette collection de publication"
-"$$$/Piwigo/SetAlbumCover/SetalbumcoverTFindPublish=SetAlbumCover - Impossible de trouver les paramètres de publication pour cette collection de publication"
+"$$$/Piwigo/SetAlbumCover/SetalbumcoverTFindPublish=SetAlbumCover - Can"
 
 -- Tagset
 "$$$/Piwigo/Tagset/MostRecentUpload=Téléchargement le plus récent"
 
 -- Title
-"$$$/FionaBoston/Title=Métadonnées Piwigo Publisher"
+"$$$/FionaBoston/Title=Piwigo Publisher Metadata"
 
 -- UIHelpers
 "$$$/Piwigo/UIHelpers/PiwigoPublisherPlugin=Plugin Piwigo Publisher"
