@@ -240,7 +240,7 @@ end
 -- *************************************************
 local function buildCatHierarchy(allCats)
     -- convert flat list of categories to hierarchical table with children tables
-    log:info("buildCatHierarchy - allCats\n" .. utils.serialiseVar(allCats))
+    -- log:info("buildCatHierarchy - allCats\n" .. utils.serialiseVar(allCats))
     -- 1. Create all nodes (no hierarchy yet)
     local nodes = {}
     local roots = {}
@@ -273,7 +273,7 @@ local function buildCatHierarchy(allCats)
             end
         end
     end
-    log:info("buildCatHierarchy - hierarchy\n" .. utils.serialiseVar(roots))
+    -- log:info("buildCatHierarchy - hierarchy\n" .. utils.serialiseVar(roots))
     return roots
 end
 
@@ -1058,6 +1058,11 @@ function PiwigoAPI.ConnectionChange(propertyTable)
     propertyTable.cookieHeader = nil
     propertyTable.userStatus = ""
     propertyTable.token = ""
+
+    if (propertyTable.savedHost ~= propertyTable.host) or (propertyTable.savedUsername ~= propertyTable.userName) then
+        propertyTable.unsavedConnectionChanges = true
+    end
+
 end
 
 -- *************************************************
@@ -1247,6 +1252,7 @@ function PiwigoAPI.login(propertyTable)
             "Error: Piwigo server URL, username or password is empty.")
         return false
     end
+    -- set default connectionname if blank
     if not (propertyTable.LR_publish_connectionName) or propertyTable.LR_publish_connectionName == "" then
         propertyTable.LR_publish_connectionName = propertyTable.userName .. "@" .. propertyTable.host
     end
@@ -1519,7 +1525,7 @@ function PiwigoAPI.importAlbums(propertyTable)
     -- log:info("PiwigoAPI:importAlbums - allCats\n" .. utils.serialiseVar(allCats)  )
     -- hierarchical table of categories
     local catHierarchy = buildCatHierarchy(allCats)
-    log:info("PiwigoAPI:importAlbums - catHierarchy\n" .. utils.serialiseVar(catHierarchy))
+    -- log:info("PiwigoAPI:importAlbums - catHierarchy\n" .. utils.serialiseVar(catHierarchy))
 
     local statusData = {
         existing = 0,
@@ -2026,11 +2032,12 @@ end
 -- *************************************************
 function PiwigoAPI.associateImageToCategory(propertyTable, imageId, categoryId)
     -- Associates an existing Piwigo image to an additional category without re-uploading
-    log:info("PiwigoAPI.associateImageToCategory - imageId: " .. tostring(imageId) .. ", categoryId: " .. tostring(categoryId))
-    
+    log:info("PiwigoAPI.associateImageToCategory - imageId: " ..
+        tostring(imageId) .. ", categoryId: " .. tostring(categoryId))
+
     local callStatus = { status = false }
     local rv
-    
+
     -- Check connection
     if not propertyTable.Connected then
         rv = PiwigoAPI.login(propertyTable)
@@ -2039,17 +2046,17 @@ function PiwigoAPI.associateImageToCategory(propertyTable, imageId, categoryId)
             return callStatus
         end
     end
-    
+
     local params = {
-        { name = "method", value = "pwg.images.setInfo" },
-        { name = "image_id", value = tostring(imageId) },
-        { name = "categories", value = tostring(categoryId) },
+        { name = "method",              value = "pwg.images.setInfo" },
+        { name = "image_id",            value = tostring(imageId) },
+        { name = "categories",          value = tostring(categoryId) },
         { name = "multiple_value_mode", value = "append" },
-        { name = "pwg_token", value = propertyTable.token }
+        { name = "pwg_token",           value = propertyTable.token }
     }
-    
+
     local postResponse = PiwigoAPI.httpPostMultiPart(propertyTable, params)
-    
+
     if postResponse.status then
         callStatus.status = true
         callStatus.remoteid = imageId
@@ -2057,7 +2064,7 @@ function PiwigoAPI.associateImageToCategory(propertyTable, imageId, categoryId)
     else
         callStatus.statusMsg = postResponse.statusMsg or "Association failed"
     end
-    
+
     return callStatus
 end
 
@@ -2065,11 +2072,12 @@ end
 function PiwigoAPI.dissociateImageFromCategory(propertyTable, imageId, categoryId)
     -- Removes an image from a specific category WITHOUT deleting the image
     -- Uses pwg.images.setInfo to update categories list (excluding the target category)
-    log:info("PiwigoAPI.dissociateImageFromCategory - imageId: " .. tostring(imageId) .. ", categoryId: " .. tostring(categoryId))
-    
+    log:info("PiwigoAPI.dissociateImageFromCategory - imageId: " ..
+        tostring(imageId) .. ", categoryId: " .. tostring(categoryId))
+
     local callStatus = { status = false }
     local rv
-    
+
     -- Check connection
     if not propertyTable.Connected then
         rv = PiwigoAPI.login(propertyTable)
@@ -2078,19 +2086,19 @@ function PiwigoAPI.dissociateImageFromCategory(propertyTable, imageId, categoryI
             return callStatus
         end
     end
-    
+
     -- First, get current categories for this image
     local checkStatus = PiwigoAPI.checkPhoto(propertyTable, imageId)
     if not checkStatus.status then
         callStatus.statusMsg = "Cannot find image " .. tostring(imageId) .. " on Piwigo"
         return callStatus
     end
-    
+
     local imageDets = checkStatus.imageDets
     local currentCategories = imageDets.categories or {}
-    
+
     log:info("PiwigoAPI.dissociateImageFromCategory - image currently in " .. #currentCategories .. " categories")
-    
+
     -- Build new categories list excluding the target category
     local newCategoryIds = {}
     for _, cat in ipairs(currentCategories) do
@@ -2098,30 +2106,30 @@ function PiwigoAPI.dissociateImageFromCategory(propertyTable, imageId, categoryI
             table.insert(newCategoryIds, tostring(cat.id))
         end
     end
-    
+
     log:info("PiwigoAPI.dissociateImageFromCategory - remaining categories: " .. #newCategoryIds)
-    
+
     -- If image would be orphaned (no remaining categories), delete it entirely
     if #newCategoryIds == 0 then
         log:info("PiwigoAPI.dissociateImageFromCategory - image would be orphaned, deleting entirely")
         return PiwigoAPI.deletePhoto(propertyTable, categoryId, imageId, callStatus)
     end
-    
+
     -- Update image with new categories list (replaces all associations)
     local categoriesStr = table.concat(newCategoryIds, ";")
-    
+
     local params = {
-        { name = "method", value = "pwg.images.setInfo" },
-        { name = "image_id", value = tostring(imageId) },
-        { name = "categories", value = categoriesStr },
+        { name = "method",              value = "pwg.images.setInfo" },
+        { name = "image_id",            value = tostring(imageId) },
+        { name = "categories",          value = categoriesStr },
         { name = "multiple_value_mode", value = "replace" },
-        { name = "pwg_token", value = propertyTable.token }
+        { name = "pwg_token",           value = propertyTable.token }
     }
-    
+
     log:info("PiwigoAPI.dissociateImageFromCategory - new categories string: " .. categoriesStr)
-    
+
     local postResponse = PiwigoAPI.httpPostMultiPart(propertyTable, params)
-    
+
     if postResponse.status then
         callStatus.status = true
         log:info("PiwigoAPI.dissociateImageFromCategory - success")
@@ -2129,7 +2137,7 @@ function PiwigoAPI.dissociateImageFromCategory(propertyTable, imageId, categoryI
         callStatus.statusMsg = postResponse.statusMsg or "Dissociation failed"
         log:info("PiwigoAPI.dissociateImageFromCategory - failed: " .. callStatus.statusMsg)
     end
-    
+
     return callStatus
 end
 

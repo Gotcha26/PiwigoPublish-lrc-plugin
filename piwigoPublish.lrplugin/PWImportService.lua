@@ -328,7 +328,15 @@ local function populateCollections(stdColls, smartColls, publishService, propert
         processSmartCollectionQueue(smartColls, publishService, propertyTable, 1, progressScope, stats)
     else
         progressScope:done()
-        LrDialogs.message("Clone completed", "Publish Service Clone Complete.", "info")
+        if pwDetails.isPiwigo and pwDetails.isSameHost then
+            LrDialogs.message("Clone completed", "Publish Service Clone Complete.", "info")
+        else
+            LrDialogs.message("Clone completed",
+                "Clone Complete. Check and Link Piwigo Structure will now be run", "info")
+            --LrTasks.startAsyncTask(function()
+                PiwigoAPI.validatePiwigoStructure(propertyTable)
+            --end)
+        end
     end
 end
 
@@ -644,10 +652,10 @@ local function importServicePrelim(propertyTable, thisService, impService)
                     if numlrPhotos > numPubPhotos then
                         stats.unpublishedSmartCollImages = stats.unpublishedSmartCollImages +
                             (numlrPhotos - numPubPhotos)
+                        canClone = false
                     end
                     searchDesc = thisColl:getSearchDescription()
                     stats.smartCollections = stats.smartCollections + 1
-                    canClone = false
                 else
                     local numlrPhotos = #thisColl:getPhotos()
                     local numPubPhotos = #thisColl:getPublishedPhotos()
@@ -736,11 +744,11 @@ local function importServicePrelim(propertyTable, thisService, impService)
         else
             text2 =
             "The service being cloned is a Piwigo service but connected to a different Piwigo host."
-            text3 = "Collections/Sets will be cloned but links to Piwigo albums and images will not"
+            text3 = "Collections/Sets and images will be cloned but links to Piwigo will not"
         end
     else
         text2 = "The service being cloned is not a Piwigo service."
-        text3 = "Collections/Sets will be cloned but no links to Piwigo albums or images will be made"
+        text3 = "Collections/Sets and images will be cloned but no links to Piwigo albums or images will be made"
     end
     local f = LrView.osFactory()
     local c = f:column {
@@ -871,7 +879,6 @@ local function importServicePrelim(propertyTable, thisService, impService)
             actionVerb = "Clone",
             cancelVerb = "Cancel",
         })
-        log:info("importServicePrelim - dialog is " .. utils.serialiseVar(dialog))
         if dialog == "ok" then
             local rv = importService(propertyTable, thisService, impService, indexById, pwDetails, stats)
         end

@@ -37,7 +37,10 @@ function PublishDialogSections.startDialog(propertyTable)
 		propertyTable.ConCheck = true
 		propertyTable.ConStatus = "Not Connected"
 	end
-
+	-- Store the last saved connection details
+	propertyTable.savedHost = propertyTable.host or ""
+	propertyTable.savedUsername = propertyTable.userName or ""
+	propertyTable.unsavedConnectionChanges = false
 	propertyTable:addObserver('host', PiwigoAPI.ConnectionChange)
 	propertyTable:addObserver('userName', PiwigoAPI.ConnectionChange)
 	propertyTable:addObserver('userPW', PiwigoAPI.ConnectionChange)
@@ -50,7 +53,14 @@ end
 
 -- *************************************************
 function PublishDialogSections.endDialog(propertyTable, why)
+	log:info('PublishDialogSections.endDialog')
 
+	if why == 'ok' then
+		-- User clicked Save - update our saved values
+		propertyTable.savedHost = propertyTable.host
+		propertyTable.savedUsername = propertyTable.userName
+		propertyTable.unsavedConnectionChanges = false
+	end
 end
 
 -- *************************************************
@@ -187,6 +197,12 @@ local function prefsDialog(f, propertyTable)
 					enabled = bind('Connected', propertyTable),
 					tooltip = "Click to fetch the current album structure from the Piwigo Host above. Only albums the user has permission to see will be included",
 					action = function(button)
+						if propertyTable.unsavedConnectionChanges then
+							LrDialogs.message("Unsaved Connection Changes",
+								"You have changed the connection details. Please click 'Save' to save the publish service.",
+								"info")
+							return
+						end
 						local result = LrDialogs.confirm("Import Piwigo Albums",
 							"Are you sure you want to import the album structure from Piwigo?\nExisting collections will be unaffected.",
 							"Import", "Cancel")
@@ -219,6 +235,12 @@ local function prefsDialog(f, propertyTable)
 					--enabled = false, -- temporary disabled
 					tooltip = "Check Piwigo album structure against local collection / set structure",
 					action = function(button)
+						if propertyTable.unsavedConnectionChanges then
+							LrDialogs.message("Unsaved Connection Changes",
+								"You have changed the connection details. Please click 'Save' to save the publish service.",
+								"info")
+							return
+						end
 						local result = LrDialogs.confirm("Check / link Piwigo Structure",
 							"Are you sure you want to check / link Piwigo Structure?\nExisting collections will be unaffected.",
 							"Check", "Cancel")
@@ -249,6 +271,12 @@ local function prefsDialog(f, propertyTable)
 					--enabled = false, -- temporary disabled
 					tooltip = "Clone existing publish service (collections/sets and links to Piwigo)",
 					action = function(button)
+						if propertyTable.unsavedConnectionChanges then
+							LrDialogs.message("Unsaved Connection Changes",
+								"You have changed the connection details. Please click 'Save' to save the publish service.",
+								"info")
+							return
+						end
 						LrTasks.startAsyncTask(function()
 							PWImportService.selectService(propertyTable)
 						end)
@@ -275,6 +303,12 @@ local function prefsDialog(f, propertyTable)
 					--enabled = false, -- temporary disabled
 					tooltip = "Create special publish collections for publish collection sets, allowing images to be published to Piwigo albums with sub-albums",
 					action = function(button)
+						if propertyTable.unsavedConnectionChanges then
+							LrDialogs.message("Unsaved Connection Changes",
+								"You have changed the connection details. Please click 'Save' to save the publish service.",
+								"info")
+							return
+						end
 						local result = LrDialogs.confirm("Create Special Collections",
 							"Are you sure you want to create Special Collections?\nExisting collections may be updated and missing Piwigo albums will be created.",
 							"Create", "Cancel")

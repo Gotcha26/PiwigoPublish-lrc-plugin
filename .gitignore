@@ -4,6 +4,9 @@
 # macOS system files
 .DS_Store
 
+#localResources
+localResources/
+
 # not used
 piwigoPublish.lrplugin/icons/piwigoPublish_1_0-assets/
 piwigoPublish.lrplugin/icons/piwigoPublish_1_5-assets/

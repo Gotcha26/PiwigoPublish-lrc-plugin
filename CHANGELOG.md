@@ -1,4 +1,7 @@
 # Changelog
+## [20260207.31] - 2026-02-06
+### Fixed
+Problem with Clone Existing Publish Service - smart collections
 
 ## [20260206.30] - 2026-02-06
 ### Fixed
