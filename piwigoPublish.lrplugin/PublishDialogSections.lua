@@ -228,7 +228,7 @@ local function prefsDialog(f, propertyTable)
 			f:spacer { height = 1 },
 			f:row {
 				f:push_button {
-					title = "Check and Link Piwigo Structure",
+					title = "Check and Link Piwigo Structure\n ",
 					font = "<system>",
 					width = share 'buttonwidth',
 					enabled = bind('Connected', propertyTable),
@@ -252,19 +252,19 @@ local function prefsDialog(f, propertyTable)
 					end,
 				},
 				f:static_text {
-					title = "Piwigo structure will be checked against local collection / set structure. Missing Piwigo albums will be created and links checked / updated",
+					title = "Piwigo structure will be checked against local collection / set structure.\nMissing Piwigo albums will be created and links checked / updated",
 					font = "<system>",
 					alignment = 'left',
 					-- width = share 'labelWidth',
 					-- width_in_chars = 50,
-					tooltip = "Piwigo structure will be checked against local collection / set structure. Missing Piwigo albums will be created and links checked / updated"
+					tooltip = "Piwigo structure will be checked against local collection / set structure.\nMissing Piwigo albums will be created and links checked / updated"
 				},
 			},
 
 			f:spacer { height = 1 },
 			f:row {
 				f:push_button {
-					title = "Clone Existing Publish Service",
+					title = "Clone Existing Publish Service\n ",
 					font = "<system>",
 					width = share 'buttonwidth',
 					enabled = bind('Connected', propertyTable),
@@ -283,12 +283,12 @@ local function prefsDialog(f, propertyTable)
 					end,
 				},
 				f:static_text {
-					title = "Collection/Set structure and images of selected Publish Service will be cloned to this one.",
+					title = "Collection/Set structure and images of selected Publish Service\nwill be cloned to this one.",
 					font = "<system>",
 					alignment = 'left',
 					-- width = share 'labelWidth',
 					-- width_in_chars = 50,
-					tooltip = "Selected Collection/Set structure and images of selected Publish Service will be cloned to this one."
+					tooltip = "Selected Collection/Set structure and images of selected Publish Service\nwill be cloned to this one."
 				},
 			},
 
@@ -296,7 +296,7 @@ local function prefsDialog(f, propertyTable)
 
 			f:row {
 				f:push_button {
-					title = "Create Special Collections",
+					title = "Create Special Collections\n ",
 					font = "<system>",
 					width = share 'buttonwidth',
 					enabled = bind('Connected', propertyTable),
@@ -320,12 +320,12 @@ local function prefsDialog(f, propertyTable)
 					end,
 				},
 				f:static_text {
-					title = "Create special publish collections to allow images to be published to albums with sub-albums on Piwigo",
+					title = "Create special publish collections to allow images to be published\nto albums with sub-albums on Piwigo",
 					alignment = 'left',
 					font = "<system>",
 					-- width = share 'labelWidth',
 					-- width_in_chars = 50,
-					tooltip = "Create special collections to allow images to be published to Piwigo albums with sub-albums - which is not natively supported on LrC"
+					tooltip = "Create special collections to allow images to be published to Piwigo\nalbums with sub-albums - which is not natively supported on LrC"
 				},
 			},
 			f:spacer { height = 1 },
@@ -374,96 +374,7 @@ local function prefsDialog(f, propertyTable)
 
 		f:spacer { height = 2 },
 
-		f:group_box {
-			title = "Keyword Settings",
-			font = "<system/bold>",
-			fill_horizontal = 1,
-			f:spacer { height = 2 },
-			f:row {
-				fill_horizontal = 1,
-				f:static_text {
-					title = "",
-					alignment = 'right',
-					width_in_chars = 7,
-				},
-				f:checkbox {
-					font = "<system>",
-					title = "Include Full Keyword Hierarchy",
-					tooltip = "If checked, all keywords in a keyword hierarchy will be sent to Piwigo",
-					value = bind 'KwFullHierarchy',
-				}
-			},
-
-			f:spacer { height = 2 },
-
-			f:row {
-				fill_horizontal = 1,
-				f:static_text {
-					title = "",
-					alignment = 'right',
-					width_in_chars = 7,
-				},
-				f:checkbox {
-					font = "<system>",
-					title = "Include Keyword Synonyms",
-					tooltip = "If checked, keyword synonyms will be sent to Piwigo",
-					value = bind 'KwSynonyms',
-				}
-			},
-
-			f:spacer { height = 2 },
-			f:separator { fill_horizontal = 1 },
-			f:spacer { height = 2 },
-
-			f:static_text {
-				title = "Use these rules to filter photos based on their keywords when publishing.",
-				font = "<system>",
-			},
-			f:static_text {
-				title = "One rule per line. Wildcards: * matches any number of characters, ? matches exactly one character.",
-				font = "<system>",
-			},
-			f:static_text {
-				title = "Examples: nature* (nature, natureza, etc.), *photo* (photograph, photoshop, etc.), ?at (bat, cat, hat, etc.)",
-				font = "<system>",
-			},
-			f:spacer { height = 2 },
-
-			f:row {
-				fill_horizontal = 1,
-				spacing = f:control_spacing(),
-
-				f:column {
-					f:static_text {
-						title = "Exclusion Rules",
-						font = "<system/bold>",
-					},
-					f:edit_field {
-						value = bind 'KwFilterExclude',
-						font = "<system>",
-						alignment = 'left',
-						width_in_chars = 30,
-						height_in_lines = 8,
-						tooltip = "Photos with any keyword matching these rules will not be published. One rule per line.",
-					},
-				},
-
-				f:column {
-					f:static_text {
-						title = "Inclusion Rules",
-						font = "<system/bold>",
-					},
-					f:edit_field {
-						value = bind 'KwFilterInclude',
-						font = "<system>",
-						alignment = 'left',
-						width_in_chars = 30,
-						height_in_lines = 8,
-						tooltip = "Photos must have at least one keyword matching these rules to be published. Leave empty to allow all. One rule per line.",
-					},
-				},
-			},
-		},
+		UIHelpers.createKeywordSettingsGroupBox(f, bind),
 		f:spacer { height = 2 },
 		f:group_box {
 			title = "Other Settings",

@@ -860,43 +860,7 @@ function PublishTask.viewForCollectionSettings(f, publishSettings, info)
         { title = "All Except Camera & Camera Raw Info", value = "All Except Camera & Camera Raw Info" },
     }
 
-    local pwAlbumUI = f:group_box {
-        title = "Piwigo Album Settings",
-        font = "<system/bold>",
-        size = 'regular',
-        fill_horizontal = 1,
-        bind_to_object = assert(collectionSettings),
-        f:column {
-            spacing = f:control_spacing(),
-
-            f:separator { fill_horizontal = 1 },
-
-            f:row {
-                f:static_text { title = "Album Description:", font = "<system>", alignment = 'right', width = share 'label_width', },
-                f:edit_field {
-                    enabled = LrView.bind {
-                        key = 'syncAlbumDescriptions',
-                        object = publishSettings,
-                    },
-
-                    value = bind 'albumDescription',
-                    width_in_chars = 40,
-                    font = "<system>",
-                    alignment = 'left',
-                    height_in_lines = 4,
-                },
-            },
-
-            f:row {
-                f:checkbox {
-                    title = "Album is Private",
-                    tooltip = "If checked, this album will be private on Piwigo",
-                    value = bind 'albumPrivate',
-                }
-            }
-
-        }
-    }
+    local pwAlbumUI = UIHelpers.createPiwigoAlbumSettingsUI(f, share, bind, collectionSettings, publishSettings)
 
     local pubSettingsUI = f:group_box {
         title = "Custom Publish Settings (Overrides defaults set in Publish Settings)",
@@ -974,59 +938,7 @@ function PublishTask.viewForCollectionSettings(f, publishSettings, info)
         },
     }
 
-    local kwFilterUI = f:group_box {
-        title = "Keyword Filtering (Overrides defaults set in Publish Settings)",
-        font = "<system/bold>",
-        size = 'regular',
-        fill_horizontal = 1,
-        bind_to_object = assert(collectionSettings),
-        f:column {
-            spacing = f:control_spacing(),
-            fill_horizontal = 1,
-            f:separator { fill_horizontal = 1 },
-            f:static_text {
-                title = "One rule per line. Use * to match any characters, ? to match a single character.",
-                font = "<system>",
-            },
-            f:static_text {
-                title = "Leave empty to use global settings from Publish Settings.",
-                font = "<system>",
-            },
-            f:spacer { height = 2 },
-            f:row {
-                fill_horizontal = 1,
-                spacing = f:control_spacing(),
-                f:column {
-                    f:static_text {
-                        title = "Exclusion Rules",
-                        font = "<system/bold>",
-                    },
-                    f:edit_field {
-                        value = bind 'KwFilterExclude',
-                        font = "<system>",
-                        alignment = 'left',
-                        width_in_chars = 25,
-                        height_in_lines = 6,
-                        tooltip = "Photos with any keyword matching these rules will not be published. One rule per line.",
-                    },
-                },
-                f:column {
-                    f:static_text {
-                        title = "Inclusion Rules",
-                        font = "<system/bold>",
-                    },
-                    f:edit_field {
-                        value = bind 'KwFilterInclude',
-                        font = "<system>",
-                        alignment = 'left',
-                        width_in_chars = 25,
-                        height_in_lines = 6,
-                        tooltip = "Photos must have at least one keyword matching these rules to be published. Leave empty to allow all. One rule per line.",
-                    },
-                },
-            },
-        },
-    }
+    local kwFilterUI = UIHelpers.createKeywordFilteringUI(f, bind, collectionSettings)
 
     local UI = f:column {
         spacing = f:control_spacing(),
@@ -1213,95 +1125,9 @@ function PublishTask.viewForCollectionSetSettings(f, publishSettings, info)
         { title = "All Except Camera & Camera Raw Info", value = "All Except Camera & Camera Raw Info" },
     }
 
-    local pwAlbumUI = f:group_box {
-        title = "Piwigo Album Settings",
-        font = "<system/bold>",
-        size = 'regular',
-        fill_horizontal = 1,
-        bind_to_object = assert(collectionSettings),
-        f:column {
-            spacing = f:control_spacing(),
+    local pwAlbumUI = UIHelpers.createPiwigoAlbumSettingsUI(f, share, bind, collectionSettings, publishSettings)
 
-            f:separator { fill_horizontal = 1 },
-
-            f:row {
-                f:static_text { title = "Album Description:", font = "<system>", alignment = 'right', width = share 'label_width', },
-                f:edit_field {
-                    enabled = LrView.bind {
-                        key = 'syncAlbumDescriptions',
-                        object = publishSettings,
-                    },
-                    value = bind 'albumDescription',
-                    width_in_chars = 40,
-                    font = "<system>",
-                    alignment = 'left',
-                    height_in_lines = 4,
-                },
-            },
-
-            f:row {
-                f:checkbox {
-                    title = "Album is Private",
-                    tooltip = "If checked, this album will be private on Piwigo",
-                    value = bind 'albumPrivate',
-                }
-            }
-        }
-    }
-
-    local kwFilterUI = f:group_box {
-        title = "Keyword Filtering (Overrides defaults set in Publish Settings)",
-        font = "<system/bold>",
-        size = 'regular',
-        fill_horizontal = 1,
-        bind_to_object = assert(collectionSettings),
-        f:column {
-            spacing = f:control_spacing(),
-            fill_horizontal = 1,
-            f:separator { fill_horizontal = 1 },
-            f:static_text {
-                title = "One rule per line. Use * to match any characters, ? to match a single character.",
-                font = "<system>",
-            },
-            f:static_text {
-                title = "Leave empty to use global settings from Publish Settings.",
-                font = "<system>",
-            },
-            f:spacer { height = 2 },
-            f:row {
-                fill_horizontal = 1,
-                spacing = f:control_spacing(),
-                f:column {
-                    f:static_text {
-                        title = "Exclusion Rules",
-                        font = "<system/bold>",
-                    },
-                    f:edit_field {
-                        value = bind 'KwFilterExclude',
-                        font = "<system>",
-                        alignment = 'left',
-                        width_in_chars = 25,
-                        height_in_lines = 6,
-                        tooltip = "Photos with any keyword matching these rules will not be published. One rule per line.",
-                    },
-                },
-                f:column {
-                    f:static_text {
-                        title = "Inclusion Rules",
-                        font = "<system/bold>",
-                    },
-                    f:edit_field {
-                        value = bind 'KwFilterInclude',
-                        font = "<system>",
-                        alignment = 'left',
-                        width_in_chars = 25,
-                        height_in_lines = 6,
-                        tooltip = "Photos must have at least one keyword matching these rules to be published. Leave empty to allow all. One rule per line.",
-                    },
-                },
-            },
-        },
-    }
+    local kwFilterUI = UIHelpers.createKeywordFilteringUI(f, bind, collectionSettings)
 
     local UI = f:column {
         spacing = f:control_spacing(),
