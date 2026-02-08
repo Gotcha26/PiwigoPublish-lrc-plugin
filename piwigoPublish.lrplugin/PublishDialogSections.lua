@@ -191,7 +191,7 @@ local function prefsDialog(f, propertyTable)
 			f:spacer { height = 2 },
 			f:row {
 				f:push_button {
-					title = 'Import Albums',
+					title = "Import Albums",
 					font = "<system>",
 					width = share 'buttonwidth',
 					enabled = bind('Connected', propertyTable),
@@ -228,7 +228,7 @@ local function prefsDialog(f, propertyTable)
 			f:spacer { height = 1 },
 			f:row {
 				f:push_button {
-					title = 'Check and Link Piwigo Structure',
+					title = "Check and Link Piwigo Structure",
 					font = "<system>",
 					width = share 'buttonwidth',
 					enabled = bind('Connected', propertyTable),
@@ -264,7 +264,7 @@ local function prefsDialog(f, propertyTable)
 			f:spacer { height = 1 },
 			f:row {
 				f:push_button {
-					title = 'Clone Existing Publish Service',
+					title = "Clone Existing Publish Service",
 					font = "<system>",
 					width = share 'buttonwidth',
 					enabled = bind('Connected', propertyTable),
@@ -296,7 +296,7 @@ local function prefsDialog(f, propertyTable)
 
 			f:row {
 				f:push_button {
-					title = 'Create Special Collections',
+					title = "Create Special Collections",
 					font = "<system>",
 					width = share 'buttonwidth',
 					enabled = bind('Connected', propertyTable),

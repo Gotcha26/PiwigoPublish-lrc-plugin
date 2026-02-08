@@ -96,7 +96,7 @@ local function main()
             f:spacer { height = 1 },
             f:row {
                 f:push_button {
-                    title = 'Set Piwigo Album Cover',
+                    title = "Set Piwigo Album Cover",
                     tooltip = "Sets selected image as Piwigo album cover ",
                     action = function(button)
                         LrTasks.startAsyncTask(function()
