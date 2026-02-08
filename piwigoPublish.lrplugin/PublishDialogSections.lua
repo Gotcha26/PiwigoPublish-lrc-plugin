@@ -410,6 +410,59 @@ local function prefsDialog(f, propertyTable)
 					value = bind 'KwSynonyms',
 				}
 			},
+
+			f:spacer { height = 2 },
+			f:separator { fill_horizontal = 1 },
+			f:spacer { height = 2 },
+
+			f:static_text {
+				title = "Use these rules to filter photos based on their keywords when publishing.",
+				font = "<system>",
+			},
+			f:static_text {
+				title = "One rule per line. Wildcards: * matches any number of characters, ? matches exactly one character.",
+				font = "<system>",
+			},
+			f:static_text {
+				title = "Examples: nature* (nature, natureza, etc.), *photo* (photograph, photoshop, etc.), ?at (bat, cat, hat, etc.)",
+				font = "<system>",
+			},
+			f:spacer { height = 2 },
+
+			f:row {
+				fill_horizontal = 1,
+				spacing = f:control_spacing(),
+
+				f:column {
+					f:static_text {
+						title = "Exclusion Rules",
+						font = "<system/bold>",
+					},
+					f:edit_field {
+						value = bind 'KwFilterExclude',
+						font = "<system>",
+						alignment = 'left',
+						width_in_chars = 30,
+						height_in_lines = 8,
+						tooltip = "Photos with any keyword matching these rules will not be published. One rule per line.",
+					},
+				},
+
+				f:column {
+					f:static_text {
+						title = "Inclusion Rules",
+						font = "<system/bold>",
+					},
+					f:edit_field {
+						value = bind 'KwFilterInclude',
+						font = "<system>",
+						alignment = 'left',
+						width_in_chars = 30,
+						height_in_lines = 8,
+						tooltip = "Photos must have at least one keyword matching these rules to be published. Leave empty to allow all. One rule per line.",
+					},
+				},
+			},
 		},
 		f:spacer { height = 2 },
 		f:group_box {

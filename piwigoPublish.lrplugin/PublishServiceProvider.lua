@@ -57,6 +57,8 @@ return {
 		{ key = "syncAlbumDescriptions", default = false },
 		{ key = "syncCommentsPublish",   default = true },
 		{ key = "syncCommentsPubOnly",   default = false },
+		{ key = "KwFilterInclude",       default = '' },
+		{ key = "KwFilterExclude",       default = '' },
 	},
 
 	metadataThatTriggersRepublish = function(publishSettings, photoId, fieldName)

@@ -133,6 +133,25 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
         end
     end
 
+    -- Keyword filter setup
+    local kwFilterInclude = propertyTable.KwFilterInclude or ""
+    local kwFilterExclude = propertyTable.KwFilterExclude or ""
+    -- collection-level override if non-empty
+    if not utils.nilOrEmpty(collectionSettings.KwFilterInclude) then
+        kwFilterInclude = collectionSettings.KwFilterInclude
+    end
+    if not utils.nilOrEmpty(collectionSettings.KwFilterExclude) then
+        kwFilterExclude = collectionSettings.KwFilterExclude
+    end
+    local includePatterns = utils.parseFilterPatterns(kwFilterInclude)
+    local excludePatterns = utils.parseFilterPatterns(kwFilterExclude)
+    local kwFilterActive = #includePatterns > 0 or #excludePatterns > 0
+    local blockedPhotos = {}
+
+    log:info("KeywordFilter - active: " .. tostring(kwFilterActive)
+        .. " include: '" .. kwFilterInclude .. "'"
+        .. " exclude: '" .. kwFilterExclude .. "'")
+
     local resetConnectioncount = 0
     local renditionParams = {
         stopIfCanceled = true,
@@ -162,139 +181,161 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
         local lrPhoto = rendition.photo
         local remoteId = rendition.publishedPhotoId or ""
 
-        -- Detect photo already published in this service (multi-album support)
-        local existingPwImageId = nil
-        if remoteId == "" then
-            -- Method 1: Via custom metadata (photos published with plugin >= 20251224.16)
-            local storedImageUrl = lrPhoto:getPropertyForPlugin(_PLUGIN, "pwImageURL")
-            local storedHost = lrPhoto:getPropertyForPlugin(_PLUGIN, "pwHostURL")
-
-            log:info("DEBUG multi-album: remoteId vide, checking metadata...")
-            log:info("DEBUG storedHost: " .. tostring(storedHost))
-            log:info("DEBUG storedImageUrl: " .. tostring(storedImageUrl))
-            log:info("DEBUG propertyTable.host: " .. tostring(propertyTable.host))
-
-            if storedHost == propertyTable.host and storedImageUrl then
-                existingPwImageId = utils.extractPwImageIdFromUrl(storedImageUrl, propertyTable.host)
+        -- Keyword filter check
+        local kwBlocked = false
+        if kwFilterActive then
+            local keywords = utils.getPhotoDirectKeywords(lrPhoto)
+            local allowed, reason = utils.checkKeywordFilter(keywords, includePatterns, excludePatterns)
+            if not allowed then
+                local fileName = lrPhoto:getFormattedMetadata("fileName") or "unknown"
+                log:info("KeywordFilter - BLOCKED: " .. fileName .. " - " .. reason)
+                table.insert(blockedPhotos, { name = fileName, reason = reason })
+                -- wait for render to complete then discard
+                local bSuccess, bPath = rendition:waitForRender()
+                if bSuccess and LrFileUtils.exists(bPath) then
+                    LrFileUtils.delete(bPath)
+                end
+                rendition:uploadFailed("Blocked by keyword filter: " .. reason)
+                kwBlocked = true
             end
+        end
 
-            -- Method 2: Search in other collections of the service (fallback)
-            if not existingPwImageId then
-                log:info("DEBUG multi-album: metadata vides, recherche cross-collection...")
-                local publishService = publishedCollection:getService()
-                existingPwImageId = utils.findExistingPwImageId(publishService, lrPhoto)
+        if not kwBlocked then
+            -- Detect photo already published in this service (multi-album support)
+            local existingPwImageId = nil
+            if remoteId == "" then
+                -- Method 1: Via custom metadata (photos published with plugin >= 20251224.16)
+                local storedImageUrl = lrPhoto:getPropertyForPlugin(_PLUGIN, "pwImageURL")
+                local storedHost = lrPhoto:getPropertyForPlugin(_PLUGIN, "pwHostURL")
+
+                log:info("DEBUG multi-album: remoteId vide, checking metadata...")
+                log:info("DEBUG storedHost: " .. tostring(storedHost))
+                log:info("DEBUG storedImageUrl: " .. tostring(storedImageUrl))
+                log:info("DEBUG propertyTable.host: " .. tostring(propertyTable.host))
+
+                if storedHost == propertyTable.host and storedImageUrl then
+                    existingPwImageId = utils.extractPwImageIdFromUrl(storedImageUrl, propertyTable.host)
+                end
+
+                -- Method 2: Search in other collections of the service (fallback)
+                if not existingPwImageId then
+                    log:info("DEBUG multi-album: metadata vides, recherche cross-collection...")
+                    local publishService = publishedCollection:getService()
+                    existingPwImageId = utils.findExistingPwImageId(publishService, lrPhoto)
+                    if existingPwImageId then
+                        log:info("DEBUG multi-album: trouvé via cross-collection, ID = " .. tostring(existingPwImageId))
+                    end
+                end
+
+                -- Verify the image still exists on Piwigo
                 if existingPwImageId then
-                    log:info("DEBUG multi-album: trouvé via cross-collection, ID = " .. tostring(existingPwImageId))
+                    local checkStatus = PiwigoAPI.checkPhoto(propertyTable, existingPwImageId)
+                    if not checkStatus.status then
+                        log:info("DEBUG multi-album: image " .. existingPwImageId .. " n'existe plus sur Piwigo")
+                        existingPwImageId = nil
+                    end
                 end
             end
 
-            -- Verify the image still exists on Piwigo
-            if existingPwImageId then
-                local checkStatus = PiwigoAPI.checkPhoto(propertyTable, existingPwImageId)
-                if not checkStatus.status then
-                    log:info("DEBUG multi-album: image " .. existingPwImageId .. " n'existe plus sur Piwigo")
-                    existingPwImageId = nil
-                end
-            end
-        end
-
-        -- Wait for next photo to render.
-        local success, pathOrMessage = rendition:waitForRender()
-        -- Check for cancellation again after photo has been rendered.
-        if progressScope:isCanceled() then
-            if LrFileUtils.exists(pathOrMessage) then
-                LrFileUtils.delete(pathOrMessage)
-            end
-            break
-        end
-
-        if success then
-            -- upload to Piwigo
-            callStatus = {}
-            local filePath = pathOrMessage
-
-            -- If photo already exists on Piwigo, associate instead of uploading
-            if existingPwImageId then
-                log:info("Photo exists on Piwigo (ID " .. existingPwImageId .. "), associating to album " .. albumId)
-                callStatus = PiwigoAPI.associateImageToCategory(propertyTable, existingPwImageId, albumId)
-
-                if callStatus.status then
-                    rendition:recordPublishedPhotoId(callStatus.remoteid)
-                    rendition:recordPublishedPhotoUrl(callStatus.remoteurl)
-                    rendition:renditionIsDone(true)
+            -- Wait for next photo to render.
+            local success, pathOrMessage = rendition:waitForRender()
+            -- Check for cancellation again after photo has been rendered.
+            if progressScope:isCanceled() then
+                if LrFileUtils.exists(pathOrMessage) then
                     LrFileUtils.delete(pathOrMessage)
-                else
-                    log:warn("Association failed: " .. (callStatus.statusMsg or "") .. ", falling back to upload")
-                    existingPwImageId = nil
                 end
+                break
             end
 
-            if not existingPwImageId then
-                -- Begin existing upload block (indent all upload code until end of if success)
-                local metaData = {}
-                -- build metadata structure
-                metaData = utils.getPhotoMetadata(propertyTable, lrPhoto)
-                metaData.Albumid = albumId
-                metaData.Remoteid = remoteId
-                -- run to build missingTags - tags that will be created on upload to Piwigo
-                -- will use this to decide whether to run build tagtable cache
-                -- means we don't have to rebuild after each uploaded photo
-                local tagIdList, missingTags = utils.tagsToIds(propertyTable, metaData.tagString)
+            if success then
+                -- upload to Piwigo
+                callStatus = {}
+                local filePath = pathOrMessage
 
-                -- do the upload
-                callStatus = PiwigoAPI.updateGallery(propertyTable, filePath, metaData)
-                -- check status and complete rendition
-                if callStatus.status then
-                    rendition:recordPublishedPhotoId(callStatus.remoteid or "")
-                    rendition:recordPublishedPhotoUrl(callStatus.remoteurl or "")
-                    rendition:renditionIsDone(true)
-                    -- set metadata for photo
-                    local pluginData = {
-                        pwHostURL = propertyTable.host,
-                        albumName = albumName,
-                        albumUrl = albumUrl,
-                        imageUrl = callStatus.remoteurl,
-                        pwUploadDate = os.date("%Y-%m-%d"),
-                        pwUploadTime = os.date("%H:%M:%S"),
-                        pwCommentSync = ""
-                    }
-                    if propertyTable.syncCommentsPublish then
-                        -- set to allow comments to sync for this photo if flag set
-                        pluginData.pwCommentSync = "YES"
+                -- If photo already exists on Piwigo, associate instead of uploading
+                if existingPwImageId then
+                    log:info("Photo exists on Piwigo (ID " .. existingPwImageId .. "), associating to album " .. albumId)
+                    callStatus = PiwigoAPI.associateImageToCategory(propertyTable, existingPwImageId, albumId)
+
+                    if callStatus.status then
+                        rendition:recordPublishedPhotoId(callStatus.remoteid)
+                        rendition:recordPublishedPhotoUrl(callStatus.remoteurl)
+                        rendition:renditionIsDone(true)
+                        LrFileUtils.delete(pathOrMessage)
+                    else
+                        log:warn("Association failed: " .. (callStatus.statusMsg or "") .. ", falling back to upload")
+                        existingPwImageId = nil
                     end
-
-                    -- store / update custom metadata
-
-
-                    PiwigoAPI.storeMetaData(catalog, lrPhoto, pluginData)
-
-                    -- photo was uploaded with keywords included, but existing keywords aren't replaced by this process,
-                    -- so force a metadata update using pwg.images.setInfo with single_value_mode set to "replace" to force old metadata/keywords to be replaced
-                    metaData.Remoteid = callStatus.remoteid
-                    if missingTags then
-                        -- refresh cached tag list as new tags have been created during updateGallery
-                        rv, propertyTable.tagTable = PiwigoAPI.getTagList(propertyTable)
-                        if not rv then
-                            LrDialogs.message("PiwigoAPI:updateMetadata - cannot get taglist from Piwigo")
-                        else
-                            utils.buildTagIndex(propertyTable)
-                        end
-                    end
-                    callStatus = PiwigoAPI.updateMetadata(propertyTable, lrPhoto, metaData)
-                    if not callStatus.status then
-                        LrDialogs.message("Unable to set metadata for uploaded photo - " .. callStatus.statusMsg)
-                    end
-                else
-                    rendition:uploadFailed(callStatus.message or "Upload failed")
                 end
 
-                -- When done with photo, delete temp file.
-                LrFileUtils.delete(pathOrMessage)
-            end -- end if not existingPwImageId
-        else
-            rendition:uploadFailed(pathOrMessage or "Render failed")
-        end
+                if not existingPwImageId then
+                    -- Begin existing upload block (indent all upload code until end of if success)
+                    local metaData = {}
+                    -- build metadata structure
+                    metaData = utils.getPhotoMetadata(propertyTable, lrPhoto)
+                    metaData.Albumid = albumId
+                    metaData.Remoteid = remoteId
+                    -- run to build missingTags - tags that will be created on upload to Piwigo
+                    -- will use this to decide whether to run build tagtable cache
+                    -- means we don't have to rebuild after each uploaded photo
+                    local tagIdList, missingTags = utils.tagsToIds(propertyTable, metaData.tagString)
+
+                    -- do the upload
+                    callStatus = PiwigoAPI.updateGallery(propertyTable, filePath, metaData)
+                    -- check status and complete rendition
+                    if callStatus.status then
+                        rendition:recordPublishedPhotoId(callStatus.remoteid or "")
+                        rendition:recordPublishedPhotoUrl(callStatus.remoteurl or "")
+                        rendition:renditionIsDone(true)
+                        -- set metadata for photo
+                        local pluginData = {
+                            pwHostURL = propertyTable.host,
+                            albumName = albumName,
+                            albumUrl = albumUrl,
+                            imageUrl = callStatus.remoteurl,
+                            pwUploadDate = os.date("%Y-%m-%d"),
+                            pwUploadTime = os.date("%H:%M:%S"),
+                            pwCommentSync = ""
+                        }
+                        if propertyTable.syncCommentsPublish then
+                            -- set to allow comments to sync for this photo if flag set
+                            pluginData.pwCommentSync = "YES"
+                        end
+
+                        -- store / update custom metadata
+
+
+                        PiwigoAPI.storeMetaData(catalog, lrPhoto, pluginData)
+
+                        -- photo was uploaded with keywords included, but existing keywords aren't replaced by this process,
+                        -- so force a metadata update using pwg.images.setInfo with single_value_mode set to "replace" to force old metadata/keywords to be replaced
+                        metaData.Remoteid = callStatus.remoteid
+                        if missingTags then
+                            -- refresh cached tag list as new tags have been created during updateGallery
+                            rv, propertyTable.tagTable = PiwigoAPI.getTagList(propertyTable)
+                            if not rv then
+                                LrDialogs.message("PiwigoAPI:updateMetadata - cannot get taglist from Piwigo")
+                            else
+                                utils.buildTagIndex(propertyTable)
+                            end
+                        end
+                        callStatus = PiwigoAPI.updateMetadata(propertyTable, lrPhoto, metaData)
+                        if not callStatus.status then
+                            LrDialogs.message("Unable to set metadata for uploaded photo - " .. callStatus.statusMsg)
+                        end
+                    else
+                        rendition:uploadFailed(callStatus.message or "Upload failed")
+                    end
+
+                    -- When done with photo, delete temp file.
+                    LrFileUtils.delete(pathOrMessage)
+                end -- end if not existingPwImageId
+            else
+                rendition:uploadFailed(pathOrMessage or "Render failed")
+            end
+        end -- end if not kwBlocked
     end
+
     progressScope:done()
     PWStatusManager.setPiwigoBusy(publishService, false)
 end
@@ -797,6 +838,12 @@ function PublishTask.viewForCollectionSettings(f, publishSettings, info)
     if collectionSettings.KwSynonyms == nil then
         collectionSettings.KwSynonyms = true
     end
+    if collectionSettings.KwFilterInclude == nil then
+        collectionSettings.KwFilterInclude = ""
+    end
+    if collectionSettings.KwFilterExclude == nil then
+        collectionSettings.KwFilterExclude = ""
+    end
     -- build UI
     local reSizeOptions = {
         { title = "Long Edge",  value = "Long Edge" },
@@ -927,9 +974,64 @@ function PublishTask.viewForCollectionSettings(f, publishSettings, info)
         },
     }
 
+    local kwFilterUI = f:group_box {
+        title = "Keyword Filtering (Overrides defaults set in Publish Settings)",
+        font = "<system/bold>",
+        size = 'regular',
+        fill_horizontal = 1,
+        bind_to_object = assert(collectionSettings),
+        f:column {
+            spacing = f:control_spacing(),
+            fill_horizontal = 1,
+            f:separator { fill_horizontal = 1 },
+            f:static_text {
+                title = "One rule per line. Use * to match any characters, ? to match a single character.",
+                font = "<system>",
+            },
+            f:static_text {
+                title = "Leave empty to use global settings from Publish Settings.",
+                font = "<system>",
+            },
+            f:spacer { height = 2 },
+            f:row {
+                fill_horizontal = 1,
+                spacing = f:control_spacing(),
+                f:column {
+                    f:static_text {
+                        title = "Exclusion Rules",
+                        font = "<system/bold>",
+                    },
+                    f:edit_field {
+                        value = bind 'KwFilterExclude',
+                        font = "<system>",
+                        alignment = 'left',
+                        width_in_chars = 25,
+                        height_in_lines = 6,
+                        tooltip = "Photos with any keyword matching these rules will not be published. One rule per line.",
+                    },
+                },
+                f:column {
+                    f:static_text {
+                        title = "Inclusion Rules",
+                        font = "<system/bold>",
+                    },
+                    f:edit_field {
+                        value = bind 'KwFilterInclude',
+                        font = "<system>",
+                        alignment = 'left',
+                        width_in_chars = 25,
+                        height_in_lines = 6,
+                        tooltip = "Photos must have at least one keyword matching these rules to be published. Leave empty to allow all. One rule per line.",
+                    },
+                },
+            },
+        },
+    }
+
     local UI = f:column {
         spacing = f:control_spacing(),
         pwAlbumUI,
+        kwFilterUI,
         --pubSettingsUI,
     }
     return UI
@@ -1089,6 +1191,12 @@ function PublishTask.viewForCollectionSetSettings(f, publishSettings, info)
     if collectionSettings.KwSynonyms == nil then
         collectionSettings.KwSynonyms = true
     end
+    if collectionSettings.KwFilterInclude == nil then
+        collectionSettings.KwFilterInclude = ""
+    end
+    if collectionSettings.KwFilterExclude == nil then
+        collectionSettings.KwFilterExclude = ""
+    end
     -- build UI
     local reSizeOptions = {
         { title = "Long Edge",  value = "Long Edge" },
@@ -1141,9 +1249,64 @@ function PublishTask.viewForCollectionSetSettings(f, publishSettings, info)
         }
     }
 
+    local kwFilterUI = f:group_box {
+        title = "Keyword Filtering (Overrides defaults set in Publish Settings)",
+        font = "<system/bold>",
+        size = 'regular',
+        fill_horizontal = 1,
+        bind_to_object = assert(collectionSettings),
+        f:column {
+            spacing = f:control_spacing(),
+            fill_horizontal = 1,
+            f:separator { fill_horizontal = 1 },
+            f:static_text {
+                title = "One rule per line. Use * to match any characters, ? to match a single character.",
+                font = "<system>",
+            },
+            f:static_text {
+                title = "Leave empty to use global settings from Publish Settings.",
+                font = "<system>",
+            },
+            f:spacer { height = 2 },
+            f:row {
+                fill_horizontal = 1,
+                spacing = f:control_spacing(),
+                f:column {
+                    f:static_text {
+                        title = "Exclusion Rules",
+                        font = "<system/bold>",
+                    },
+                    f:edit_field {
+                        value = bind 'KwFilterExclude',
+                        font = "<system>",
+                        alignment = 'left',
+                        width_in_chars = 25,
+                        height_in_lines = 6,
+                        tooltip = "Photos with any keyword matching these rules will not be published. One rule per line.",
+                    },
+                },
+                f:column {
+                    f:static_text {
+                        title = "Inclusion Rules",
+                        font = "<system/bold>",
+                    },
+                    f:edit_field {
+                        value = bind 'KwFilterInclude',
+                        font = "<system>",
+                        alignment = 'left',
+                        width_in_chars = 25,
+                        height_in_lines = 6,
+                        tooltip = "Photos must have at least one keyword matching these rules to be published. Leave empty to allow all. One rule per line.",
+                    },
+                },
+            },
+        },
+    }
+
     local UI = f:column {
         spacing = f:control_spacing(),
         pwAlbumUI,
+        kwFilterUI,
         --pubSettingsUI,
     }
     return UI

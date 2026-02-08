@@ -495,6 +495,91 @@ function utils.BuildTagString(propertyTable, lrPhoto)
 end
 
 -- *************************************************
+function utils.wildcardMatch(pattern, text)
+    -- match text against a wildcard pattern (* = any chars, ? = single char)
+    -- case-insensitive
+    local p = pattern:lower()
+    local t = text:lower()
+    -- escape Lua magic characters except * and ?
+    p = p:gsub("([%.%+%-%^%$%(%)%%])", "%%%1")
+    p = p:gsub("%[", "%%[")
+    p = p:gsub("%]", "%%]")
+    -- convert wildcards to Lua patterns
+    p = p:gsub("%*", ".*")
+    p = p:gsub("%?", ".")
+    -- anchor the pattern
+    p = "^" .. p .. "$"
+    return t:match(p) ~= nil
+end
+
+-- *************************************************
+function utils.parseFilterPatterns(filterString)
+    -- parse filter patterns string into a table (one rule per line, also accepts commas)
+    local patterns = {}
+    if not filterString or filterString == "" then
+        return patterns
+    end
+    for token in filterString:gmatch("[^\r\n,]+") do
+        local trimmed = utils.clean_spaces(token)
+        if trimmed ~= "" then
+            table.insert(patterns, trimmed)
+        end
+    end
+    return patterns
+end
+
+-- *************************************************
+function utils.getPhotoDirectKeywords(lrPhoto)
+    -- return table of direct keyword names on lrPhoto (no hierarchy, no synonyms)
+    -- respects includeOnExport flag
+    local keywords = {}
+    for _, kw in ipairs(lrPhoto:getRawMetadata("keywords")) do
+        local attrs = kw:getAttributes()
+        if attrs.includeOnExport then
+            table.insert(keywords, kw:getName())
+        end
+    end
+    return keywords
+end
+
+-- *************************************************
+function utils.checkKeywordFilter(keywords, includePatterns, excludePatterns)
+    -- check if a list of keywords satisfies include/exclude filter rules
+    -- returns: isAllowed (bool), failReason (string or nil)
+
+    -- check exclude rules first
+    if excludePatterns and #excludePatterns > 0 then
+        for _, kw in ipairs(keywords) do
+            for _, pat in ipairs(excludePatterns) do
+                if utils.wildcardMatch(pat, kw) then
+                    return false, "keyword '" .. kw .. "' matches exclude rule '" .. pat .. "'"
+                end
+            end
+        end
+    end
+
+    -- check include rules
+    if includePatterns and #includePatterns > 0 then
+        local found = false
+        for _, kw in ipairs(keywords) do
+            for _, pat in ipairs(includePatterns) do
+                if utils.wildcardMatch(pat, kw) then
+                    found = true
+                    break
+                end
+            end
+            if found then break end
+        end
+        if not found then
+            local patList = table.concat(includePatterns, ", ")
+            return false, "no keyword matches include rule(s) '" .. patList .. "'"
+        end
+    end
+
+    return true, nil
+end
+
+-- *************************************************
 function utils.getPhotoMetadata(publishSettings, lrPhoto)
     -- build set of metadata to be send to Piwigo
     local metaData = {}
