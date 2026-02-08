@@ -1,4 +1,8 @@
 # Changelog
+## [20260208.32] - 2026-02-08
+### Fixed
+Fix #41 Issue with Import albums - public/private setting
+
 ## [20260207.31] - 2026-02-06
 ### Fixed
 Problem with Clone Existing Publish Service - smart collections

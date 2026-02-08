@@ -777,11 +777,15 @@ function PiwigoAPI.createCollection(propertyTable, node, parentNode, isLeafNode,
                         collectionSettings = newColl:getCollectionInfoSummary().collectionSettings or {}
                         if propertyTable.syncAlbumDescriptions then
                             collectionSettings.albumDescription = collDescription
-                            collectionSettings.albumPrivate = collStatus == "private"
                         else
                             collectionSettings.albumDescription = ""
-                            collectionSettings.albumPrivate = "public"
                         end
+                        if collStatus == "private" then
+                            collectionSettings.albumPrivate = true
+                        else
+                            collectionSettings.albumPrivate = false
+                        end
+
                         catalog:withWriteAccessDo("Add Piwigo details to collections", function()
                             newColl:setRemoteId(remoteId)
                             newColl:setRemoteUrl(propertyTable.host .. "/index.php?/category/" .. remoteId)
@@ -807,10 +811,13 @@ function PiwigoAPI.createCollection(propertyTable, node, parentNode, isLeafNode,
                         collectionSettings = newColl:getCollectionSetInfoSummary().collectionSettings or {}
                         if propertyTable.syncAlbumDescriptions then
                             collectionSettings.albumDescription = collDescription
-                            collectionSettings.albumPrivate = collStatus == "private"
                         else
                             collectionSettings.albumDescription = ""
-                            collectionSettings.albumPrivate = "public"
+                        end
+                        if collStatus == "private" then
+                            collectionSettings.albumPrivate = true
+                        else
+                            collectionSettings.albumPrivate = false
                         end
 
                         catalog:withWriteAccessDo("Add Piwigo details to collections", function()
@@ -833,10 +840,13 @@ function PiwigoAPI.createCollection(propertyTable, node, parentNode, isLeafNode,
                 collectionSettings = existingColl:getCollectionInfoSummary().collectionSettings or {}
                 if propertyTable.syncAlbumDescriptions then
                     collectionSettings.albumDescription = collDescription
-                    collectionSettings.albumPrivate = collStatus == "private"
                 else
                     collectionSettings.albumDescription = ""
-                    collectionSettings.albumPrivate = "public"
+                end
+                if collStatus == "private" then
+                    collectionSettings.albumPrivate = true
+                else
+                    collectionSettings.albumPrivate = false
                 end
 
                 catalog:withWriteAccessDo("Update Piwigo details to collections", function()
@@ -848,10 +858,13 @@ function PiwigoAPI.createCollection(propertyTable, node, parentNode, isLeafNode,
                 collectionSettings = existingColl:getCollectionSetInfoSummary().collectionSettings or {}
                 if propertyTable.syncAlbumDescriptions then
                     collectionSettings.albumDescription = collDescription
-                    collectionSettings.albumPrivate = collStatus == "private"
                 else
                     collectionSettings.albumDescription = ""
-                    collectionSettings.albumPrivate = "public"
+                end
+                if collStatus == "private" then
+                    collectionSettings.albumPrivate = true
+                else
+                    collectionSettings.albumPrivate = false
                 end
                 catalog:withWriteAccessDo("Update Piwigo details to collections", function()
                     existingColl:setCollectionSetSettings(collectionSettings)
@@ -1062,7 +1075,6 @@ function PiwigoAPI.ConnectionChange(propertyTable)
     if (propertyTable.savedHost ~= propertyTable.host) or (propertyTable.savedUsername ~= propertyTable.userName) then
         propertyTable.unsavedConnectionChanges = true
     end
-
 end
 
 -- *************************************************
