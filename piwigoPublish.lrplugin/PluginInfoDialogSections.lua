@@ -37,7 +37,6 @@ local GITHUB_URL = "https://github.com/Piwigo/PiwigoPublish-lrc-plugin"
 -- HELPER FUNCTIONS
 -- *************************************************
 -- Reset plugin preferences (optionally filtered by prefix)
--- NOTE: Currently not exposed in the GUI but kept for potential future use
 local function resetPluginPrefs(prefix)
     log:info("resetPluginPrefs \n" .. utils.serialiseVar(prefs))
     for k, p in prefs:pairs() do
@@ -62,6 +61,9 @@ function PluginInfoDialogSections.startDialog(propertyTable)
     if prefs.debugEnabled == nil then
         prefs.debugEnabled = false
     end
+    if prefs.debugToFile == nil then
+        prefs.debugToFile = false
+    end
 
     -- Initialize update check preference
     if prefs.checkUpdatesOnStartup == nil then
@@ -70,12 +72,17 @@ function PluginInfoDialogSections.startDialog(propertyTable)
 
     -- Apply debug settings
     if prefs.debugEnabled then
-        log:enable("logfile")
+        if prefs.debugToFile then
+            log:enable("logfile")
+        else
+            log:enable("print")
+        end
     else
         log:disable()
     end
 
     propertyTable.debugEnabled = prefs.debugEnabled
+    propertyTable.debugToFile = prefs.debugToFile
     propertyTable.checkUpdatesOnStartup = prefs.checkUpdatesOnStartup
 end
 
@@ -85,79 +92,6 @@ function PluginInfoDialogSections.sectionsForBottomOfDialog(f, propertyTable)
     local share = LrView.share
 
     return {
-        -- ===================================
-        -- SELF UPDATE SECTION
-        -- ===================================
-        {
-            bind_to_object = propertyTable,
-            title = "Self Update",
-
-            f:row {
-                f:checkbox {
-                    value = bind 'checkUpdatesOnStartup',
-                    title = "Check for updates to this plugin when Lightroom starts",
-                },
-            },
-
-            f:row {
-                f:push_button {
-                    title = "Check for updates now",
-                    action = function()
-                        UpdateChecker.checkForUpdates(false) -- silent = false
-                    end,
-                },
-            },
-        },
-
-        -- ===================================
-        -- DEBUGGING SECTION
-        -- ===================================
-        {
-            bind_to_object = propertyTable,
-            title = "Debugging",
-
-            f:row {
-                f:static_text {
-                    title = "If you have a problem with Piwigo Publisher then I'll probably ask you to activate the debug logging. This will save all sorts of useful information into a file.",
-                    width_in_chars = 60,
-                    height_in_lines = 2,
-                    alignment = 'left',
-                },
-            },
-
-            f:row {
-                spacing = f:label_spacing(),
-
-                f:radio_button {
-                    value = bind 'debugEnabled',
-                    checked_value = false,
-                    title = "Do not log debug information",
-                },
-            },
-
-            f:row {
-                spacing = f:label_spacing(),
-
-                f:radio_button {
-                    value = bind 'debugEnabled',
-                    checked_value = true,
-                    title = "Log debug information to a file (PiwigoPublishPlugin.log) in your Lightroom logs folder",
-                },
-            },
-
-            f:row {
-                spacing = f:label_spacing(),
-
-                f:push_button {
-                    title = "Show logfile",
-                    enabled = bind 'debugEnabled',
-                    action = function()
-                        LrShell.revealInShell(utils.getLogfilePath())
-                    end,
-                },
-            },
-        },
-
         -- ===================================
         -- STATUS SECTION
         -- ===================================
@@ -228,6 +162,142 @@ function PluginInfoDialogSections.sectionsForBottomOfDialog(f, propertyTable)
                             },
                         },
                     },
+                },
+            },
+        },
+
+        -- ===================================
+        -- SELF UPDATE SECTION
+        -- ===================================
+        {
+            bind_to_object = propertyTable,
+            title = "Self Update",
+
+            f:row {
+                f:checkbox {
+                    value = bind 'checkUpdatesOnStartup',
+                    title = "Check for updates to this plugin when Lightroom starts",
+                },
+            },
+
+            f:row {
+                f:push_button {
+                    title = "Check for updates now",
+                    action = function()
+                        UpdateChecker.checkForUpdates(false) -- silent = false
+                    end,
+                },
+            },
+        },
+
+        -- ===================================
+        -- DEBUGGING SECTION
+        -- ===================================
+        {
+            bind_to_object = propertyTable,
+            title = "Debugging",
+
+            f:row {
+                f:static_text {
+                    title = "If you have a problem with Piwigo Publisher then I'll probably ask you to activate the debug logging. This will save all sorts of useful information to the Lightroom console.",
+                    width_in_chars = 60,
+                    height_in_lines = 2,
+                    alignment = 'left',
+                },
+            },
+
+            f:row {
+                spacing = f:label_spacing(),
+
+                f:radio_button {
+                    value = bind 'debugEnabled',
+                    checked_value = false,
+                    title = "Do not log debug information",
+                },
+            },
+
+            f:row {
+                spacing = f:label_spacing(),
+
+                f:radio_button {
+                    value = bind 'debugEnabled',
+                    checked_value = true,
+                    title = "Log debug information to the Lightroom console",
+                },
+            },
+
+            f:row {
+                spacing = f:label_spacing(),
+
+                f:push_button {
+                    title = "Show logfile",
+                    enabled = bind 'debugEnabled',
+                    action = function()
+                        LrShell.revealInShell(utils.getLogfilePath())
+                    end,
+                },
+            },
+
+            f:separator { fill_horizontal = 1 },
+
+            f:row {
+                f:static_text {
+                    title = "Unsafe area — Development only",
+                    font = "<system/bold>",
+                    alignment = 'left',
+                    text_color = LrColor("red"),
+                },
+            },
+
+            f:row {
+                f:static_text {
+                    title = "These options are intended for plugin development and troubleshooting only.",
+                    width_in_chars = 60,
+                    alignment = 'left',
+                    text_color = LrColor(0.4, 0.4, 0.4),
+                },
+            },
+
+            f:row {
+                f:checkbox {
+                    value = bind 'debugToFile',
+                    enabled = bind 'debugEnabled',
+                },
+                f:static_text {
+                    title = "Log to file instead of console",
+                    alignment = 'left',
+                },
+            },
+
+            f:row {
+                f:static_text {
+                    title = utils.getLogfilePath(),
+                },
+            },
+
+            f:row {
+                spacing = f:control_spacing(),
+
+                f:push_button {
+                    title = "Reset Plugin Preferences…",
+
+                    action = function()
+                        local result = LrDialogs.confirm(
+                            "Reset Plugin Preferences",
+                            "This will delete all saved settings for this plugin.\n\nThis cannot be undone.",
+                            "Reset",
+                            "Cancel"
+                        )
+
+                        if result == "ok" then
+                            resetPluginPrefs()
+                            LrDialogs.message(
+                                "Preferences Reset",
+                                "Plugin preferences have been cleared.",
+                                "info"
+                            )
+                        end
+                    end,
                 },
             },
         },
@@ -309,17 +379,23 @@ function PluginInfoDialogSections.sectionsForBottomOfDialog(f, propertyTable)
                 },
             },
         },
+
     }
 end
 
 -- *************************************************
 function PluginInfoDialogSections.endDialog(propertyTable)
     prefs.debugEnabled = propertyTable.debugEnabled
+    prefs.debugToFile = propertyTable.debugToFile
     prefs.checkUpdatesOnStartup = propertyTable.checkUpdatesOnStartup
 
     -- Apply debug settings
     if prefs.debugEnabled then
-        log:enable("logfile")
+        if prefs.debugToFile then
+            log:enable("logfile")
+        else
+            log:enable("print")
+        end
     else
         log:disable()
     end
