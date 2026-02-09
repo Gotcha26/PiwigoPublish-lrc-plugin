@@ -20,6 +20,8 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ]]
 
+---@diagnostic disable: undefined-global
+
 local PWIMportService = {}
 
 local SPECIAL_PREFIX = "※" -- U+203B Reference Mark used by another plugin to identify super collections

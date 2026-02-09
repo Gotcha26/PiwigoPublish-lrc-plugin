@@ -52,7 +52,10 @@ _G.PiwigoAPI = require "PiwigoAPI"
 _G.PWImportService = require "PWImportService"
 _G.PWStatusManager = require "PWStatusManager"
 
--- Global initializations 
+-- Global initializations
+-- Detect macOS vs Windows based on path separator in Lightroom's standard paths
+local testPath = LrPathUtils.getStandardFilePath("documents")
+_G.MAC_ENV = testPath:find("/") and not testPath:find("\\") or false
 _G.prefs = _G.LrPrefs.prefsForPlugin()
 -- logger setup
 _G.log = import 'LrLogger' ('PiwigoPublishPlugin')

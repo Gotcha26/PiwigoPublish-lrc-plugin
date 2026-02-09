@@ -22,6 +22,9 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ]]
+
+---@diagnostic disable: undefined-global
+
 local PiwigoAPI = {}
 
 -- *************************************************
@@ -119,7 +122,7 @@ local function httpPost(propertyTable, params, headers)
         -- successful connection to Piwigo
         -- Now check login result
         local rtnBody = JSON:decode(httpResponse)
-        if rtnBody.stat == "ok" then
+        if rtnBody and rtnBody.stat == "ok" then
             -- login ok - store session cookies
             local cookies = {}
             local SessionCookie = ""
@@ -142,7 +145,7 @@ local function httpPost(propertyTable, params, headers)
             propertyTable.cookieHeader = table.concat(propertyTable.cookies, "; ")
             propertyTable.Connected = true
         else
-            LrDialogs.message("Cannot log in to Piwigo - ", rtnBody.err .. ", " .. rtnBody.message)
+            LrDialogs.message("Cannot log in to Piwigo - ", (rtnBody and (rtnBody.err .. ", " .. rtnBody.message) or "Unknown error"))
             return false
         end
     else
@@ -245,31 +248,39 @@ local function buildCatHierarchy(allCats)
     local nodes = {}
     local roots = {}
     for _, cat in ipairs(allCats) do
-        local id = tonumber(cat.id)
-        nodes[id] = {
-            id = id,
-            name = cat.name,
-            comment = cat.comment,
-            status = cat.status,
-            children = {}
-        }
+        if cat then
+            local id = tonumber(cat.id)
+            if id then
+                nodes[id] = {
+                    id = id,
+                    name = cat.name,
+                    comment = cat.comment,
+                    status = cat.status,
+                    children = {}
+                }
+            end
+        end
     end
     -- 2. Attach nodes to parents
     for _, cat in ipairs(allCats) do
-        -- uppercats is a comma-separated list like "16,28" or "24,27"
-        local path = utils.stringtoTable(cat.uppercats, ",")
-        local id = tonumber(cat.id)
-        local node = nodes[id]
+        if cat then
+            -- uppercats is a comma-separated list like "16,28" or "24,27"
+            local path = utils.stringtoTable(cat.uppercats, ",")
+            local id = tonumber(cat.id)
+            if id then
+                local node = nodes[id]
 
-        if #path == 1 then
-            -- Top-level category
-            roots[#roots + 1] = node
-        else
-            -- Parent is the second-to-last element
-            local parent_id = tonumber(path[#path - 1])
-            local parent = nodes[parent_id]
-            if parent then
-                parent.children[#parent.children + 1] = node
+                if #path == 1 then
+                    -- Top-level category
+                    roots[#roots + 1] = node
+                else
+                    -- Parent is the second-to-last element
+                    local parent_id = tonumber(path[#path - 1])
+                    local parent = nodes[parent_id]
+                    if parent then
+                        parent.children[#parent.children + 1] = node
+                    end
+                end
             end
         end
     end
@@ -1608,6 +1619,7 @@ function PiwigoAPI.pwCategoriesGetThis(propertyTable, thisCat)
         return nil
     end
     -- go through allCats to find thisCat
+    allCats = allCats or {}
     for _, cat in ipairs(allCats) do
         if tostring(cat.id) == tostring(thisCat) then
             return cat
@@ -1721,16 +1733,16 @@ function PiwigoAPI.pwCategoriesMove(propertyTable, info, thisCat, newCat, callSt
         parseResp = JSON:decode(httpResponse)
     end
     if httpHeaders.status == 201 or httpHeaders.status == 200 then
-        if parseResp.stat == "ok" then
+        if parseResp and parseResp.stat == "ok" then
             callStatus.status = true
             callStatus.statusMsg = ""
         else
             callStatus.status = false
-            callStatus.statusMsg = parseResp.message or ""
+            callStatus.statusMsg = (parseResp and parseResp.message) or ""
         end
     else
         callStatus.status = false
-        callStatus.statusMsg = parseResp.message or ""
+        callStatus.statusMsg = (parseResp and parseResp.message) or ""
     end
 
     return callStatus
@@ -1893,16 +1905,16 @@ function PiwigoAPI.pwCategoriesDelete(propertyTable, info, metaData, callStatus)
         parseResp = JSON:decode(httpResponse)
     end
     if httpHeaders.status == 201 or httpHeaders.status == 200 then
-        if parseResp.stat == "ok" then
+        if parseResp and parseResp.stat == "ok" then
             callStatus.status = true
             callStatus.statusMsg = ""
         else
             callStatus.status = false
-            callStatus.statusMsg = parseResp.message or ""
+            callStatus.statusMsg = (parseResp and parseResp.message) or ""
         end
     else
         callStatus.status = false
-        callStatus.statusMsg = parseResp.message or ""
+        callStatus.statusMsg = (parseResp and parseResp.message) or ""
     end
     return callStatus
 end
@@ -1975,7 +1987,7 @@ function PiwigoAPI.pwCategoriesSetinfo(propertyTable, info, metaData)
         body = JSON:decode(httpResponse)
     end
     if httpHeaders.status == 201 or httpHeaders.status == 200 then
-        if body.stat == "ok" then
+        if body and body.stat == "ok" then
             callStatus.status = true
             callStatus.statusMsg = ""
         else
@@ -1983,14 +1995,14 @@ function PiwigoAPI.pwCategoriesSetinfo(propertyTable, info, metaData)
             log:info("PiwigoAPI.pwCategoriesSetinfo - httpHeaders\n" .. utils.serialiseVar(httpHeaders))
             log:info("PiwigoAPI.pwCategoriesSetinfo - httpResponse\n" .. utils.serialiseVar(httpResponse))
             callStatus.status = false
-            callStatus.statusMsg = "Category " .. tostring(remoteId) .. " - " .. (body.message or "")
+            callStatus.statusMsg = "Category " .. tostring(remoteId) .. " - " .. ((body and body.message) or "")
         end
     else
         log:info("PiwigoAPI.pwCategoriesSetinfo - params \n" .. utils.serialiseVar(params))
         log:info("PiwigoAPI.pwCategoriesSetinfo - httpHeaders\n" .. utils.serialiseVar(httpHeaders))
         log:info("PiwigoAPI.pwCategoriesSetinfo - httpResponse\n" .. utils.serialiseVar(httpResponse))
         callStatus.status = false
-        callStatus.statusMsg = "Category " .. tostring(remoteId) .. " - " .. (body.message or "")
+        callStatus.statusMsg = "Category " .. tostring(remoteId) .. " - " .. ((body and body.message) or "")
     end
 
     return callStatus
@@ -2250,7 +2262,7 @@ function PiwigoAPI.updateGallery(propertyTable, exportFilename, metaData)
                 " to Piwigo - Invalid JSON response - " .. tostring(httpResponse))
             return callStatus
         end
-        if response.stat == "ok" then
+        if response and response.stat == "ok" then
             callStatus.remoteid = response.result.image_id
             callStatus.remoteurl = response.result.url
             callStatus.status = true
@@ -2485,7 +2497,7 @@ function PiwigoAPI.deletePhoto(propertyTable, pwCatID, pwImageID, callStatus)
     end
 
     if httpHeaders.status == 201 or httpHeaders.status == 200 then
-        if body.stat == "ok" then
+        if body and body.stat == "ok" then
             callStatus.status = true
             callStatus.statusMsg = ""
         else
@@ -2494,7 +2506,7 @@ function PiwigoAPI.deletePhoto(propertyTable, pwCatID, pwImageID, callStatus)
             log:info("PiwigoAPI.deletePhoto - httpResponse \n" .. utils.serialiseVar(httpResponse))
             log:info("PiwigoAPI.deletePhoto - httpHeaders \n" .. utils.serialiseVar(httpHeaders))
             callStatus.status = false
-            callStatus.statusMsg = body.message or ""
+            callStatus.statusMsg = (body and body.message) or ""
         end
     else
         log:info("PiwigoAPI.deletePhoto - propertyTable \n " .. utils.serialiseVar(propertyTable))
@@ -2502,7 +2514,7 @@ function PiwigoAPI.deletePhoto(propertyTable, pwCatID, pwImageID, callStatus)
         log:info("PiwigoAPI.deletePhoto - httpResponse \n" .. utils.serialiseVar(httpResponse))
         log:info("PiwigoAPI.deletePhoto - httpHeaders \n" .. utils.serialiseVar(httpHeaders))
         callStatus.status = false
-        callStatus.statusMsg = body.message or ""
+        callStatus.statusMsg = (body and body.message) or ""
     end
     return callStatus
 end
