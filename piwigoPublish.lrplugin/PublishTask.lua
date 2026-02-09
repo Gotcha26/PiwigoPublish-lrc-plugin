@@ -798,6 +798,69 @@ local function valueEqual(a, b)
 end
 
 -- ************************************************
+-- ************************************************
+-- Shared helpers for viewForCollectionSettings / viewForCollectionSetSettings
+-- ************************************************
+local function initCollectionSettingsDefaults(collectionSettings)
+    local defaults = {
+        albumDescription       = "",
+        albumPrivate           = false,
+        enableCustom           = false,
+        reSize                 = false,
+        reSizeParam            = "Long Edge",
+        reSizeNoEnlarge        = true,
+        reSizeLongEdge         = 1024,
+        reSizeShortEdge        = 1024,
+        reSizeW                = 1024,
+        reSizeH                = 1024,
+        reSizeMP               = 5,
+        reSizePC               = 50,
+        metaData               = "All",
+        metaDataNoPerson       = true,
+        metaDataNoLocation     = false,
+        KwFullHierarchy        = true,
+        KwSynonyms             = true,
+        KwFilterInclude        = "",
+        KwFilterExclude        = "",
+        syncSortOrderOverride  = "default",
+    }
+    for key, defaultVal in pairs(defaults) do
+        if collectionSettings[key] == nil then
+            collectionSettings[key] = defaultVal
+        end
+    end
+end
+
+local function buildCommonCollectionUI(f, bind, share, collectionSettings, publishSettings)
+    local pwAlbumUI = UIHelpers.createPiwigoAlbumSettingsUI(f, share, bind, collectionSettings, publishSettings)
+    local kwFilterUI = UIHelpers.createKeywordFilteringUI(f, bind, collectionSettings)
+    local sortOrderUI = f:group_box {
+        title = "Sort Order",
+        font = "<system/bold>",
+        size = 'regular',
+        fill_horizontal = 1,
+        bind_to_object = assert(collectionSettings),
+        f:row {
+            fill_horizontal = 1,
+            f:static_text {
+                title = "Sync sort order to Piwigo:",
+                font = "<system>",
+                alignment = 'right',
+            },
+            f:popup_menu {
+                value = bind 'syncSortOrderOverride',
+                items = {
+                    { title = "Use global setting", value = "default" },
+                    { title = "Always sync",        value = "always" },
+                    { title = "Never sync",         value = "never" },
+                },
+            },
+        },
+    }
+    return pwAlbumUI, sortOrderUI, kwFilterUI
+end
+
+-- ************************************************
 function PublishTask.viewForCollectionSettings(f, publishSettings, info)
     log:info("PublishTask.viewForCollectionSettings")
 
@@ -814,69 +877,9 @@ function PublishTask.viewForCollectionSettings(f, publishSettings, info)
     local bind = LrView.bind
     local share = LrView.share
     local collectionSettings = assert(info.collectionSettings)
-    -- piwigo album settings
-    if collectionSettings.albumDescription == nil then
-        collectionSettings.albumDescription = ""
-    end
-    if collectionSettings.albumPrivate == nil then
-        collectionSettings.albumPrivate = false
-    end
 
-    -- customisation of image export settings
-    if collectionSettings.enableCustom == nil then
-        collectionSettings.enableCustom = false
-    end
-    if collectionSettings.reSize == nil then
-        collectionSettings.reSize = false
-    end
-    if collectionSettings.reSizeParam == nil then
-        collectionSettings.reSizeParam = "Long Edge"
-    end
-    if collectionSettings.reSizeNoEnlarge == nil then
-        collectionSettings.reSizeNoEnlarge = true
-    end
-    if collectionSettings.reSizeLongEdge == nil then
-        collectionSettings.reSizeLongEdge = 1024
-    end
-    if collectionSettings.reSizeShortEdge == nil then
-        collectionSettings.reSizeShortEdge = 1024
-    end
-    if collectionSettings.reSizeW == nil then
-        collectionSettings.reSizeW = 1024
-    end
-    if collectionSettings.reSizeH == nil then
-        collectionSettings.reSizeH = 1024
-    end
-    if collectionSettings.reSizeMP == nil then
-        collectionSettings.reSizeMP = 5
-    end
-    if collectionSettings.reSizePC == nil then
-        collectionSettings.reSizePC = 50
-    end
-    if collectionSettings.metaData == nil then
-        collectionSettings.metaData = "All"
-    end
-    if collectionSettings.metaDataNoPerson == nil then
-        collectionSettings.metaDataNoPerson = true
-    end
-    if collectionSettings.metaDataNoLocation == nil then
-        collectionSettings.metaDataNoLocation = false
-    end
-    if collectionSettings.KwFullHierarchy == nil then
-        collectionSettings.KwFullHierarchy = true
-    end
-    if collectionSettings.KwSynonyms == nil then
-        collectionSettings.KwSynonyms = true
-    end
-    if collectionSettings.KwFilterInclude == nil then
-        collectionSettings.KwFilterInclude = ""
-    end
-    if collectionSettings.KwFilterExclude == nil then
-        collectionSettings.KwFilterExclude = ""
-    end
-    if collectionSettings.syncSortOrderOverride == nil then
-        collectionSettings.syncSortOrderOverride = "default"
-    end
+    initCollectionSettingsDefaults(collectionSettings)
+
     -- build UI
     local reSizeOptions = {
         { title = "Long Edge",  value = "Long Edge" },
@@ -893,7 +896,7 @@ function PublishTask.viewForCollectionSettings(f, publishSettings, info)
         { title = "All Except Camera & Camera Raw Info", value = "All Except Camera & Camera Raw Info" },
     }
 
-    local pwAlbumUI = UIHelpers.createPiwigoAlbumSettingsUI(f, share, bind, collectionSettings, publishSettings)
+    local pwAlbumUI, sortOrderUI, kwFilterUI = buildCommonCollectionUI(f, bind, share, collectionSettings, publishSettings)
 
     local pubSettingsUI = f:group_box {
         title = "Custom Publish Settings (Overrides defaults set in Publish Settings)",
@@ -966,32 +969,6 @@ function PublishTask.viewForCollectionSettings(f, publishSettings, info)
                         value = bind 'KwSynonyms',
                     }
 
-                },
-            },
-        },
-    }
-
-    local kwFilterUI = UIHelpers.createKeywordFilteringUI(f, bind, collectionSettings)
-
-    local sortOrderUI = f:group_box {
-        title = "Sort Order",
-        font = "<system/bold>",
-        size = 'regular',
-        fill_horizontal = 1,
-        bind_to_object = assert(collectionSettings),
-        f:row {
-            fill_horizontal = 1,
-            f:static_text {
-                title = "Sync sort order to Piwigo:",
-                font = "<system>",
-                alignment = 'right',
-            },
-            f:popup_menu {
-                value = bind 'syncSortOrderOverride',
-                items = {
-                    { title = "Use global setting", value = "default" },
-                    { title = "Always sync",        value = "always" },
-                    { title = "Never sync",         value = "never" },
                 },
             },
         },
@@ -1107,91 +1084,16 @@ function PublishTask.viewForCollectionSetSettings(f, publishSettings, info)
     local bind = LrView.bind
     local share = LrView.share
     local collectionSettings = assert(info.collectionSettings)
-    -- piwigo album settings
-    if collectionSettings.albumDescription == nil then
-        collectionSettings.albumDescription = ""
-    end
-    if collectionSettings.albumPrivate == nil then
-        collectionSettings.albumPrivate = false
-    end
 
-    -- customisation of image export settings
-    if collectionSettings.enableCustom == nil then
-        collectionSettings.enableCustom = false
-    end
-    if collectionSettings.reSize == nil then
-        collectionSettings.reSize = false
-    end
-    if collectionSettings.reSizeParam == nil then
-        collectionSettings.reSizeParam = "Long Edge"
-    end
-    if collectionSettings.reSizeNoEnlarge == nil then
-        collectionSettings.reSizeNoEnlarge = true
-    end
-    if collectionSettings.reSizeLongEdge == nil then
-        collectionSettings.reSizeLongEdge = 1024
-    end
-    if collectionSettings.reSizeShortEdge == nil then
-        collectionSettings.reSizeShortEdge = 1024
-    end
-    if collectionSettings.reSizeW == nil then
-        collectionSettings.reSizeW = 1024
-    end
-    if collectionSettings.reSizeH == nil then
-        collectionSettings.reSizeH = 1024
-    end
-    if collectionSettings.reSizeMP == nil then
-        collectionSettings.reSizeMP = 5
-    end
-    if collectionSettings.reSizePC == nil then
-        collectionSettings.reSizePC = 50
-    end
-    if collectionSettings.metaData == nil then
-        collectionSettings.metaData = "All"
-    end
-    if collectionSettings.metaDataNoPerson == nil then
-        collectionSettings.metaDataNoPerson = true
-    end
-    if collectionSettings.metaDataNoLocation == nil then
-        collectionSettings.metaDataNoLocation = false
-    end
-    if collectionSettings.KwFullHierarchy == nil then
-        collectionSettings.KwFullHierarchy = true
-    end
-    if collectionSettings.KwSynonyms == nil then
-        collectionSettings.KwSynonyms = true
-    end
-    if collectionSettings.KwFilterInclude == nil then
-        collectionSettings.KwFilterInclude = ""
-    end
-    if collectionSettings.KwFilterExclude == nil then
-        collectionSettings.KwFilterExclude = ""
-    end
-    -- build UI
-    local reSizeOptions = {
-        { title = "Long Edge",  value = "Long Edge" },
-        { title = "Short Edge", value = "Short Edge" },
-        { title = "Dimensions", value = "Dimensions" },
-        { title = "Megapixels", value = "MegaPixels" },
-        { title = "Percent",    value = "Percent" },
-    }
-    local metaDataOpts = {
-        { title = "All Metadata",                        value = "All Metadata" },
-        { title = "Copyright only",                      value = "Copyright Only" },
-        { title = "Copyright & Contact Info Only",       value = "Copyright & Contact Info Only" },
-        { title = "All Except Camera Raw Info",          value = "All Except Camera Raw Info" },
-        { title = "All Except Camera & Camera Raw Info", value = "All Except Camera & Camera Raw Info" },
-    }
+    initCollectionSettingsDefaults(collectionSettings)
 
-    local pwAlbumUI = UIHelpers.createPiwigoAlbumSettingsUI(f, share, bind, collectionSettings, publishSettings)
-
-    local kwFilterUI = UIHelpers.createKeywordFilteringUI(f, bind, collectionSettings)
+    local pwAlbumUI, sortOrderUI, kwFilterUI = buildCommonCollectionUI(f, bind, share, collectionSettings, publishSettings)
 
     local UI = f:column {
         spacing = f:control_spacing(),
         pwAlbumUI,
+        sortOrderUI,
         kwFilterUI,
-        --pubSettingsUI,
     }
     return UI
 end
