@@ -428,6 +428,22 @@ local function prefsDialog(f, propertyTable)
 					width_in_chars = 7,
 				},
 				f:checkbox {
+					title = "Synchronise Photo Sort Order",
+					font = "<system>",
+					tooltip = "If checked, the photo display order in Lightroom will be sent to Piwigo after each publish",
+					value = bind 'syncPhotoSortOrder',
+				},
+			},
+			f:spacer { height = 1 },
+
+			f:row {
+				fill_horizontal = 1,
+				f:static_text {
+					title = "",
+					alignment = 'right',
+					width_in_chars = 7,
+				},
+				f:checkbox {
 					title = "Synchronise comments as part of a Publish Process",
 					font = "<system>",
 					tooltip = "When checked, comments will be synchronised for all photos in a collection during a publish operation",

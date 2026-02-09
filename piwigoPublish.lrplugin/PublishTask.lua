@@ -683,61 +683,89 @@ end
 
 -- ************************************************
 function PublishTask.imposeSortOrderOnPublishedCollection(publishSettings, info, remoteIdSequence)
-    -- This callback is called by Lightroom for smart collections.
-    -- It allows you to detect published photos that no longer meet the criteria and mark them for
-    -- deletion.
+    -- This callback is called by Lightroom after each publish.
+    -- It handles two tasks:
+    --   1. For smart collections: filter out photos that no longer meet the criteria
+    --   2. Sync sort order to Piwigo via pwg.images.setRank (if enabled)
     log:info("PublishTask.imposeSortOrderOnPublishedCollection")
 
-    local validSequence = {}
     local publishedCollection = info.publishedCollection
-
     if not publishedCollection then
         return nil
     end
 
-    -- Check if it is a smart collection
-    if not publishedCollection:isSmartCollection() then
-        return nil
-    end
+    local finalSequence = remoteIdSequence
+    local isSmartCollection = publishedCollection:isSmartCollection()
 
-    -- Retrieve photos currently in the smart collection (according to criteria)
-    local currentPhotos = publishedCollection:getPhotos()
-    local currentPhotoIds = {}
-    for _, photo in ipairs(currentPhotos) do
-        currentPhotoIds[photo.localIdentifier] = true
-    end
-
-    -- Browse the remoteIds of published photos
-    -- remoteIdSequence contains the remoteIds in the current order
-    local publishedPhotos = publishedCollection:getPublishedPhotos()
-    local remoteIdToPhoto = {}
-    for _, pubPhoto in ipairs(publishedPhotos) do
-        local remoteId = pubPhoto:getRemoteId()
-        if remoteId then
-            remoteIdToPhoto[remoteId] = pubPhoto
+    -- PART 1: Smart collection filtering (existing logic)
+    if isSmartCollection then
+        local validSequence = {}
+        local currentPhotos = publishedCollection:getPhotos()
+        local currentPhotoIds = {}
+        for _, photo in ipairs(currentPhotos) do
+            currentPhotoIds[photo.localIdentifier] = true
         end
-    end
 
-    -- Build the valid sequence: only photos that still meet the criteria
-    for _, remoteId in ipairs(remoteIdSequence) do
-        local pubPhoto = remoteIdToPhoto[remoteId]
-        if pubPhoto then
-            local lrPhoto = pubPhoto:getPhoto()
-            if lrPhoto and currentPhotoIds[lrPhoto.localIdentifier] then
-                -- The photo still meets the criteria, keep it.
-                table.insert(validSequence, remoteId)
+        local publishedPhotos = publishedCollection:getPublishedPhotos()
+        local remoteIdToPhoto = {}
+        for _, pubPhoto in ipairs(publishedPhotos) do
+            local remoteId = pubPhoto:getRemoteId()
+            if remoteId then
+                remoteIdToPhoto[remoteId] = pubPhoto
             end
-            -- If the photo is no longer in currentPhotoIds, it will be marked for deletion because
-            -- its remoteId will not be in validSequence.
+        end
+
+        for _, remoteId in ipairs(remoteIdSequence) do
+            local pubPhoto = remoteIdToPhoto[remoteId]
+            if pubPhoto then
+                local lrPhoto = pubPhoto:getPhoto()
+                if lrPhoto and currentPhotoIds[lrPhoto.localIdentifier] then
+                    table.insert(validSequence, remoteId)
+                end
+            end
+        end
+
+        log:info("PublishTask.imposeSortOrderOnPublishedCollection - " ..
+            #remoteIdSequence .. " published, " ..
+            #validSequence .. " still match criteria, " ..
+            (#remoteIdSequence - #validSequence) .. " to delete")
+
+        finalSequence = validSequence
+    end
+
+    -- PART 2: Sync sort order to Piwigo
+    local shouldSync = false
+    local collectionInfo = publishedCollection:getCollectionInfoSummary()
+    local collectionSettings = collectionInfo.collectionSettings or {}
+    local override = collectionSettings.syncSortOrderOverride or "default"
+
+    if override == "always" then
+        shouldSync = true
+    elseif override == "never" then
+        shouldSync = false
+    else
+        shouldSync = publishSettings.syncPhotoSortOrder or false
+    end
+
+    if shouldSync and #finalSequence > 0 then
+        local categoryId = info.remoteCollectionId
+        if categoryId then
+            log:info("PublishTask.imposeSortOrderOnPublishedCollection - syncing sort order for category " ..
+                tostring(categoryId) .. ", " .. #finalSequence .. " photos")
+            local callStatus = PiwigoAPI.pwImagesSetRank(publishSettings, categoryId, finalSequence)
+            if not callStatus.status then
+                log:info("PublishTask.imposeSortOrderOnPublishedCollection - setRank failed: " ..
+                    (callStatus.statusMsg or "unknown error"))
+            end
+        else
+            log:info("PublishTask.imposeSortOrderOnPublishedCollection - no remoteId for collection, skipping sort sync")
         end
     end
 
-    log:info("PublishTask.imposeSortOrderOnPublishedCollection - " ..
-        #remoteIdSequence .. " published, " ..
-        #validSequence .. " still match criteria, " ..
-        (#remoteIdSequence - #validSequence) .. " to delete")
-
-    return validSequence
+    if isSmartCollection then
+        return finalSequence
+    end
+    return nil
 end
 
 -- ************************************************
@@ -846,6 +874,9 @@ function PublishTask.viewForCollectionSettings(f, publishSettings, info)
     if collectionSettings.KwFilterExclude == nil then
         collectionSettings.KwFilterExclude = ""
     end
+    if collectionSettings.syncSortOrderOverride == nil then
+        collectionSettings.syncSortOrderOverride = "default"
+    end
     -- build UI
     local reSizeOptions = {
         { title = "Long Edge",  value = "Long Edge" },
@@ -942,9 +973,34 @@ function PublishTask.viewForCollectionSettings(f, publishSettings, info)
 
     local kwFilterUI = UIHelpers.createKeywordFilteringUI(f, bind, collectionSettings)
 
+    local sortOrderUI = f:group_box {
+        title = "Sort Order",
+        font = "<system/bold>",
+        size = 'regular',
+        fill_horizontal = 1,
+        bind_to_object = assert(collectionSettings),
+        f:row {
+            fill_horizontal = 1,
+            f:static_text {
+                title = "Sync sort order to Piwigo:",
+                font = "<system>",
+                alignment = 'right',
+            },
+            f:popup_menu {
+                value = bind 'syncSortOrderOverride',
+                items = {
+                    { title = "Use global setting", value = "default" },
+                    { title = "Always sync",        value = "always" },
+                    { title = "Never sync",         value = "never" },
+                },
+            },
+        },
+    }
+
     local UI = f:column {
         spacing = f:control_spacing(),
         pwAlbumUI,
+        sortOrderUI,
         kwFilterUI,
         --pubSettingsUI,
     }

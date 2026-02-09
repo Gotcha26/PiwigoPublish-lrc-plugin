@@ -40,7 +40,7 @@ return {
 	allowFileFormats = { "JPEG", "PNG" },
 	allowColorSpaces = nil,
 	canExportVideo = false,
-	supportsCustomSortOrder = false,
+	supportsCustomSortOrder = true,
 	hidePrintResolution = true,
 	supportsIncrementalPublish = 'only', -- plugin only visible in publish services, not export
 
@@ -55,6 +55,7 @@ return {
 		{ key = "mdTitle",               default = "{{title}}" },
 		{ key = "mdDescription",         default = "{{caption}}" },
 		{ key = "syncAlbumDescriptions", default = false },
+		{ key = "syncPhotoSortOrder",    default = false },
 		{ key = "syncCommentsPublish",   default = true },
 		{ key = "syncCommentsPubOnly",   default = false },
 		{ key = "KwFilterInclude",       default = '' },

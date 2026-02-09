@@ -3024,6 +3024,72 @@ function PiwigoAPI.httpPostMultiPart(propertyTable, params)
 end
 
 -- *************************************************
+function PiwigoAPI.pwImagesSetRank(publishSettings, categoryId, imageIdSequence)
+    -- Set the display rank (sort order) of images within a Piwigo album
+    -- Uses Mode B of pwg.images.setRank: pass all image_id values as a
+    -- comma-separated list + category_id. Piwigo assigns rank 1,2,3... automatically.
+
+    log:info("PiwigoAPI.pwImagesSetRank - category " .. tostring(categoryId) ..
+        ", " .. #imageIdSequence .. " images")
+
+    local callStatus = {}
+    callStatus.status = false
+    callStatus.statusMsg = ""
+
+    if not categoryId or #imageIdSequence == 0 then
+        callStatus.statusMsg = "PiwigoAPI.pwImagesSetRank - missing categoryId or empty sequence"
+        return callStatus
+    end
+
+    local rv
+    -- check connection to piwigo
+    if not (publishSettings.Connected) then
+        rv = PiwigoAPI.login(publishSettings)
+        if not rv then
+            callStatus.statusMsg = "PiwigoAPI.pwImagesSetRank - cannot connect to piwigo"
+            return callStatus
+        end
+    end
+
+    -- check role is admin level
+    if publishSettings.userStatus ~= "webmaster" then
+        callStatus.statusMsg = "PiwigoAPI.pwImagesSetRank - User needs webmaster role on piwigo gallery at " ..
+            publishSettings.host .. " to set photo sort order"
+        return callStatus
+    end
+
+    -- Build comma-separated list of image IDs
+    local idStrings = {}
+    for _, id in ipairs(imageIdSequence) do
+        table.insert(idStrings, tostring(id))
+    end
+    local imageIdList = table.concat(idStrings, ",")
+
+    local params = { {
+        name = "method",
+        value = "pwg.images.setRank"
+    }, {
+        name = "image_id",
+        value = imageIdList
+    }, {
+        name = "category_id",
+        value = tostring(categoryId)
+    } }
+
+    local postResponse = PiwigoAPI.httpPostMultiPart(publishSettings, params)
+
+    if postResponse.status then
+        callStatus.status = true
+        log:info("PiwigoAPI.pwImagesSetRank - success for category " .. tostring(categoryId))
+    else
+        callStatus.statusMsg = "PiwigoAPI.pwImagesSetRank - " .. (postResponse.statusMsg or "unknown error")
+        log:info(callStatus.statusMsg)
+    end
+
+    return callStatus
+end
+
+-- *************************************************
 function PiwigoAPI.createHeaders(propertyTable)
     return { {
         field = 'pwg_token',
