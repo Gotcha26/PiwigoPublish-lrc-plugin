@@ -222,11 +222,10 @@ local function pwGetSessionStatus(propertyTable)
         if getResponse.response.result.status and (getResponse.response.result.status == "webmaster") then
             propertyTable.userStatus = getResponse.response.result.status
             propertyTable.token = getResponse.response.result.pwg_token
-            propertyTable.pwVersion = getResponse.response.result.version
+            propertyTable.pwVersion = getResponse.response.result.version or "unknown"
             propertyTable.Connected = true
-            propertyTable.ConCheck = false
-            propertyTable.ConStatus = "Connected to Piwigo Gallery at " .. propertyTable.host .. " as " ..
-                propertyTable.userStatus .. " - Piwigo version " .. propertyTable.pwVersion
+            propertyTable.ConCheck = true
+            propertyTable.ConStatus = "Connected to your Piwigo gallery v" .. propertyTable.pwVersion
             return true
         else
             propertyTable.Connected = false

@@ -106,13 +106,32 @@ local function connectionDialog(f, propertyTable, pwInstance)
 				end,
 			},
 			f:push_button {
-				title = "Check Connection",
+				title = LrView.bind {
+					key = 'Connected',
+					transform = function(value)
+						return value and "Disconnect" or "Check Connection"
+					end
+				},
 				enabled = bind('ConCheck', propertyTable),
 				font = "<system/bold>",
 				action = function()
 					LrTasks.startAsyncTask(function()
-						if not PiwigoAPI.login(propertyTable) then
-							LrDialogs.message("Connection NOT successful")
+						if propertyTable.Connected then
+							-- Déconnexion
+							propertyTable.Connected = false
+							propertyTable.ConCheck = true
+							propertyTable.ConStatus = "Not Connected"
+							propertyTable.SessionCookie = nil
+							propertyTable.cookies = nil
+							propertyTable.cookieHeader = nil
+							propertyTable.userStatus = nil
+							propertyTable.token = nil
+							propertyTable.pwVersion = nil
+						else
+							-- Connexion
+							if not PiwigoAPI.login(propertyTable) then
+								LrDialogs.message("Connection NOT successful")
+							end
 						end
 					end)
 				end,
