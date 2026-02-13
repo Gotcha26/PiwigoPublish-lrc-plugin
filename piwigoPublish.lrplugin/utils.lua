@@ -1349,4 +1349,128 @@ function utils.findExistingPwImageId(publishService, lrPhoto)
     return foundRemoteId
 end
 
+-- *************************************************
+function utils.buildAlbumSummary(publishService)
+    -- Recursively build a tree of collection sets and collections with photo counts.
+    -- Returns a flat list of display nodes, each being either a "set" (parent) or "collection" (leaf).
+    -- Set nodes include aggregated sub-totals. Collection nodes include individual counts.
+    -- Returns: { nodes = { ... }, totals = {published, modified, new} }
+    --   node fields: type ("set"|"collection"), name, path, depth, published, modified, new
+
+    local nodes = {}
+    local totals = { published = 0, modified = 0, new = 0 }
+
+    local function countCollection(collection)
+        local published, modified, new = 0, 0, 0
+        local pubPhotos = collection:getPublishedPhotos()
+        for _, pubPhoto in ipairs(pubPhotos) do
+            local remoteId = pubPhoto:getRemoteId()
+            if not remoteId or remoteId == "" then
+                new = new + 1
+            elseif pubPhoto:getEditedFlag() then
+                modified = modified + 1
+            else
+                published = published + 1
+            end
+        end
+        return published, modified, new
+    end
+
+    local function collectFromSet(collectionSet, path, depth)
+        local name = collectionSet:getName()
+        local fullPath = path ~= "" and (path .. " / " .. name) or name
+        local setPub, setMod, setNew = 0, 0, 0
+        local childNodes = {}
+
+        -- Child collections
+        local childColls = collectionSet:getChildCollections()
+        if childColls then
+            for _, coll in ipairs(childColls) do
+                local p, m, n = countCollection(coll)
+                if p > 0 or m > 0 or n > 0 then
+                    table.insert(childNodes, {
+                        type = "collection",
+                        name = coll:getName(),
+                        path = fullPath .. " / " .. coll:getName(),
+                        depth = depth + 1,
+                        published = p, modified = m, new = n,
+                    })
+                    setPub = setPub + p
+                    setMod = setMod + m
+                    setNew = setNew + n
+                end
+            end
+        end
+
+        -- Child sets (recursive)
+        local childSets = collectionSet:getChildCollectionSets()
+        if childSets then
+            for _, childSet in ipairs(childSets) do
+                local subNodes, sp, sm, sn = collectFromSet(childSet, fullPath, depth + 1)
+                for _, node in ipairs(subNodes) do
+                    table.insert(childNodes, node)
+                end
+                setPub = setPub + sp
+                setMod = setMod + sm
+                setNew = setNew + sn
+            end
+        end
+
+        -- Only emit if this set has content
+        local result = {}
+        if setPub > 0 or setMod > 0 or setNew > 0 then
+            -- Insert set header with sub-totals
+            table.insert(result, {
+                type = "set",
+                name = name,
+                path = fullPath,
+                depth = depth,
+                published = setPub, modified = setMod, new = setNew,
+            })
+            -- Then all children
+            for _, node in ipairs(childNodes) do
+                table.insert(result, node)
+            end
+        end
+
+        return result, setPub, setMod, setNew
+    end
+
+    -- Root-level collections (no parent set)
+    local childColls = publishService:getChildCollections()
+    if childColls then
+        for _, coll in ipairs(childColls) do
+            local p, m, n = countCollection(coll)
+            if p > 0 or m > 0 or n > 0 then
+                table.insert(nodes, {
+                    type = "collection",
+                    name = coll:getName(),
+                    path = coll:getName(),
+                    depth = 0,
+                    published = p, modified = m, new = n,
+                })
+                totals.published = totals.published + p
+                totals.modified = totals.modified + m
+                totals.new = totals.new + n
+            end
+        end
+    end
+
+    -- Root-level sets
+    local childSets = publishService:getChildCollectionSets()
+    if childSets then
+        for _, set in ipairs(childSets) do
+            local subNodes, sp, sm, sn = collectFromSet(set, "", 0)
+            for _, node in ipairs(subNodes) do
+                table.insert(nodes, node)
+            end
+            totals.published = totals.published + sp
+            totals.modified = totals.modified + sm
+            totals.new = totals.new + sn
+        end
+    end
+
+    return { nodes = nodes, totals = totals }
+end
+
 return utils

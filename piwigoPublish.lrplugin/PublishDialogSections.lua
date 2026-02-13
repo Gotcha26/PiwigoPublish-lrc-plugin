@@ -349,6 +349,149 @@ local function prefsDialog(f, propertyTable)
 			},
 			f:spacer { height = 1 },
 
+			f:row {
+				f:push_button {
+					title = "Album Summary\n ",
+					font = "<system>",
+					width = share 'buttonwidth',
+					enabled = bind('Connected', propertyTable),
+					tooltip = "Show a summary of all albums with photo counts (published, modified, new to publish)",
+					action = function(button)
+						LrTasks.startAsyncTask(function()
+								local found, service = PiwigoAPI.getPublishService(propertyTable)
+								if not found or not service then
+									LrDialogs.message("Album Summary", "Could not find the publish service. Please save the connection first.")
+									return
+								end
+
+								local summary = utils.buildAlbumSummary(service)
+								local allNodes = summary.nodes
+								local totals = summary.totals
+
+								if #allNodes == 0 then
+									LrDialogs.message("Album Summary", "No albums with photos found.")
+									return
+								end
+
+								-- Build LrView dialog
+								local dlgF = LrView.osFactory()
+
+								-- Column widths (pixels)
+								local colName = 370
+								local colNum = 45
+								local indentPx = 20
+
+								-- Count leaf albums
+								local albumCount = 0
+								for _, node in ipairs(allNodes) do
+									if node.type == "collection" then albumCount = albumCount + 1 end
+								end
+
+								local function mkRow(indent, nameStr, nameFont, pub, pubFont, mod, modFont, new, newFont)
+									return dlgF:row {
+										dlgF:static_text { title = "", width = indent },
+										dlgF:static_text {
+											title = nameStr, font = nameFont,
+											width = colName - indent, truncation = 'middle',
+										},
+										dlgF:static_text {
+											title = pub, font = pubFont or "<system>",
+											width = colNum, alignment = 'right',
+										},
+										dlgF:static_text {
+											title = mod, font = modFont or "<system>",
+											width = colNum, alignment = 'right',
+										},
+										dlgF:static_text {
+											title = new, font = newFont or "<system>",
+											width = colNum, alignment = 'right',
+										},
+									}
+								end
+
+								-- Header
+								local headerRow = mkRow(0, "Album", "<system/bold>",
+									"Pub.", "<system/bold>", "Mod.", "<system/bold>", "New", "<system/bold>")
+
+								-- Build data rows
+								local dataRows = {}
+								for _, node in ipairs(allNodes) do
+									local indent = node.depth * indentPx
+									local modStr = node.modified > 0 and tostring(node.modified) or "-"
+									local newStr = node.new > 0 and tostring(node.new) or "-"
+									local modFont = node.modified > 0 and "<system/bold>" or "<system>"
+									local newFont = node.new > 0 and "<system/bold>" or "<system>"
+
+									if node.type == "set" then
+										-- Parent set: separator + bold name + sub-totals in italic
+										if #dataRows > 0 then
+											table.insert(dataRows, dlgF:spacer { height = 6 })
+										end
+										table.insert(dataRows, mkRow(indent,
+											node.name, "<system/bold>",
+											tostring(node.published), "<system>",
+											modStr, modFont,
+											newStr, newFont
+										))
+									else
+										-- Leaf album
+										local hasPending = node.modified > 0 or node.new > 0
+										local nameFont = hasPending and "<system/bold>" or "<system>"
+										table.insert(dataRows, mkRow(indent,
+											node.name, nameFont,
+											tostring(node.published), "<system>",
+											modStr, modFont,
+											newStr, newFont
+										))
+									end
+								end
+
+								-- Totals row
+								local totalRow = mkRow(0,
+									"TOTAL (" .. albumCount .. " albums)", "<system/bold>",
+									tostring(totals.published), "<system/bold>",
+									tostring(totals.modified), "<system/bold>",
+									tostring(totals.new), "<system/bold>"
+								)
+
+								-- Assemble
+								local contentItems = {
+									headerRow,
+									dlgF:separator { fill_horizontal = 1 },
+								}
+								for _, dr in ipairs(dataRows) do
+									table.insert(contentItems, dr)
+								end
+								table.insert(contentItems, dlgF:separator { fill_horizontal = 1 })
+								table.insert(contentItems, totalRow)
+								contentItems.spacing = dlgF:control_spacing()
+
+								local contents = dlgF:column(contentItems)
+
+								local scrolled = dlgF:scrolled_view {
+									width = colName + colNum * 3 + 40,
+									height = math.min(500, 80 + #allNodes * 20),
+									contents,
+								}
+
+								LrDialogs.presentModalDialog({
+									title = "Album Summary — " .. (propertyTable.LR_publish_connectionName or ""),
+									contents = scrolled,
+									actionVerb = "OK",
+									cancelVerb = "< exclude >",
+								})
+						end)
+					end,
+				},
+				f:static_text {
+					title = "Show a summary of all albums with photo counts\n(published, modified, new to publish)",
+					font = "<system>",
+					alignment = 'left',
+					tooltip = "Display a summary dialog listing all albums and their photo status counts"
+				},
+			},
+			f:spacer { height = 1 },
+
 		},
 
 		f:group_box {
