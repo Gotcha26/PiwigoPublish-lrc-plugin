@@ -114,12 +114,30 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
             return nil
         end
     end
+    if not utils.nilOrEmpty(checkCats) and albumId then
+        -- album exists on Piwigo — sync status (private/public) from collection settings
+        local metaData = {}
+        metaData.name = albumName
+        metaData.remoteId = albumId
+        metaData.description = collectionSettings.albumDescription or ""
+        if collectionSettings.albumPrivate then
+            metaData.status = "private"
+        else
+            metaData.status = "public"
+        end
+        PiwigoAPI.pwCategoriesSetinfo(propertyTable, publishedCollection, metaData)
+    end
     if utils.nilOrEmpty(checkCats) or not (albumId) then
         -- create missing album on piwigo (may happen if album is deleted directly on Piwigo rather than via this plugin, or if smartcollectionimport is run)
         local metaData = {}
         callStatus = {}
         metaData.name = albumName
         metaData.parentCat = parentID
+        if collectionSettings.albumPrivate then
+            metaData.status = "private"
+        else
+            metaData.status = "public"
+        end
         callStatus = PiwigoAPI.pwCategoriesAdd(propertyTable, publishedCollection, metaData, callStatus)
         if callStatus.status then
             -- reset album id to newly created one
