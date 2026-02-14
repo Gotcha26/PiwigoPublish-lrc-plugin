@@ -1793,11 +1793,12 @@ function PiwigoAPI.pwCategoriesAdd(propertyTable, info, metaData, callStatus)
             name = "comment",
             value = description
         })
-        table.insert(Params, {
-            name = "status",
-            value = albumstatus
-        })
     end
+
+    table.insert(Params, {
+        name = "status",
+        value = albumstatus
+    })
 
     if metaData.parentCat ~= "" then
         table.insert(Params, {
