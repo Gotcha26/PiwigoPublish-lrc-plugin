@@ -620,6 +620,13 @@ function utils.getPhotoMetadata(publishSettings, lrPhoto)
 
     metaData.tagString = utils.BuildTagString(publishSettings, lrPhoto)
 
+    -- GPS coordinates
+    local gps = lrPhoto:getRawMetadata("gps")
+    if gps then
+        metaData.latitude = gps.latitude
+        metaData.longitude = gps.longitude
+    end
+
     return metaData
 end
 

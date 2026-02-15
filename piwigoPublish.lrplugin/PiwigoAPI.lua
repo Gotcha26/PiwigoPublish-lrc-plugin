@@ -2394,6 +2394,18 @@ function PiwigoAPI.updateMetadata(propertyTable, lrPhoto, metaData)
         })
     end
 
+    -- GPS coordinates
+    if metaData.latitude and metaData.longitude then
+        table.insert(params, {
+            name = "latitude",
+            value = tostring(metaData.latitude)
+        })
+        table.insert(params, {
+            name = "longitude",
+            value = tostring(metaData.longitude)
+        })
+    end
+
     -- keywords
     if metaData.tagString and metaData.tagString ~= "" then
         -- convert tagString to list of tagIDS
