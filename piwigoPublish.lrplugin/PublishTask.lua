@@ -27,6 +27,150 @@
 PublishTask = {}
 
 -- ************************************************
+-- Reconcile album metadata (description, privacy) between Lightroom and Piwigo.
+-- Returns true to proceed, false if cancelled by user.
+local function reconcileAlbumMeta(publishSettings, collectionSettings, thisCat)
+    if not thisCat then return true end
+
+    local lrDesc = collectionSettings.albumDescription or ""
+    local pwDesc = thisCat.comment or ""
+    local lrPrivate = collectionSettings.albumPrivate or false
+    local pwPrivate = (thisCat.status == "private")
+
+    local descDiff = (lrDesc ~= pwDesc)
+    local statusDiff = (lrPrivate ~= pwPrivate)
+
+    if not descDiff and not statusDiff then return true end
+
+    local descMode = publishSettings.albumDescSyncMode or "ask"
+    local statusMode = publishSettings.albumStatusSyncMode or "ask"
+
+    -- Resolve automatically when a forced mode is set
+    if descDiff and descMode == "piwigo" then
+        collectionSettings.albumDescription = pwDesc
+        descDiff = false
+    end
+    if statusDiff and statusMode == "piwigo" then
+        collectionSettings.albumPrivate = pwPrivate
+        statusDiff = false
+    end
+    if descDiff and descMode == "lightroom" then
+        descDiff = false
+    end
+    if statusDiff and statusMode == "lightroom" then
+        statusDiff = false
+    end
+
+    -- If all diffs resolved by forced modes, proceed
+    if not descDiff and not statusDiff then return true end
+
+    -- Strip HTML tags for display
+    local function stripHtml(s)
+        if not s or s == "" then return s end
+        -- Strip all HTML tags
+        s = s:gsub("<[^>]+>", "")
+        -- Decode common HTML entities
+        s = s:gsub("&nbsp;", " "):gsub("&amp;", "&"):gsub("&lt;", "<"):gsub("&gt;", ">"):gsub("&quot;", '"'):gsub("&#39;", "'")
+        -- Linearize: replace newlines/carriage returns with a single space
+        s = s:gsub("[\r\n]+", " ")
+        -- Collapse multiple spaces
+        s = s:gsub("  +", " ")
+        -- Trim
+        s = s:gsub("^%s+", ""):gsub("%s+$", "")
+        return s
+    end
+
+    -- Build conflict dialog with formatted view
+    local f = LrView.osFactory()
+    local rows = {}
+
+    table.insert(rows, f:static_text {
+        title = "Differences detected between Lightroom and Piwigo:",
+        font = "<system/bold>",
+        fill_horizontal = 1,
+    })
+    table.insert(rows, f:static_text { title = " ", height_in_lines = 1 })
+
+    if descDiff then
+        table.insert(rows, f:static_text {
+            title = "Album Description",
+            font = "<system/bold>",
+        })
+        table.insert(rows, f:static_text { title = " ", height_in_lines = 2 })
+        table.insert(rows, f:row {
+            f:static_text { title = "Lightroom:", font = "<system>", width = 80 },
+            f:static_text {
+                title = lrDesc == "" and "(empty)" or stripHtml(lrDesc),
+                font = "<system/italic>",
+                width_in_chars = 50,
+                height_in_lines = 3,
+            },
+        })
+        table.insert(rows, f:row {
+            f:static_text { title = "Piwigo:", font = "<system>", width = 80 },
+            f:static_text {
+                title = pwDesc == "" and "(empty)" or stripHtml(pwDesc),
+                font = "<system/italic>",
+                width_in_chars = 50,
+                height_in_lines = 3,
+            },
+        })
+        table.insert(rows, f:static_text { title = " ", height_in_lines = 1 })
+    end
+
+    if statusDiff then
+        table.insert(rows, f:static_text {
+            title = "Album Privacy Status",
+            font = "<system/bold>",
+        })
+        table.insert(rows, f:static_text { title = " ", height_in_lines = 1 })
+        table.insert(rows, f:row {
+            f:static_text { title = "Lightroom:", font = "<system>", width = 80 },
+            f:static_text {
+                title = lrPrivate and "Private" or "Public",
+                font = "<system/italic>",
+            },
+        })
+        table.insert(rows, f:row {
+            f:static_text { title = "Piwigo:", font = "<system>", width = 80 },
+            f:static_text {
+                title = pwPrivate and "Private" or "Public",
+                font = "<system/italic>",
+            },
+        })
+        table.insert(rows, f:static_text { title = " ", height_in_lines = 1 })
+    end
+
+    table.insert(rows, f:separator { fill_horizontal = 1 })
+    table.insert(rows, f:static_text { title = " ", height_in_lines = 1 })
+    table.insert(rows, f:static_text {
+        title = "Your choice will overwrite the other version. This cannot be undone.",
+        font = "<system/bold>",
+        text_color = LrColor(0.8, 0, 0),
+        fill_horizontal = 1,
+    })
+
+    local contents = f:column(rows)
+
+    local dialogResult = LrDialogs.presentModalDialog({
+        title = "Album conflict: " .. (thisCat.name or ""),
+        contents = contents,
+        actionVerb = "Keep Lightroom (overwrite Piwigo)",
+        cancelVerb = "Cancel",
+        otherVerb = "Keep Piwigo (overwrite Lightroom)",
+    })
+
+    if dialogResult == "cancel" then
+        return false
+    elseif dialogResult == "other" then
+        if descDiff then collectionSettings.albumDescription = pwDesc end
+        if statusDiff then collectionSettings.albumPrivate = pwPrivate end
+    end
+
+    return true
+end
+
+-- ************************************************
 function PublishTask.processRenderedPhotos(functionContext, exportContext)
     -- render photos and upload to Piwigo
 
@@ -115,7 +259,12 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
         end
     end
     if not utils.nilOrEmpty(checkCats) and albumId then
-        -- album exists on Piwigo — sync status (private/public) from collection settings
+        -- album exists on Piwigo — reconcile metadata before updating
+        local thisCat = PiwigoAPI.pwCategoriesGetThis(propertyTable, albumId)
+        if not reconcileAlbumMeta(propertyTable, collectionSettings, thisCat) then
+            PWStatusManager.setPiwigoBusy(publishService, false)
+            return nil
+        end
         local metaData = {}
         metaData.name = albumName
         metaData.remoteId = albumId
@@ -1064,6 +1213,11 @@ function PublishTask.updateCollectionSettings(publishSettings, info)
                 publishSettings.host)
             return nil
         end
+        if not reconcileAlbumMeta(publishSettings, collectionSettings, thisCat) then
+            return { status = false, statusMsg = "Cancelled by user" }
+        end
+        metaData.description = collectionSettings.albumDescription or ""
+        metaData.status = collectionSettings.albumPrivate and "private" or "public"
         CallStatus = PiwigoAPI.pwCategoriesSetinfo(publishSettings, info, metaData)
         return CallStatus
     end
@@ -1184,6 +1338,11 @@ function PublishTask.updateCollectionSetSettings(publishSettings, info)
                 publishSettings.host)
             return nil
         end
+        if not reconcileAlbumMeta(publishSettings, collectionSettings, thisCat) then
+            return { status = false, statusMsg = "Cancelled by user" }
+        end
+        metaData.description = collectionSettings.albumDescription or ""
+        metaData.status = collectionSettings.albumPrivate and "private" or "public"
         CallStatus = PiwigoAPI.pwCategoriesSetinfo(publishSettings, info, metaData)
         return CallStatus
     end
@@ -1291,6 +1450,13 @@ function PublishTask.renamePublishedCollection(publishSettings, info)
         collectionSettings = collection:getCollectionSetInfoSummary()
     else
         collectionSettings = collection:getCollectionInfoSummary()
+    end
+    -- Reconcile metadata with Piwigo before renaming
+    if not utils.nilOrEmpty(remoteId) then
+        local thisCat = PiwigoAPI.pwCategoriesGetThis(publishSettings, remoteId)
+        if not reconcileAlbumMeta(publishSettings, collectionSettings, thisCat) then
+            return { status = false, statusMsg = "Cancelled by user" }
+        end
     end
     local metaData = {}
     metaData.name = newName

@@ -785,11 +785,7 @@ function PiwigoAPI.createCollection(propertyTable, node, parentNode, isLeafNode,
                         stat.errors = stat.errors + 1
                     else
                         collectionSettings = newColl:getCollectionInfoSummary().collectionSettings or {}
-                        if propertyTable.syncAlbumDescriptions then
-                            collectionSettings.albumDescription = collDescription
-                        else
-                            collectionSettings.albumDescription = ""
-                        end
+                        collectionSettings.albumDescription = collDescription
                         if collStatus == "private" then
                             collectionSettings.albumPrivate = true
                         else
@@ -819,11 +815,7 @@ function PiwigoAPI.createCollection(propertyTable, node, parentNode, isLeafNode,
                     else
                         -- now add remoteids and urls to collections and collection sets, and description and status
                         collectionSettings = newColl:getCollectionSetInfoSummary().collectionSettings or {}
-                        if propertyTable.syncAlbumDescriptions then
-                            collectionSettings.albumDescription = collDescription
-                        else
-                            collectionSettings.albumDescription = ""
-                        end
+                        collectionSettings.albumDescription = collDescription
                         if collStatus == "private" then
                             collectionSettings.albumPrivate = true
                         else
@@ -848,11 +840,7 @@ function PiwigoAPI.createCollection(propertyTable, node, parentNode, isLeafNode,
                 -- existing collection
                 log:info("createCollection - updating existing PublishedCollection " .. existingColl:getName())
                 collectionSettings = existingColl:getCollectionInfoSummary().collectionSettings or {}
-                if propertyTable.syncAlbumDescriptions then
-                    collectionSettings.albumDescription = collDescription
-                else
-                    collectionSettings.albumDescription = ""
-                end
+                collectionSettings.albumDescription = collDescription
                 if collStatus == "private" then
                     collectionSettings.albumPrivate = true
                 else
@@ -866,11 +854,7 @@ function PiwigoAPI.createCollection(propertyTable, node, parentNode, isLeafNode,
                 -- existing collection set
                 log:info("createCollection - updating existing PublishedCollectionSet " .. existingColl:getName())
                 collectionSettings = existingColl:getCollectionSetInfoSummary().collectionSettings or {}
-                if propertyTable.syncAlbumDescriptions then
-                    collectionSettings.albumDescription = collDescription
-                else
-                    collectionSettings.albumDescription = ""
-                end
+                collectionSettings.albumDescription = collDescription
                 if collStatus == "private" then
                     collectionSettings.albumPrivate = true
                 else
@@ -1788,12 +1772,10 @@ function PiwigoAPI.pwCategoriesAdd(propertyTable, info, metaData, callStatus)
         value = propertyTable.token
     } }
 
-    if propertyTable.syncAlbumDescriptions then
-        table.insert(Params, {
-            name = "comment",
-            value = description
-        })
-    end
+    table.insert(Params, {
+        name = "comment",
+        value = description
+    })
 
     table.insert(Params, {
         name = "status",
@@ -1963,12 +1945,10 @@ function PiwigoAPI.pwCategoriesSetinfo(propertyTable, info, metaData)
         name = "pwg_token",
         value = propertyTable.token
     } }
-    if propertyTable.syncAlbumDescriptions then
-        table.insert(params, {
-            name = "comment",
-            value = description
-        })
-    end
+    table.insert(params, {
+        name = "comment",
+        value = description
+    })
     table.insert(params, {
         name = "status",
         value = status

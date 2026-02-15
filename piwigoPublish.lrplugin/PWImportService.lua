@@ -396,11 +396,7 @@ local function createTree(nodes, parentSet, publishService, created, childrenInd
             if pwDetails.isPiwigo then
                 local collectionSettings = newCollorSet:getCollectionSetInfoSummary().collectionSettings or {}
                 -- album settings set to correspond to service being cloned
-                if propertyTable.syncAlbumDescriptions then
-                    collectionSettings.albumDescription = comment
-                else
-                    collectionSettings.albumDescription = ""
-                end
+                collectionSettings.albumDescription = comment
                 if status == "private" then
                     collectionSettings.albumPrivate = true
                 else
@@ -411,13 +407,7 @@ local function createTree(nodes, parentSet, publishService, created, childrenInd
                     local thisCat = PiwigoAPI.pwCategoriesGetThis(propertyTable, remoteAlbumId)
                     if thisCat then
                         -- use settings directly from Piwigo, overriding local settings
-                        if propertyTable.syncAlbumDescriptions then
-                            if thisCat.description then
-                                collectionSettings.albumDescription = thisCat.description
-                            else
-                                collectionSettings.albumDescription = ""
-                            end
-                        end
+                        collectionSettings.albumDescription = thisCat.description or ""
                         if thisCat.status == "public" then
                             collectionSettings.albumPrivate = false
                         else
@@ -478,11 +468,7 @@ local function createTree(nodes, parentSet, publishService, created, childrenInd
             if pwDetails.isPiwigo and pwDetails.isSameHost then
                 -- this is the same Piwigo host then we can copy remote ids etc
                 local collectionSettings = newCollorSet:getCollectionInfoSummary().collectionSettings or {}
-                if propertyTable.syncAlbumDescriptions then
-                    collectionSettings.albumDescription = comment
-                else
-                    collectionSettings.albumDescription = ""
-                end
+                collectionSettings.albumDescription = comment
                 if status == "private" then
                     collectionSettings.albumPrivate = true
                 else
@@ -492,13 +478,7 @@ local function createTree(nodes, parentSet, publishService, created, childrenInd
                     -- check if remoote album exists and add to collection if so
                     local thisCat = PiwigoAPI.pwCategoriesGetThis(propertyTable, remoteAlbumId)
                     if thisCat then
-                        if propertyTable.syncAlbumDescriptions then
-                            if thisCat.description then
-                                collectionSettings.albumDescription = thisCat.description
-                            else
-                                collectionSettings.albumDescription = ""
-                            end
-                        end
+                        collectionSettings.albumDescription = thisCat.description or ""
                         if thisCat.status == "public" then
                             collectionSettings.albumPrivate = false
                         else

@@ -84,11 +84,7 @@ function UIHelpers.createPiwigoAlbumSettingsUI(f, share, bind, collectionSetting
 				fill_horizontal = 1,
 				f:static_text { title = "Album Description:", font = "<system>", alignment = 'right', width = share 'label_width', },
 				f:edit_field {
-					enabled = LrView.bind {
-						key = 'syncAlbumDescriptions',
-						object = publishSettings,
-					},
-
+					enabled = true,
 					value = bind 'albumDescription',
 					fill_horizontal = 1,
 					width_in_chars = 70,

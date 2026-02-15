@@ -550,15 +550,37 @@ local function prefsDialog(f, propertyTable)
 			f:row {
 				fill_horizontal = 1,
 				f:static_text {
-					title = "",
-					alignment = 'right',
-					width_in_chars = 7,
-				},
-				f:checkbox {
-					title = "Synchronise Album Descriptions",
+					title = "Album description :",
 					font = "<system>",
-					tooltip = "If checked, Album descriptions will be maintainable in Lightroom and sent to Piwigo",
-					value = bind 'syncAlbumDescriptions',
+					alignment = 'right',
+					width_in_chars = 18,
+				},
+				f:popup_menu {
+					tooltip = "How to resolve conflicts between Lightroom and Piwigo album descriptions",
+					value = bind 'albumDescSyncMode',
+					items = {
+						{ title = "Ask on conflict",       value = "ask" },
+						{ title = "Always use Lightroom",  value = "lightroom" },
+						{ title = "Always use Piwigo",     value = "piwigo" },
+					},
+				},
+			},
+			f:row {
+				fill_horizontal = 1,
+				f:static_text {
+					title = "Album privacy :",
+					font = "<system>",
+					alignment = 'right',
+					width_in_chars = 18,
+				},
+				f:popup_menu {
+					tooltip = "How to resolve conflicts between Lightroom and Piwigo album privacy status",
+					value = bind 'albumStatusSyncMode',
+					items = {
+						{ title = "Ask on conflict",       value = "ask" },
+						{ title = "Always use Lightroom",  value = "lightroom" },
+						{ title = "Always use Piwigo",     value = "piwigo" },
+					},
 				},
 			},
 			f:spacer { height = 1 },
