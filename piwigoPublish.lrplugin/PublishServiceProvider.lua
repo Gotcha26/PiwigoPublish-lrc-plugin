@@ -39,7 +39,11 @@ return {
 	-- Behaviour Settings
 	allowFileFormats = { "JPEG", "PNG" },
 	allowColorSpaces = nil,
-	canExportVideo = false,
+	canExportVideo = true,
+	allowVideoExportPresets = {
+		{ formatID = "h.264" },
+		{ formatID = "original" },
+	},
 	supportsCustomSortOrder = true,
 	hidePrintResolution = true,
 	supportsIncrementalPublish = 'only', -- plugin only visible in publish services, not export

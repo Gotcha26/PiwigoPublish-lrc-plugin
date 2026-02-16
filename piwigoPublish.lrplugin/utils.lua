@@ -1480,4 +1480,20 @@ function utils.buildAlbumSummary(publishService)
     return { nodes = nodes, totals = totals }
 end
 
+-- *************************************************
+function utils.parsePhpSize(sizeStr)
+    -- Convert PHP size strings like "128M", "2G", "512K" to bytes
+    if not sizeStr or sizeStr == "" then return nil end
+    sizeStr = tostring(sizeStr):upper():gsub("%s+", "")
+    local num, unit = sizeStr:match("^(%d+%.?%d*)([KMGT]?)$")
+    if not num then return nil end
+    num = tonumber(num)
+    if not num then return nil end
+    local multipliers = { K = 1024, M = 1024*1024, G = 1024*1024*1024, T = 1024*1024*1024*1024 }
+    if unit and unit ~= "" then
+        num = num * (multipliers[unit] or 1)
+    end
+    return math.floor(num)
+end
+
 return utils

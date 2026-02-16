@@ -328,6 +328,114 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
     -- flag to allow sync comments to manage process in PublishTask.getCommentsFromPublishedCollection
     PWStatusManager.setRenderPhotos(publishService, true)
 
+    -- Video upload guard: pre-check before rendering starts
+    local videoUploadBlocked = false
+    local serverMaxBytes     = nil
+
+    -- Pre-scan: detect if batch contains videos and check server support BEFORE rendering
+    local batchVideoCount = 0
+    local batchTotalCount = exportSession:countRenditions()
+    local videoPhotos = {}
+    for photo in exportSession:photosToExport() do
+        local fmt = photo:getRawMetadata("fileFormat")
+        if fmt == "VIDEO" then
+            batchVideoCount = batchVideoCount + 1
+            table.insert(videoPhotos, photo)
+        end
+    end
+    if batchVideoCount == 0 then
+        log:info("PublishTask - pre-scan: no videos detected in batch")
+    else
+        log:info("PublishTask - pre-scan: " .. batchVideoCount .. " video(s) detected in batch of " .. batchTotalCount)
+        -- Check server video support now, before rendering starts
+        local videoSupport = PiwigoAPI.getServerVideoSupport(propertyTable)
+        local warnings = {}
+
+        if not videoSupport.status then
+            videoUploadBlocked = true
+            table.insert(warnings, "- Cannot verify server video support (connection issue).")
+        elseif not videoSupport.companionAvailable then
+            videoUploadBlocked = true
+            table.insert(warnings, "- The 'Lightroom Companion' plugin is not installed on your Piwigo server.")
+            table.insert(warnings, "  Without it, video upload cannot be authorized.")
+            table.insert(warnings, "\nInstall and activate the 'Lightroom Companion' plugin in Piwigo,")
+            table.insert(warnings, "then use 'Server Info' > 'Enable Video Support' to configure the server.")
+        else
+            local cfg = videoSupport.serverConfig
+            if cfg and cfg.piwigo then
+                if cfg.piwigo.video_ready then
+                    log:info("PublishTask - server video_ready = true")
+                    if cfg.php and cfg.php.upload_max_filesize then
+                        serverMaxBytes = utils.parsePhpSize(cfg.php.upload_max_filesize)
+                        local postMax = utils.parsePhpSize(cfg.php.post_max_size or "0")
+                        if postMax and postMax > 0 and (not serverMaxBytes or postMax < serverMaxBytes) then
+                            serverMaxBytes = postMax
+                        end
+                        if serverMaxBytes then
+                            log:info("PublishTask - server max upload = " .. serverMaxBytes .. " bytes")
+                        end
+                    end
+                else
+                    videoUploadBlocked = true
+                    if not cfg.piwigo.upload_form_all_types then
+                        table.insert(warnings, "- Server does NOT accept all file types (upload_form_all_types = false)")
+                    end
+                    local vExts = cfg.piwigo.video_ext_configured or {}
+                    if type(vExts) ~= "table" or #vExts == 0 then
+                        table.insert(warnings, "- No video extensions configured on the server.")
+                    end
+                    table.insert(warnings, "\nUse 'Server Info' > 'Enable Video Support' to fix this automatically.")
+                end
+
+                if not videoSupport.videoJsInstalled then
+                    table.insert(warnings, "- VideoJS plugin is NOT installed (videos won't play in gallery)")
+                elseif not videoSupport.videoJsActive then
+                    table.insert(warnings, "- VideoJS plugin is installed but INACTIVE")
+                end
+
+                -- FFmpeg absence is non-blocking, info available via Companion admin page
+                if cfg.ffmpeg and not cfg.ffmpeg.installed then
+                    log:info("PublishTask - FFmpeg not installed (non-blocking)")
+                end
+            else
+                videoUploadBlocked = true
+                table.insert(warnings, "- Companion plugin responded but returned no configuration data.")
+            end
+        end
+
+        if videoUploadBlocked then
+            local warningText = table.concat(warnings, "\n")
+            -- Remove blocked videos from session BEFORE rendering starts
+            for _, vPhoto in ipairs(videoPhotos) do
+                local vName = vPhoto:getFormattedMetadata("fileName") or "unknown"
+                log:info("PublishTask - removing blocked video from session: " .. vName)
+                exportSession:removePhoto(vPhoto)
+            end
+            -- If batch contained ONLY videos, skip rendering entirely
+            if batchVideoCount >= batchTotalCount then
+                log:info("PublishTask - batch contained only videos, all blocked — nothing to render")
+                LrDialogs.message("Video Upload Blocked",
+                    "Video upload is not authorized:\n\n" .. warningText ..
+                    "\n\nNo photos to publish in this batch.",
+                    "critical")
+                PWStatusManager.setPiwigoBusy(publishService, false)
+                PWStatusManager.setRenderPhotos(publishService, false)
+                return
+            else
+                LrDialogs.message("Video Upload Blocked",
+                    "Video upload is not authorized:\n\n" .. warningText ..
+                    "\n\n" .. batchVideoCount .. " video(s) skipped.\nPhotos will still be published.",
+                    "critical")
+            end
+        elseif #warnings > 0 then
+            local warningText = table.concat(warnings, "\n")
+            LrDialogs.message("Video Support Warning",
+                "Issues detected on your Piwigo server:\n\n" .. warningText ..
+                "\n\nVideo upload will proceed.",
+                "warning")
+        end
+    end
+
     -- now wait for photos to be exported and then upload to Piwigo
     for i, rendition in exportContext:renditions(renditionParams) do
         -- reset connection every 75 uploads
@@ -349,10 +457,45 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
 
         local lrPhoto = rendition.photo
         local remoteId = rendition.publishedPhotoId or ""
+        local fileFormat = lrPhoto:getRawMetadata("fileFormat")
+        local isVideo = (fileFormat == "VIDEO")
 
-        -- Keyword filter check
+        -- Video guard: server-blocked videos already removed before the loop via removePhoto
+        local videoBlocked = false
+        if isVideo then
+            local videoFileName = lrPhoto:getFormattedMetadata("fileName") or "unknown"
+            log:info("PublishTask.processRenderedPhotos - video detected: " .. videoFileName)
+
+            -- Per-file size check (only if upload allowed and limit known)
+            if serverMaxBytes then
+                local filePath = lrPhoto:getRawMetadata("path")
+                if filePath then
+                    local attrs = LrFileUtils.fileAttributes(filePath)
+                    if attrs and attrs.fileSize and attrs.fileSize > serverMaxBytes then
+                        local sizeMB = string.format("%.1f", attrs.fileSize / (1024*1024))
+                        local limitMB = string.format("%.1f", serverMaxBytes / (1024*1024))
+                        log:info("PublishTask - BLOCKING video (too large): " .. videoFileName
+                            .. " (" .. sizeMB .. " MB > " .. limitMB .. " MB)")
+                        local skipOk, skipErr = pcall(function() rendition:skipRender() end)
+                        if not skipOk then
+                            log:info("PublishTask - skipRender failed (" .. tostring(skipErr) .. "), waiting for render to discard")
+                            local bSuccess, bPath = rendition:waitForRender()
+                            if bSuccess and LrFileUtils.exists(bPath) then LrFileUtils.delete(bPath) end
+                            rendition:renditionIsDone(false, "Video too large: " .. sizeMB .. " MB (limit: " .. limitMB .. " MB)")
+                        end
+                        videoBlocked = true
+                        LrDialogs.message("Video Too Large",
+                            videoFileName .. " (" .. sizeMB .. " MB) exceeds the server limit of " .. limitMB .. " MB.\n"
+                            .. "This video will be skipped.",
+                            "warning")
+                    end
+                end
+            end
+        end
+
+        -- Keyword filter check (skip if video already blocked)
         local kwBlocked = false
-        if kwFilterActive then
+        if not videoBlocked and kwFilterActive then
             local keywords = utils.getPhotoDirectKeywords(lrPhoto)
             local allowed, reason = utils.checkKeywordFilter(keywords, includePatterns, excludePatterns)
             if not allowed then
@@ -369,7 +512,7 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
             end
         end
 
-        if not kwBlocked then
+        if not kwBlocked and not videoBlocked then
             -- Detect photo already published in this service (multi-album support)
             local existingPwImageId = nil
             if remoteId == "" then
@@ -377,30 +520,20 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
                 local storedImageUrl = lrPhoto:getPropertyForPlugin(_PLUGIN, "pwImageURL")
                 local storedHost = lrPhoto:getPropertyForPlugin(_PLUGIN, "pwHostURL")
 
-                log:info("DEBUG multi-album: remoteId vide, checking metadata...")
-                log:info("DEBUG storedHost: " .. tostring(storedHost))
-                log:info("DEBUG storedImageUrl: " .. tostring(storedImageUrl))
-                log:info("DEBUG propertyTable.host: " .. tostring(propertyTable.host))
-
                 if storedHost == propertyTable.host and storedImageUrl then
                     existingPwImageId = utils.extractPwImageIdFromUrl(storedImageUrl, propertyTable.host)
                 end
 
                 -- Method 2: Search in other collections of the service (fallback)
                 if not existingPwImageId then
-                    log:info("DEBUG multi-album: metadata vides, recherche cross-collection...")
                     local publishService = publishedCollection:getService()
                     existingPwImageId = utils.findExistingPwImageId(publishService, lrPhoto)
-                    if existingPwImageId then
-                        log:info("DEBUG multi-album: trouvé via cross-collection, ID = " .. tostring(existingPwImageId))
-                    end
                 end
 
                 -- Verify the image still exists on Piwigo
                 if existingPwImageId then
                     local checkStatus = PiwigoAPI.checkPhoto(propertyTable, existingPwImageId)
                     if not checkStatus.status then
-                        log:info("DEBUG multi-album: image " .. existingPwImageId .. " n'existe plus sur Piwigo")
                         existingPwImageId = nil
                     end
                 end
