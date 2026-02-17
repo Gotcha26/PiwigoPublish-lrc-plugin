@@ -24,6 +24,7 @@ from typing import Callable
 from .ffmpeg import FFmpeg, FFmpegError
 from .ffprobe import FFprobe, ProbeError, VideoInfo
 from .hasher import Hasher
+from .metadata import ExifTool
 from .presets import PresetManager, VideoPreset
 from .status import StatusManager, STATE_PROCESSING, STATE_COMPLETE, STATE_ERROR
 
@@ -62,16 +63,20 @@ class VideoProcessor:
         self,
         ffmpeg_path: str = "ffmpeg",
         ffprobe_path: str = "ffprobe",
+        exiftool_path: str = "exiftool",
         preset_manager: PresetManager | None = None,
         thumbnail_timestamp_pct: int = 10,
         thumbnail_max_width: int = 1280,
+        copy_metadata: bool = True,
     ):
         self._ffmpeg = FFmpeg(ffmpeg_path)
         self._ffprobe = FFprobe(ffprobe_path)
+        self._exiftool = ExifTool(exiftool_path)
         self._hasher = Hasher()
         self._presets = preset_manager or PresetManager()
         self._thumb_pct = thumbnail_timestamp_pct
         self._thumb_max_w = thumbnail_max_width
+        self._copy_metadata = copy_metadata
 
     # -------------------------------------------------------------------
     # Public API
@@ -240,7 +245,20 @@ class VideoProcessor:
             t_info = status.get_thumbnail()
             thumb_size = t_info.get("size", 0)
 
-        # --- 9. Finalisation ---
+        # --- 9. Copie des métadonnées source → variante ---
+        if self._copy_metadata and not thumbnail_only and not dry_run and not preset.is_origin:
+            # origin = copie directe, métadonnées déjà présentes
+            meta_copy = self._exiftool.copy(
+                source_path=input_path,
+                target_path=variant_path,
+            )
+            # Extraction pour le fichier statut (optionnelle, ne bloque pas)
+            if not meta_copy.skipped and not meta_copy.error:
+                meta_obj = self._exiftool.extract(input_path)
+                if meta_obj:
+                    status.set_metadata(meta_obj.to_dict())
+
+        # --- 10. Finalisation ---
         status.set_state(STATE_COMPLETE, progress=100)
         if not dry_run:
             status.save()
