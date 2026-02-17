@@ -964,26 +964,39 @@ local function videoDialog(f, propertyTable)
 
 		f:group_box {
 			title = "Video Toolkit",
-			font = "<system/bold>",
+			font = "<system>",
 			fill_horizontal = 1,
 
 			f:spacer { height = 2 },
 
 			-- Enable/disable toggle
 			f:row {
+				fill_horizontal = 1,
 				f:checkbox {
 					title = "Enable Video Toolkit (local transcoding)",
+					fill_horizontal = 1,
 					value = bind "vtkEnabled",
 					tooltip = "When enabled, videos are transcoded locally by the Video Toolkit before upload.",
+				},
+			},
+
+			f:row {
+				fill_horizontal = 1,
+				f:checkbox {
+					title = "Include video files",
+					fill_horizontal = 1,
+					value = bind "vtkIncludeVideo",
+					tooltip = "Include video files in publications. Requires Video Toolkit to be enabled.",
+					enabled = bind "vtkEnabled",
 				},
 			},
 
 			f:spacer { height = 4 },
 
 			-- Preset + poster settings (enabled only when vtkEnabled = true)
-			f:group_box {
-				title = "Encoding Settings",
-				font = "<system>",
+			f:separator { fill_horizontal = 1 },
+			f:row { f:static_text { title = "Encoding Settings", fill_horizontal = 1 } },
+			f:column {
 				fill_horizontal = 1,
 				enabled = bind "vtkEnabled",
 
@@ -1012,6 +1025,7 @@ local function videoDialog(f, propertyTable)
 					},
 					f:checkbox {
 						title = "Generate poster (JPG)",
+						fill_horizontal = 1,
 						value = bind "vtkGeneratePoster",
 						tooltip = "Extract a JPG thumbnail from the video and upload as representative image.",
 					},
@@ -1039,13 +1053,27 @@ local function videoDialog(f, propertyTable)
 			f:spacer { height = 4 },
 
 			-- Advanced paths (collapsible group_box)
-			f:group_box {
-				title = "Advanced — Tool Paths",
-				font = "<system>",
+			f:separator { fill_horizontal = 1 },
+			f:row { f:static_text { title = "Advanced — Tool Paths", fill_horizontal = 1 } },
+			f:column {
 				fill_horizontal = 1,
 				enabled = bind "vtkEnabled",
 
 				f:spacer { height = 2 },
+
+				f:row {
+					f:static_text {
+						title = "Toolkit:",
+						alignment = 'right',
+						width = share 'vtk_label_w',
+				},
+					f:edit_field {
+						value = bind "vtkToolkitPath",
+						placeholder_string = "(auto: <plugin>/video-toolkit/video_toolkit.py)",
+						fill_horizontal = 1,
+						tooltip = "Path to video_toolkit.py. Leave empty to use the bundled toolkit next to the plugin.",
+				},
+				},
 
 				f:row {
 					f:static_text {
@@ -1071,6 +1099,20 @@ local function videoDialog(f, propertyTable)
 						value = bind "vtkFFmpegPath",
 						fill_horizontal = 1,
 						tooltip = "Full path to ffmpeg.exe (leave blank for auto-detect).",
+						placeholder_string = "(auto-detect)",
+					},
+				},
+
+				f:row {
+					f:static_text {
+						title = "FFprobe:",
+						alignment = 'right',
+						width = share 'vtk_label_w',
+					},
+					f:edit_field {
+						value = bind "vtkFFprobePath",
+						fill_horizontal = 1,
+						tooltip = "Full path to ffprobe.exe (leave blank for auto-detect).",
 						placeholder_string = "(auto-detect)",
 					},
 				},
@@ -1109,9 +1151,9 @@ local function videoDialog(f, propertyTable)
 			f:spacer { height = 4 },
 
 			-- Status + action buttons
-			f:group_box {
-				title = "Status",
-				font = "<system>",
+			f:separator { fill_horizontal = 1 },
+			f:row { f:static_text { title = "Status", fill_horizontal = 1 } },
+			f:column {
 				fill_horizontal = 1,
 				enabled = bind "vtkEnabled",
 
@@ -1145,35 +1187,71 @@ local function videoDialog(f, propertyTable)
 						tooltip = "Run Video Toolkit to verify Python, FFmpeg and ExifTool installations.",
 						action = function(_)
 							LrTasks.startAsyncTask(function()
-								local python = utils.resolveTool(propertyTable.vtkPythonPath, "python")
-								local plugin = rawget(_G, "_PLUGIN")
-								local toolkitPath = LrPathUtils.child(
-									LrPathUtils.parent(plugin.path),
-									"video-toolkit/video_toolkit.py"
-								)
-								local cmd = '"' .. python .. '" "' .. toolkitPath .. '" --mode probe 2>&1'
+								local python     = utils.resolveTool(propertyTable.vtkPythonPath, "python")
+								local plugin     = rawget(_G, "_PLUGIN")
+								local toolkitPath = utils.resolveToolkitPath(propertyTable.vtkToolkitPath, plugin.path)
+								local isWindows  = (LrSystemInfo.osVersion():lower():find("win") ~= nil)
+								local installCmd = isWindows and "winget install --id Gyan.FFmpeg" or "brew install ffmpeg"
+
+								local tools = {
+									{ key = "vtkFFmpegPath",   name = "FFmpeg",   val = propertyTable.vtkFFmpegPath },
+									{ key = "vtkFFprobePath",  name = "FFprobe",  val = propertyTable.vtkFFprobePath },
+									{ key = "vtkExifToolPath", name = "ExifTool", val = propertyTable.vtkExifToolPath },
+								}
+								for _, t in ipairs(tools) do
+									if t.val and t.val ~= "" and not utils.fileExists(t.val) then
+										LrDialogs.message("Video Toolkit — Invalid Path",
+											"The configured path for " .. t.name .. " is invalid:\n" .. t.val .. "\n\nFix the path in Advanced settings, or clear the field to let the toolkit detect it automatically.", "critical")
+										return
+									end
+								end
+
+								if not utils.fileExists(python) then
+									LrDialogs.message("Video Toolkit — Python Not Found",
+										"Python was not found at:\n" .. python .. "\n\nFix the path in Advanced settings, or clear the field for auto-detect.", "critical")
+									return
+								end
+								if not utils.fileExists(toolkitPath) then
+									LrDialogs.message("Video Toolkit — Script Not Found",
+										"video_toolkit.py not found at:\n" .. toolkitPath .. "\n\nFix the path in Advanced settings, or clear the field for auto-detect.", "critical")
+									return
+								end
+
+								local outFile = LrPathUtils.child(LrPathUtils.getStandardFilePath("temp"), "vtk_check.json")
+								local innerCmd = '"' .. python .. '" "' .. toolkitPath .. '" --mode check > "' .. outFile .. '" 2>&1'
+								local cmd = isWindows and ('cmd /c "' .. innerCmd .. '"') or innerCmd
 								local result = LrTasks.execute(cmd)
+								local checkOutput = ""
+								local fh = io.open(outFile, "r")
+								if fh then checkOutput = fh:read("*a"); fh:close() end
+
 								if result == 0 then
-									local detectedNote = ""
+									local ok, parsed = pcall(JSON.decode, JSON, checkOutput)
+									if ok and parsed then
+										local function fillIfEmpty(key, val)
+											if val and val ~= "not found" and (not propertyTable[key] or propertyTable[key] == "") then
+												propertyTable[key] = val
+											end
+										end
+										fillIfEmpty("vtkFFmpegPath",  parsed.ffmpeg)
+										fillIfEmpty("vtkFFprobePath", parsed.ffprobe)
+										fillIfEmpty("vtkExifToolPath", parsed.exiftool)
+									end
 									if not (propertyTable.vtkPythonPath and propertyTable.vtkPythonPath ~= "") then
-										detectedNote = "\n\nPython auto-detected at:\n" .. python
-											.. "\n\nYou can override this in Advanced settings."
+										propertyTable.vtkPythonPath = python
+									end
+									if not (propertyTable.vtkToolkitPath and propertyTable.vtkToolkitPath ~= "") then
+										propertyTable.vtkToolkitPath = toolkitPath
 									end
 									LrDialogs.message("Video Toolkit — OK",
-										"Video Toolkit found and working.\nPython and ffprobe are available."
-										.. detectedNote, "info")
+										"All tools verified and working.\n\nDetected paths have been filled in Advanced settings.", "info")
 								else
-									local isWindows = (LrSystemInfo.osVersion():lower():find("win") ~= nil)
-									local installCmd = isWindows
-										and "winget install Python.Python.3"
-										or "brew install python"
-									LrDialogs.message("Video Toolkit — Python Not Found",
-										"Could not run Video Toolkit.\n\nPython not found at:\n" .. python
-										.. "\n\nInstall Python:\n  " .. installCmd
-										.. "\n\nOr set an explicit path in Advanced settings.",
-										"critical")
+									LrDialogs.message("Video Toolkit — FFprobe Not Found",
+										"Python and the toolkit are working, but ffprobe was not found.\n\n"
+										.. "Install FFmpeg (includes ffprobe):\n  " .. installCmd .. "\n\n"
+										.. "Or set the FFprobe path in Advanced settings.", "critical")
 								end
-							end)
+						end)
 						end,
 					},
 					f:push_button {

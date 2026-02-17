@@ -41,7 +41,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--mode",
-        choices=["probe", "process", "batch", "status", "clean"],
+        choices=["check", "probe", "process", "batch", "status", "clean"],
         help="Mode d'exécution (sans --mode : mode interactif)",
     )
     p.add_argument("--input",          help="Fichier vidéo source")
@@ -53,6 +53,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--force",          action="store_true", help="Forcer le re-traitement même si cache valide")
     p.add_argument("--thumbnail-only", action="store_true", dest="thumbnail_only", help="Générer uniquement la miniature")
     p.add_argument("--keep",           help="Preset à conserver lors du nettoyage (mode clean)")
+    p.add_argument("--check-config",   dest="check_config", help="Fichier JSON avec les chemins à valider (mode check)")
     p.add_argument("--verbose",        action="store_true", help="Sortie détaillée")
     p.add_argument("--dry-run",        action="store_true", dest="dry_run", help="Simuler sans écrire")
     return p

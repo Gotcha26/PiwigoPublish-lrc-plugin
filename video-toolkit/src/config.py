@@ -122,13 +122,23 @@ def _windows_candidates(tool: str) -> list[str]:
     program_files = os.environ.get("ProgramFiles", "C:\\Program Files")
     local_app = os.environ.get("LOCALAPPDATA", home + "\\AppData\\Local")
 
+    # LOCALAPPDATA peut être absent si lancé depuis un process isolé (ex: Lightroom)
+    # Fallback sur Path.home() / AppData / Local
+    if not local_app:
+        local_app = str(Path.home() / "AppData" / "Local")
+    winget_links = f"{local_app}\\Microsoft\\WinGet\\Links"
+    winget_pkgs  = f"{local_app}\\Microsoft\\WinGet\\Packages"
     candidates_map: dict[str, list[str]] = {
         "ffmpeg": [
+            f"{winget_links}\\ffmpeg.exe",
+            f"{winget_pkgs}\\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\\ffmpeg-7.1-full_build\\bin\\ffmpeg.exe",
             "C:\\ffmpeg\\bin\\ffmpeg.exe",
             f"{program_files}\\ffmpeg\\bin\\ffmpeg.exe",
             f"{local_app}\\ffmpeg\\bin\\ffmpeg.exe",
         ],
         "ffprobe": [
+            f"{winget_links}\\ffprobe.exe",
+            f"{winget_pkgs}\\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\\ffmpeg-7.1-full_build\\bin\\ffprobe.exe",
             "C:\\ffmpeg\\bin\\ffprobe.exe",
             f"{program_files}\\ffmpeg\\bin\\ffprobe.exe",
             f"{local_app}\\ffmpeg\\bin\\ffprobe.exe",

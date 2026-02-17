@@ -1510,7 +1510,8 @@ function utils.findTool(toolName)
         local found = pHandle:read("*l")
         pHandle:close()
         if found and found ~= "" then
-            found = found:match("^(.-)%s*$")
+            found = found:match("^(.-)%s*$")   -- trim trailing whitespace
+            found = found:gsub("\r", "")        -- strip CR (Windows CRLF via io.popen)
             if found ~= "" then
                 return found
             end
@@ -1589,6 +1590,21 @@ function utils.resolveTool(configuredPath, toolName)
         return configuredPath
     end
     return utils.findTool(toolName) or toolName
+end
+
+-- Resolve the path to video_toolkit.py.
+-- Priority : 1) configured vtkToolkitPath
+--            2) <pluginPath>/video-toolkit/video_toolkit.py  (toolkit bundled inside plugin)
+--            3) <parent_of_pluginPath>/video-toolkit/video_toolkit.py  (toolkit beside plugin)
+function utils.resolveToolkitPath(configuredPath, pluginPath)
+    if configuredPath and configuredPath ~= "" then
+        return configuredPath
+    end
+    local inside = LrPathUtils.child(pluginPath, "video-toolkit/video_toolkit.py")
+    if utils.fileExists(inside) then
+        return inside
+    end
+    return LrPathUtils.child(LrPathUtils.parent(pluginPath), "video-toolkit/video_toolkit.py")
 end
 
 return utils

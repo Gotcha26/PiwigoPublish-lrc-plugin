@@ -34,6 +34,45 @@ def main() -> int:
 
     # Mode non-interactif (avec --mode)
     if args.mode:
+        if args.mode == "check":
+            import json
+            from pathlib import Path
+            # Lire les chemins configurés depuis le fichier JSON passé par Lightroom
+            explicit = {}
+            check_cfg = getattr(args, "check_config", None)
+            if check_cfg:
+                try:
+                    with open(check_cfg, "r", encoding="utf-8") as fh:
+                        explicit = json.load(fh)
+                except Exception:
+                    pass
+
+            tools_out = {}
+            for tool in ["ffmpeg", "ffprobe", "exiftool"]:
+                configured = explicit.get(tool)
+                if configured:
+                    # Chemin fourni explicitement : vérifier qu'il existe
+                    if Path(configured).is_file():
+                        tools_out[tool] = configured
+                    else:
+                        tools_out[tool] = f"not found at: {configured}"
+                else:
+                    # Auto-détection
+                    found = cfg.resolve_tool(tool)
+                    tools_out[tool] = found or "not found"
+
+            any_invalid = any(v.startswith("not found at:") for v in tools_out.values() if v)
+            ok = (tools_out["ffprobe"] not in (None, "not found")
+                  and not tools_out["ffprobe"].startswith("not found at:")
+                  and not any_invalid)
+            print(json.dumps({
+                "status":         "ok" if ok else "error",
+                "python_version": sys.version.split()[0],
+                "ffmpeg":         tools_out["ffmpeg"],
+                "ffprobe":        tools_out["ffprobe"],
+                "exiftool":       tools_out["exiftool"],
+            }))
+            return 0 if ok else 1
         if args.mode == "probe":
             return run_probe(args, cfg)
         if args.mode == "process":

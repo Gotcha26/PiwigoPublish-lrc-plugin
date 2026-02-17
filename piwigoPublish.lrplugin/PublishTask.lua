@@ -385,8 +385,8 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
         log:info("PublishTask - pre-scan: " .. batchVideoCount .. " video(s) detected in batch of " .. batchTotalCount)
 
         -- Check if user disabled video inclusion in publish settings
-        if propertyTable.LR_includeVideoFiles == false then
-            log:info("PublishTask - video inclusion disabled by user (LR_includeVideoFiles = false)")
+        if propertyTable.vtkIncludeVideo == false then
+            log:info("PublishTask - video inclusion disabled by user (vtkIncludeVideo = false)")
             videoUploadBlocked = true
             for _, vEntry in ipairs(videoPhotos) do
                 local vName = vEntry.photo:getFormattedMetadata("fileName") or "unknown"
@@ -546,10 +546,8 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
         -- Résoudre les chemins des outils (config manuelle > auto-détection > fallback PATH)
         local python = utils.resolveTool(propertyTable.vtkPythonPath, "python")
         log:info("PublishTask - python resolved to: " .. python)
-        local toolkitScript = LrPathUtils.child(
-            LrPathUtils.parent(_PLUGIN.path),
-            "video-toolkit/video_toolkit.py"
-        )
+        local toolkitScript = utils.resolveToolkitPath(propertyTable.vtkToolkitPath, _PLUGIN.path)
+        log:info("PublishTask - toolkitScript resolved to: " .. toolkitScript)
         -- 5C: collection override takes priority over service default
         local preset = (collectionSettings.vtkPresetOverride and collectionSettings.vtkPresetOverride ~= "")
             and collectionSettings.vtkPresetOverride

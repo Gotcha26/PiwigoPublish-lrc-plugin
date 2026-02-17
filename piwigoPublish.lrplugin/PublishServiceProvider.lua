@@ -33,7 +33,7 @@ return {
 	sectionsForBottomOfDialog = PublishDialogSections.sectionsForBottomOfDialog,
 	endDialog = PublishDialogSections.endDialog,
 
-	hideSections = { 'exportLocation' },
+	hideSections = { 'exportLocation', 'videoFileSettings' },
 
 
 	-- Behaviour Settings
@@ -41,8 +41,7 @@ return {
 	allowColorSpaces = nil,
 	canExportVideo = true,
 	allowVideoExportPresets = {
-		{ formatID = "h.264" },
-		{ formatID = "original" },
+		{ formatID = "original" },  -- LrC ne ré-encode pas ; Video Toolkit gère le transcodage
 	},
 	supportsCustomSortOrder = true,
 	hidePrintResolution = true,
@@ -67,11 +66,14 @@ return {
 		{ key = "KwFilterExclude",       default = '' },
 		-- Video Toolkit settings (Phase 2B)
 		{ key = "vtkEnabled",            default = false },
+		{ key = "vtkIncludeVideo",       default = true },
+		{ key = "vtkToolkitPath",        default = '' },
 		{ key = "vtkDefaultPreset",      default = "medium" },
 		{ key = "vtkGeneratePoster",     default = true },
 		{ key = "vtkPosterTimestamp",    default = 10 },
 		{ key = "vtkPythonPath",         default = '' },
 		{ key = "vtkFFmpegPath",         default = '' },
+		{ key = "vtkFFprobePath",        default = '' },
 		{ key = "vtkExifToolPath",       default = '' },
 		{ key = "vtkPresetsFile",        default = '' },
 	},

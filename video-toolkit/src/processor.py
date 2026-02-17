@@ -23,7 +23,7 @@ from typing import Callable
 
 from .ffmpeg import FFmpeg, FFmpegError
 from .ffprobe import FFprobe, ProbeError, VideoInfo
-from .hasher import Hasher
+from .hasher import partial_hash
 from .metadata import ExifTool
 from .presets import PresetManager, VideoPreset
 from .status import StatusManager, STATE_PROCESSING, STATE_COMPLETE, STATE_ERROR
@@ -72,7 +72,7 @@ class VideoProcessor:
         self._ffmpeg = FFmpeg(ffmpeg_path)
         self._ffprobe = FFprobe(ffprobe_path)
         self._exiftool = ExifTool(exiftool_path)
-        self._hasher = Hasher()
+
         self._presets = preset_manager or PresetManager()
         self._thumb_pct = thumbnail_timestamp_pct
         self._thumb_max_w = thumbnail_max_width
@@ -117,7 +117,7 @@ class VideoProcessor:
             return self._error_result(str(input_path), preset_key, str(e))
 
         # --- 3. Hash source ---
-        src_hash = self._hasher.hash_file(input_path)
+        src_hash = partial_hash(input_path)
 
         # --- 4. StatusManager ---
         status = StatusManager(input_path)
