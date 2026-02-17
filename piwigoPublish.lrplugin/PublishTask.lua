@@ -540,10 +540,9 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
     if not videoUploadBlocked and batchVideoCount > 0 and propertyTable.vtkEnabled then
         log:info("PublishTask - Video Toolkit enabled, processing " .. batchVideoCount .. " video(s)")
 
-        -- Résoudre les chemins des outils
-        local python = (propertyTable.vtkPythonPath and propertyTable.vtkPythonPath ~= "")
-            and propertyTable.vtkPythonPath
-            or "python"
+        -- Résoudre les chemins des outils (config manuelle > auto-détection > fallback PATH)
+        local python = utils.resolveTool(propertyTable.vtkPythonPath, "python")
+        log:info("PublishTask - python resolved to: " .. python)
         local toolkitScript = LrPathUtils.child(
             LrPathUtils.parent(_PLUGIN.path),
             "video-toolkit/video_toolkit.py"
@@ -620,8 +619,9 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
         progressScope:setCaption("Video Toolkit — Processing " .. batchVideoCount .. " video(s)...")
 
         -- Lancer en async + polling du fichier statut
-        local vtkDone     = false
-        local vtkExitCode = nil
+        local vtkDone      = false
+        local vtkExitCode  = nil
+        local vtkCancelled = false
 
         LrTasks.startAsyncTask(function()
             vtkExitCode = LrTasks.execute(cmd)
@@ -634,6 +634,7 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
 
             if progressScope:isCanceled() then
                 log:info("PublishTask - VTK polling cancelled by user")
+                vtkCancelled = true
                 break
             end
 
@@ -655,7 +656,12 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
         end
 
         -- Lire les résultats du toolkit
-        if vtkExitCode == 0 or vtkExitCode == nil then
+        if vtkCancelled then
+            log:info("PublishTask - VTK cancelled by user, videos will be skipped")
+            LrDialogs.message("Video Toolkit Cancelled",
+                "Publication cancelled during video processing.\n\nVideos have not been uploaded.",
+                "warning")
+        elseif vtkExitCode == 0 or vtkExitCode == nil then
             -- Lire le statut final
             local sf = io.open(statusFilePath, "r")
             if sf then
@@ -894,12 +900,16 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
         log:info("PublishTask - uploading " .. #vtkResults .. " video variant(s)")
         progressScope:setCaption("Uploading video variants...")
 
+        local vtkFailedVideos = {}
+
         for idx, vr in ipairs(vtkResults) do
             local vPhoto = vr.photo
             local vName  = vPhoto:getFormattedMetadata("fileName") or "unknown"
 
             if vr.status ~= "ok" or vr.variantPath == "" then
-                log:warn("PublishTask - skipping video (toolkit error): " .. vName .. " — " .. (vr.error or ""))
+                local errMsg = vr.error or "Unknown toolkit error"
+                log:warn("PublishTask - skipping video (toolkit error): " .. vName .. " — " .. errMsg)
+                table.insert(vtkFailedVideos, "• " .. vName .. "\n  " .. errMsg)
             else
                 log:info("PublishTask - uploading video variant: " .. vr.variantPath)
                 progressScope:setCaption("Uploading video: " .. vName)
@@ -993,6 +1003,15 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
             end
         end
 
+        if #vtkFailedVideos > 0 then
+            LrDialogs.message("Video Toolkit — Processing Errors",
+                #vtkFailedVideos .. " video(s) could not be processed by the Video Toolkit "
+                .. "and were skipped:\n\n"
+                .. table.concat(vtkFailedVideos, "\n\n")
+                .. "\n\nCheck the Video Toolkit log for details.",
+                "warning")
+        end
+
         progressScope:setPortionComplete(#vtkResults, #vtkResults)
     end
 
@@ -1003,13 +1022,17 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
         log:info("PublishTask - updating metadata for " .. #metadataOnlyVideos .. " video(s) (metadata-only)")
         progressScope:setCaption("Updating video metadata...")
 
+        local metaOnlyFailed = {}
+
         for _, vEntry in ipairs(metadataOnlyVideos) do
             local vPhoto    = vEntry.photo
             local imageId   = vEntry.existingImageId or ""
             local vName     = vPhoto:getFormattedMetadata("fileName") or "unknown"
 
             if imageId == "" then
+                local errMsg = "No Piwigo image_id found (photo may not have been published yet)"
                 log:warn("PublishTask - metadata-only: no image_id for " .. vName .. ", skipping")
+                table.insert(metaOnlyFailed, "• " .. vName .. "\n  " .. errMsg)
             else
                 log:info("PublishTask - metadata-only update for image_id=" .. imageId .. " (" .. vName .. ")")
                 progressScope:setCaption("Updating metadata: " .. vName)
@@ -1022,10 +1045,18 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
                 if updateStatus.status then
                     log:info("PublishTask - metadata updated for image_id=" .. imageId)
                 else
-                    log:warn("PublishTask - metadata update failed for " .. vName
-                        .. ": " .. (updateStatus.statusMsg or ""))
+                    local errMsg = updateStatus.statusMsg or "Unknown error"
+                    log:warn("PublishTask - metadata update failed for " .. vName .. ": " .. errMsg)
+                    table.insert(metaOnlyFailed, "• " .. vName .. "\n  " .. errMsg)
                 end
             end
+        end
+
+        if #metaOnlyFailed > 0 then
+            LrDialogs.message("Video Metadata Update — Errors",
+                #metaOnlyFailed .. " video(s) could not have their metadata updated on Piwigo:\n\n"
+                .. table.concat(metaOnlyFailed, "\n\n"),
+                "warning")
         end
     end
 

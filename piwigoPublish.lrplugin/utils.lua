@@ -1496,4 +1496,99 @@ function utils.parsePhpSize(sizeStr)
     return math.floor(num)
 end
 
+-- *************************************************
+function utils.findTool(toolName)
+    -- Auto-detect a CLI tool (python, ffmpeg, exiftool) in PATH and common locations.
+    -- Returns the resolved executable path, or nil if not found.
+
+    local isWindows = (LrSystemInfo.osVersion():lower():find("win") ~= nil)
+
+    -- 1. Try PATH lookup first (fast, covers most cases)
+    local whichCmd = isWindows and ("where " .. toolName .. " 2>nul") or ("which " .. toolName .. " 2>/dev/null")
+    local pHandle  = io.popen(whichCmd)
+    if pHandle then
+        local found = pHandle:read("*l")
+        pHandle:close()
+        if found and found ~= "" then
+            found = found:match("^(.-)%s*$")
+            if found ~= "" then
+                return found
+            end
+        end
+    end
+
+    -- 2. Check well-known locations per OS
+    local candidates = {}
+
+    if toolName == "python" or toolName == "python3" then
+        if isWindows then
+            local user = os.getenv("USERNAME") or ""
+            candidates = {
+                "C:/Windows/py.exe",
+                "C:/Program Files/Python313/python.exe",
+                "C:/Program Files/Python312/python.exe",
+                "C:/Program Files/Python311/python.exe",
+                "C:/Program Files/Python310/python.exe",
+                "C:/Program Files/Python39/python.exe",
+                "C:/Users/" .. user .. "/AppData/Local/Programs/Python/Python313/python.exe",
+                "C:/Users/" .. user .. "/AppData/Local/Programs/Python/Python312/python.exe",
+                "C:/Users/" .. user .. "/AppData/Local/Programs/Python/Python311/python.exe",
+            }
+        else
+            candidates = {
+                "/usr/bin/python3", "/usr/local/bin/python3",
+                "/opt/homebrew/bin/python3",
+                "/usr/bin/python",  "/usr/local/bin/python",
+            }
+        end
+
+    elseif toolName == "ffmpeg" then
+        if isWindows then
+            local user = os.getenv("USERNAME") or ""
+            candidates = {
+                "C:/ffmpeg/bin/ffmpeg.exe",
+                "C:/Program Files/ffmpeg/bin/ffmpeg.exe",
+                "C:/Program Files (x86)/ffmpeg/bin/ffmpeg.exe",
+                "C:/Users/" .. user .. "/AppData/Local/Microsoft/WinGet/Packages/Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe/ffmpeg-7.1-full_build/bin/ffmpeg.exe",
+            }
+        else
+            candidates = {
+                "/usr/bin/ffmpeg", "/usr/local/bin/ffmpeg",
+                "/opt/homebrew/bin/ffmpeg", "/opt/local/bin/ffmpeg",
+            }
+        end
+
+    elseif toolName == "exiftool" then
+        if isWindows then
+            candidates = {
+                "C:/Windows/exiftool.exe",
+                "C:/Program Files/exiftool/exiftool.exe",
+                "C:/Program Files (x86)/exiftool/exiftool.exe",
+            }
+        else
+            candidates = {
+                "/usr/bin/exiftool", "/usr/local/bin/exiftool",
+                "/opt/homebrew/bin/exiftool", "/opt/local/bin/exiftool",
+            }
+        end
+    end
+
+    for _, path in ipairs(candidates) do
+        if utils.fileExists(path) then
+            return path
+        end
+    end
+
+    return nil
+end
+
+-- *************************************************
+function utils.resolveTool(configuredPath, toolName)
+    -- Return configuredPath if set, else auto-detect, else return toolName bare (PATH fallback at runtime).
+    if configuredPath and configuredPath ~= "" then
+        return configuredPath
+    end
+    return utils.findTool(toolName) or toolName
+end
+
 return utils

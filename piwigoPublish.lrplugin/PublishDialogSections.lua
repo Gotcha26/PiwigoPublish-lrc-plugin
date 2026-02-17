@@ -1145,9 +1145,7 @@ local function videoDialog(f, propertyTable)
 						tooltip = "Run Video Toolkit to verify Python, FFmpeg and ExifTool installations.",
 						action = function(_)
 							LrTasks.startAsyncTask(function()
-								local python = utils.nilOrEmpty(propertyTable.vtkPythonPath)
-									and "python"
-									or propertyTable.vtkPythonPath
+								local python = utils.resolveTool(propertyTable.vtkPythonPath, "python")
 								local plugin = rawget(_G, "_PLUGIN")
 								local toolkitPath = LrPathUtils.child(
 									LrPathUtils.parent(plugin.path),
@@ -1156,12 +1154,23 @@ local function videoDialog(f, propertyTable)
 								local cmd = '"' .. python .. '" "' .. toolkitPath .. '" --mode probe 2>&1'
 								local result = LrTasks.execute(cmd)
 								if result == 0 then
-									LrDialogs.message("Video Toolkit",
-										"Video Toolkit found and working.\nPython and ffprobe are available.",
-										"info")
+									local detectedNote = ""
+									if not (propertyTable.vtkPythonPath and propertyTable.vtkPythonPath ~= "") then
+										detectedNote = "\n\nPython auto-detected at:\n" .. python
+											.. "\n\nYou can override this in Advanced settings."
+									end
+									LrDialogs.message("Video Toolkit — OK",
+										"Video Toolkit found and working.\nPython and ffprobe are available."
+										.. detectedNote, "info")
 								else
-									LrDialogs.message("Video Toolkit — Error",
-										"Could not run Video Toolkit.\n\nCheck Python and FFmpeg installation, or set explicit paths in Advanced settings.",
+									local isWindows = (LrSystemInfo.osVersion():lower():find("win") ~= nil)
+									local installCmd = isWindows
+										and "winget install Python.Python.3"
+										or "brew install python"
+									LrDialogs.message("Video Toolkit — Python Not Found",
+										"Could not run Video Toolkit.\n\nPython not found at:\n" .. python
+										.. "\n\nInstall Python:\n  " .. installCmd
+										.. "\n\nOr set an explicit path in Advanced settings.",
 										"critical")
 								end
 							end)
