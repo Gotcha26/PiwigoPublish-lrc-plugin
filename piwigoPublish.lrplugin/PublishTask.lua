@@ -336,12 +336,44 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
     -- Pre-scan: detect if batch contains videos and check server support BEFORE rendering
     local batchVideoCount = 0
     local batchTotalCount = exportSession:countRenditions()
+    -- videoPhotos[i] = { photo, existingImageId, appliedPreset, republishMode }
+    -- republishMode : "new" | "re_upload" | "metadata_only"
     local videoPhotos = {}
     for photo in exportSession:photosToExport() do
         local fmt = photo:getRawMetadata("fileFormat")
         if fmt == "VIDEO" then
             batchVideoCount = batchVideoCount + 1
-            table.insert(videoPhotos, photo)
+            -- Detect republication context
+            local existingImageId = nil
+            local appliedPreset   = nil
+            local republishMode   = "new"
+
+            local storedHost = photo:getPropertyForPlugin(_PLUGIN, "pwHostURL")
+            local storedUrl  = photo:getPropertyForPlugin(_PLUGIN, "pwImageURL")
+            if storedHost == propertyTable.host and storedUrl then
+                existingImageId = utils.extractPwImageIdFromUrl(storedUrl, propertyTable.host)
+            end
+            if existingImageId then
+                appliedPreset = photo:getPropertyForPlugin(_PLUGIN, "pwVideoPreset") or ""
+                local currentPreset = (propertyTable.vtkDefaultPreset and propertyTable.vtkDefaultPreset ~= "")
+                    and propertyTable.vtkDefaultPreset or "medium"
+                if appliedPreset ~= "" and appliedPreset ~= currentPreset then
+                    -- Preset changed → need re-encode (or use cached variant if it exists)
+                    republishMode = "re_upload"
+                else
+                    -- Same preset (or no preset recorded) → check if source file changed via .vtk cache
+                    -- If hash matches → metadata only; if not → re_upload
+                    -- Default to metadata_only; the toolkit will detect hash mismatch and re-encode
+                    republishMode = "metadata_only"
+                end
+            end
+
+            table.insert(videoPhotos, {
+                photo           = photo,
+                existingImageId = existingImageId,
+                appliedPreset   = appliedPreset,
+                republishMode   = republishMode,
+            })
         end
     end
     if batchVideoCount == 0 then
@@ -353,10 +385,10 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
         if propertyTable.LR_includeVideoFiles == false then
             log:info("PublishTask - video inclusion disabled by user (LR_includeVideoFiles = false)")
             videoUploadBlocked = true
-            for _, vPhoto in ipairs(videoPhotos) do
-                local vName = vPhoto:getFormattedMetadata("fileName") or "unknown"
+            for _, vEntry in ipairs(videoPhotos) do
+                local vName = vEntry.photo:getFormattedMetadata("fileName") or "unknown"
                 log:info("PublishTask - removing video (disabled by user): " .. vName)
-                exportSession:removePhoto(vPhoto)
+                exportSession:removePhoto(vEntry.photo)
             end
             if batchVideoCount >= batchTotalCount then
                 log:info("PublishTask - batch contained only videos, all disabled — nothing to render")
@@ -433,10 +465,10 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
 
         if videoUploadBlocked then
             -- Remove blocked videos from session BEFORE rendering starts
-            for _, vPhoto in ipairs(videoPhotos) do
-                local vName = vPhoto:getFormattedMetadata("fileName") or "unknown"
+            for _, vEntry in ipairs(videoPhotos) do
+                local vName = vEntry.photo:getFormattedMetadata("fileName") or "unknown"
                 log:info("PublishTask - removing blocked video from session: " .. vName)
-                exportSession:removePhoto(vPhoto)
+                exportSession:removePhoto(vEntry.photo)
             end
             -- If batch contained ONLY videos, skip rendering entirely
             if batchVideoCount >= batchTotalCount then
@@ -455,22 +487,26 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
                 LrDialogs.message("Video Upload Blocked", reason, "critical")
             end
         else
-            -- Server allows video — check per-file size BEFORE rendering
+            -- Server allows video — check per-file size BEFORE rendering (only for new/re_upload)
             if serverMaxBytes then
                 local oversizedVideos = {}
                 for idx = #videoPhotos, 1, -1 do
-                    local vPhoto = videoPhotos[idx]
-                    local vName = vPhoto:getFormattedMetadata("fileName") or "unknown"
-                    local filePath = vPhoto:getRawMetadata("path")
-                    if filePath then
-                        local attrs = LrFileUtils.fileAttributes(filePath)
-                        if attrs and attrs.fileSize and attrs.fileSize > serverMaxBytes then
-                            local sizeMB = string.format("%.1f", attrs.fileSize / (1024*1024))
-                            local limitMB = string.format("%.1f", serverMaxBytes / (1024*1024))
-                            log:info("PublishTask - removing oversized video from session: " .. vName
-                                .. " (" .. sizeMB .. " MB > " .. limitMB .. " MB)")
-                            exportSession:removePhoto(vPhoto)
-                            table.insert(oversizedVideos, vName .. " (" .. sizeMB .. " MB)")
+                    local vEntry = videoPhotos[idx]
+                    local vPhoto = vEntry.photo
+                    -- metadata_only videos are never uploaded, skip size check
+                    if vEntry.republishMode ~= "metadata_only" then
+                        local vName = vPhoto:getFormattedMetadata("fileName") or "unknown"
+                        local filePath = vPhoto:getRawMetadata("path")
+                        if filePath then
+                            local attrs = LrFileUtils.fileAttributes(filePath)
+                            if attrs and attrs.fileSize and attrs.fileSize > serverMaxBytes then
+                                local sizeMB = string.format("%.1f", attrs.fileSize / (1024*1024))
+                                local limitMB = string.format("%.1f", serverMaxBytes / (1024*1024))
+                                log:info("PublishTask - removing oversized video from session: " .. vName
+                                    .. " (" .. sizeMB .. " MB > " .. limitMB .. " MB)")
+                                table.remove(videoPhotos, idx)
+                                table.insert(oversizedVideos, vName .. " (" .. sizeMB .. " MB)")
+                            end
                         end
                     end
                 end
@@ -497,8 +533,9 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
     -- -----------------------------------------------------------------------
     -- Phase 2C/2D — Video Toolkit : lancement + polling + upload variantes
     -- -----------------------------------------------------------------------
-    -- vtkResults[i] = { photo, variantPath, thumbnailPath, status, error }
-    local vtkResults = {}
+    -- vtkResults[i] = { photo, existingImageId, republishMode, variantPath, thumbnailPath, status, error }
+    local vtkResults         = {}
+    local metadataOnlyVideos = {}  -- 4C : videos needing metadata-only update
 
     if not videoUploadBlocked and batchVideoCount > 0 and propertyTable.vtkEnabled then
         log:info("PublishTask - Video Toolkit enabled, processing " .. batchVideoCount .. " video(s)")
@@ -528,15 +565,27 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
         )
 
         local batchVideos = {}
-        for _, vPhoto in ipairs(videoPhotos) do
-            local filePath = vPhoto:getRawMetadata("path")
+        for _, vEntry in ipairs(videoPhotos) do
+            local filePath = vEntry.photo:getRawMetadata("path")
             if filePath then
-                table.insert(batchVideos, {
-                    input  = filePath,
-                    preset = preset,
-                })
+                if vEntry.republishMode == "metadata_only" then
+                    table.insert(metadataOnlyVideos, vEntry)
+                else
+                    -- "new" or "re_upload" : run through toolkit
+                    -- force=true if preset changed (re_upload), false for new (toolkit decides via hash)
+                    table.insert(batchVideos, {
+                        input  = filePath,
+                        preset = preset,
+                        force  = (vEntry.republishMode == "re_upload"),
+                    })
+                end
             end
         end
+
+        -- Si toutes les vidéos sont metadata_only, skip le toolkit entièrement
+        if #batchVideos == 0 then
+            log:info("PublishTask - all videos are metadata-only, skipping Video Toolkit")
+        else
 
         local batchData = {
             videos      = batchVideos,
@@ -621,23 +670,29 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
                             resultsByPath[r.input] = r
                         end
                     end
-                    for _, vPhoto in ipairs(videoPhotos) do
-                        local filePath = vPhoto:getRawMetadata("path")
-                        local r = filePath and resultsByPath[filePath]
-                        if r then
-                            table.insert(vtkResults, {
-                                photo         = vPhoto,
-                                variantPath   = r.variant   or "",
-                                thumbnailPath = r.thumbnail or "",
-                                status        = r.status    or "error",
-                                error         = r.error     or "",
-                            })
-                        else
-                            table.insert(vtkResults, {
-                                photo  = vPhoto,
-                                status = "error",
-                                error  = "No result from Video Toolkit for " .. (filePath or "?"),
-                            })
+                    for _, vEntry in ipairs(videoPhotos) do
+                        if vEntry.republishMode ~= "metadata_only" then
+                            local filePath = vEntry.photo:getRawMetadata("path")
+                            local r = filePath and resultsByPath[filePath]
+                            if r then
+                                table.insert(vtkResults, {
+                                    photo           = vEntry.photo,
+                                    existingImageId = vEntry.existingImageId,
+                                    republishMode   = vEntry.republishMode,
+                                    variantPath     = r.variant   or "",
+                                    thumbnailPath   = r.thumbnail or "",
+                                    status          = r.status    or "error",
+                                    error           = r.error     or "",
+                                })
+                            else
+                                table.insert(vtkResults, {
+                                    photo           = vEntry.photo,
+                                    existingImageId = vEntry.existingImageId,
+                                    republishMode   = vEntry.republishMode,
+                                    status          = "error",
+                                    error           = "No result from Video Toolkit for " .. (filePath or "?"),
+                                })
+                            end
                         end
                     end
                 end
@@ -652,6 +707,8 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
 
         progressScope:setCaption("Publishing to Piwigo...")
         progressScope:setPortionComplete(0, 100)
+
+        end -- if #batchVideos == 0 / else
     end
 
     -- now wait for photos to be exported and then upload to Piwigo
@@ -851,7 +908,8 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
                 -- Métadonnées depuis la vidéo originale dans le catalogue LrC
                 local metaData = utils.getPhotoMetadata(propertyTable, vPhoto)
                 metaData.Albumid  = albumId
-                metaData.Remoteid = ""  -- nouveau : pas de remoteId existant
+                -- 4B : si republication, passer l'image_id existant pour que Piwigo remplace la vidéo
+                metaData.Remoteid = vr.existingImageId or ""
 
                 -- 3B — Upload de la variante :
                 -- Si le fichier dépasse la limite PHP du serveur → upload chunked
@@ -912,7 +970,7 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
                         end
                     end, { timeout = 5 })
 
-                    -- Stocker les métadonnées custom (pwImageURL, pwHostURL, etc.)
+                    -- Stocker les métadonnées custom (pwImageURL, pwHostURL, pwVideoPreset, etc.)
                     local pluginData = {
                         pwHostURL     = propertyTable.host,
                         albumName     = albumName,
@@ -921,6 +979,7 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
                         pwUploadDate  = os.date("%Y-%m-%d"),
                         pwUploadTime  = os.date("%H:%M:%S"),
                         pwCommentSync = "",
+                        pwVideoPreset = preset,  -- 4A : stocker le preset appliqué
                     }
                     PiwigoAPI.storeMetaData(catalog, vPhoto, pluginData)
                 else
@@ -935,6 +994,39 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
         end
 
         progressScope:setPortionComplete(#vtkResults, #vtkResults)
+    end
+
+    -- -----------------------------------------------------------------------
+    -- Phase 4C — Republication métadonnées seules (vidéos sans re-upload)
+    -- -----------------------------------------------------------------------
+    if metadataOnlyVideos and #metadataOnlyVideos > 0 then
+        log:info("PublishTask - updating metadata for " .. #metadataOnlyVideos .. " video(s) (metadata-only)")
+        progressScope:setCaption("Updating video metadata...")
+
+        for _, vEntry in ipairs(metadataOnlyVideos) do
+            local vPhoto    = vEntry.photo
+            local imageId   = vEntry.existingImageId or ""
+            local vName     = vPhoto:getFormattedMetadata("fileName") or "unknown"
+
+            if imageId == "" then
+                log:warn("PublishTask - metadata-only: no image_id for " .. vName .. ", skipping")
+            else
+                log:info("PublishTask - metadata-only update for image_id=" .. imageId .. " (" .. vName .. ")")
+                progressScope:setCaption("Updating metadata: " .. vName)
+
+                local metaData = utils.getPhotoMetadata(propertyTable, vPhoto)
+                metaData.Albumid  = albumId
+                metaData.Remoteid = imageId
+
+                local updateStatus = PiwigoAPI.updateMetadata(propertyTable, vPhoto, metaData)
+                if updateStatus.status then
+                    log:info("PublishTask - metadata updated for image_id=" .. imageId)
+                else
+                    log:warn("PublishTask - metadata update failed for " .. vName
+                        .. ": " .. (updateStatus.statusMsg or ""))
+                end
+            end
+        end
     end
 
     progressScope:done()

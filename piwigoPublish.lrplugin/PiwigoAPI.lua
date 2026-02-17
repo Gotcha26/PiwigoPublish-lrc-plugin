@@ -1082,6 +1082,9 @@ function PiwigoAPI.storeMetaData(catalog, lrPhoto, pluginData)
         lrPhoto:setPropertyForPlugin(_PLUGIN, "pwUploadDate", pluginData.pwUploadDate)
         lrPhoto:setPropertyForPlugin(_PLUGIN, "pwUploadTime", pluginData.pwUploadTime)
         lrPhoto:setPropertyForPlugin(_PLUGIN, "pwCommentSync", pluginData.pwCommentSync)
+        if pluginData.pwVideoPreset then
+            lrPhoto:setPropertyForPlugin(_PLUGIN, "pwVideoPreset", pluginData.pwVideoPreset)
+        end
     end)
 end
 
