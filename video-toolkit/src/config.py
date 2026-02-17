@@ -1,0 +1,143 @@
+"""
+Config — Chargement et sauvegarde de la configuration globale du toolkit.
+
+Séparé des presets : gère les chemins d'outils, les préférences globales,
+et le fichier de presets à utiliser.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import shutil
+import sys
+from pathlib import Path
+
+
+# ---------------------------------------------------------------------------
+# Chemins par défaut
+# ---------------------------------------------------------------------------
+
+DEFAULT_CONFIG_DIR = Path.home() / ".piwigoPublish"
+DEFAULT_CONFIG_FILE = DEFAULT_CONFIG_DIR / "video-toolkit.json"
+DEFAULT_PRESETS_FILE = DEFAULT_CONFIG_DIR / "presets.json"
+DEFAULT_STATUS_FILE = DEFAULT_CONFIG_DIR / ".vtk-status.json"
+
+
+# ---------------------------------------------------------------------------
+# Config
+# ---------------------------------------------------------------------------
+
+class Config:
+    """Configuration globale du Video Toolkit (chemins + préférences)."""
+
+    DEFAULTS = {
+        "python_path": "",
+        "ffmpeg_path": "",
+        "ffprobe_path": "",
+        "exiftool_path": "",
+        "presets_file": "",
+        "default_preset": "medium",
+        "generate_poster": True,
+        "poster_timestamp_pct": 10,
+        "thumbnail_width": 1280,
+        "thumbnail_height": 720,
+        "thumbnail_quality": 85,
+        "copy_metadata": True,
+        "vtk_dir_name": ".vtk",
+    }
+
+    def __init__(self, config_path: Path | str | None = None):
+        self._path = Path(config_path) if config_path else DEFAULT_CONFIG_FILE
+        self._data: dict = dict(self.DEFAULTS)
+        self._load()
+
+    # --- Persistence ---
+
+    def _load(self) -> None:
+        if self._path.exists():
+            try:
+                with self._path.open("r", encoding="utf-8") as f:
+                    stored = json.load(f)
+                self._data.update(stored)
+            except (json.JSONDecodeError, OSError):
+                pass  # Garder les defaults si le fichier est corrompu
+
+    def save(self) -> None:
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        with self._path.open("w", encoding="utf-8") as f:
+            json.dump(self._data, f, indent=2, ensure_ascii=False)
+
+    # --- Accès ---
+
+    def get(self, key: str, default=None):
+        return self._data.get(key, default)
+
+    def set(self, key: str, value) -> None:
+        self._data[key] = value
+
+    def get_presets_file(self) -> Path:
+        p = self._data.get("presets_file", "")
+        return Path(p) if p else DEFAULT_PRESETS_FILE
+
+    # --- Résolution des outils ---
+
+    def resolve_tool(self, tool: str) -> str | None:
+        """
+        Résout le chemin d'un outil (ffmpeg, ffprobe, python, exiftool).
+        Ordre : config → PATH → emplacements courants Windows.
+        Retourne le chemin trouvé ou None.
+        """
+        configured = self._data.get(f"{tool}_path", "").strip()
+        if configured and Path(configured).is_file():
+            return configured
+
+        # PATH système
+        found = shutil.which(tool)
+        if found:
+            return found
+
+        # Emplacements courants Windows
+        if sys.platform == "win32":
+            candidates = _windows_candidates(tool)
+            for candidate in candidates:
+                if Path(candidate).is_file():
+                    return candidate
+
+        return None
+
+    def tool_status(self) -> dict[str, str | None]:
+        """Retourne un dict outil → chemin résolu (None = non trouvé)."""
+        tools = ["ffmpeg", "ffprobe", "exiftool"]
+        return {t: self.resolve_tool(t) for t in tools}
+
+
+# ---------------------------------------------------------------------------
+# Détection Windows
+# ---------------------------------------------------------------------------
+
+def _windows_candidates(tool: str) -> list[str]:
+    """Emplacements courants sur Windows pour ffmpeg, ffprobe, exiftool."""
+    home = str(Path.home())
+    program_files = os.environ.get("ProgramFiles", "C:\\Program Files")
+    local_app = os.environ.get("LOCALAPPDATA", home + "\\AppData\\Local")
+
+    candidates_map: dict[str, list[str]] = {
+        "ffmpeg": [
+            "C:\\ffmpeg\\bin\\ffmpeg.exe",
+            f"{program_files}\\ffmpeg\\bin\\ffmpeg.exe",
+            f"{local_app}\\ffmpeg\\bin\\ffmpeg.exe",
+        ],
+        "ffprobe": [
+            "C:\\ffmpeg\\bin\\ffprobe.exe",
+            f"{program_files}\\ffmpeg\\bin\\ffprobe.exe",
+            f"{local_app}\\ffmpeg\\bin\\ffprobe.exe",
+        ],
+        "exiftool": [
+            "C:\\exiftool\\exiftool.exe",
+            f"{program_files}\\ExifTool\\exiftool.exe",
+            f"{home}\\exiftool.exe",
+            "C:\\Windows\\exiftool.exe",
+        ],
+    }
+    return candidates_map.get(tool, [])
