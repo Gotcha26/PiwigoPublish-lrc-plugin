@@ -48,7 +48,7 @@ class VideoPreset:
 
     @classmethod
     def from_dict(cls, name: str, d: dict) -> "VideoPreset":
-        d = {k: v for k, v in d.items() if k in cls.__dataclass_fields__}
+        d = {k: v for k, v in d.items() if k in cls.__dataclass_fields__ and k != "name"}
         return cls(name=name, **d)
 
 
