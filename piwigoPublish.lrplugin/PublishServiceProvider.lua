@@ -65,6 +65,15 @@ return {
 		{ key = "syncCommentsPubOnly",   default = false },
 		{ key = "KwFilterInclude",       default = '' },
 		{ key = "KwFilterExclude",       default = '' },
+		-- Video Toolkit settings (Phase 2B)
+		{ key = "vtkEnabled",            default = false },
+		{ key = "vtkDefaultPreset",      default = "medium" },
+		{ key = "vtkGeneratePoster",     default = true },
+		{ key = "vtkPosterTimestamp",    default = 10 },
+		{ key = "vtkPythonPath",         default = '' },
+		{ key = "vtkFFmpegPath",         default = '' },
+		{ key = "vtkExifToolPath",       default = '' },
+		{ key = "vtkPresetsFile",        default = '' },
 	},
 
 	metadataThatTriggersRepublish = function(publishSettings, photoId, fieldName)
