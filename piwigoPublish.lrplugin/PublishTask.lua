@@ -329,8 +329,9 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
     PWStatusManager.setRenderPhotos(publishService, true)
 
     -- Video upload guard: pre-check before rendering starts
-    local videoUploadBlocked = false
-    local serverMaxBytes     = nil
+    local videoUploadBlocked  = false
+    local serverMaxBytes      = nil
+    local companionAvailable  = false
 
     -- Pre-scan: detect if batch contains videos and check server support BEFORE rendering
     local batchVideoCount = 0
@@ -379,12 +380,14 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
                 videoUploadBlocked = true
                 table.insert(warnings, "- Cannot verify server video support (connection issue).")
             elseif not videoSupport.companionAvailable then
+                companionAvailable = false
                 videoUploadBlocked = true
                 table.insert(warnings, "- The 'Lightroom Companion' plugin is not installed on your Piwigo server.")
                 table.insert(warnings, "  Without it, video upload cannot be authorized.")
                 table.insert(warnings, "\nInstall and activate the 'Lightroom Companion' plugin in Piwigo,")
                 table.insert(warnings, "then use 'Server Info' > 'Enable Video Support' to configure the server.")
             else
+                companionAvailable = true
                 local cfg = videoSupport.serverConfig
                 if cfg and cfg.piwigo then
                     if cfg.piwigo.video_ready then
@@ -850,26 +853,53 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
                 metaData.Albumid  = albumId
                 metaData.Remoteid = ""  -- nouveau : pas de remoteId existant
 
-                -- Upload de la variante
-                local uploadStatus = PiwigoAPI.updateGallery(propertyTable, vr.variantPath, metaData)
+                -- 3B — Upload de la variante :
+                -- Si le fichier dépasse la limite PHP du serveur → upload chunked
+                -- Sinon → addSimple standard
+                local uploadStatus
+                local variantAttrs = LrFileUtils.fileAttributes(vr.variantPath)
+                local variantSize  = variantAttrs and variantAttrs.fileSize or 0
+                local useChunked   = serverMaxBytes and (variantSize > serverMaxBytes)
+
+                if useChunked then
+                    log:info(string.format(
+                        "PublishTask - video %s (%d bytes) > server limit (%d) → chunked upload",
+                        vName, variantSize, serverMaxBytes))
+                    progressScope:setCaption("Uploading (chunked): " .. vName)
+                    uploadStatus = PiwigoAPI.uploadVideoChunked(propertyTable, vr.variantPath, metaData)
+                else
+                    log:info("PublishTask - video " .. vName .. " → addSimple upload")
+                    uploadStatus = PiwigoAPI.updateGallery(propertyTable, vr.variantPath, metaData)
+                end
 
                 if uploadStatus.status then
                     local imageId = uploadStatus.remoteid or ""
                     log:info("PublishTask - video variant uploaded, image_id=" .. imageId)
 
-                    -- Upload du poster si disponible (Phase 3 : pwg.companion.setRepresentative)
-                    if vr.thumbnailPath ~= "" and LrFileUtils.exists(vr.thumbnailPath) then
-                        log:info("PublishTask - poster available: " .. vr.thumbnailPath
-                            .. " (upload via companion planned in Phase 3)")
-                        -- TODO Phase 3 : PiwigoAPI.setRepresentative(propertyTable, imageId, vr.thumbnailPath)
+                    -- 3C — Upload du poster via pwg.companion.setRepresentative
+                    if vr.thumbnailPath and vr.thumbnailPath ~= ""
+                            and LrFileUtils.exists(vr.thumbnailPath) then
+                        if companionAvailable then
+                            log:info("PublishTask - uploading poster: " .. vr.thumbnailPath)
+                            progressScope:setCaption("Uploading poster: " .. vName)
+                            local posterStatus = PiwigoAPI.setRepresentative(
+                                propertyTable, imageId, vr.thumbnailPath)
+                            if posterStatus.status then
+                                log:info("PublishTask - poster set for image_id=" .. imageId)
+                            else
+                                log:warn("PublishTask - poster upload failed: "
+                                    .. (posterStatus.statusMsg or ""))
+                            end
+                        else
+                            log:info("PublishTask - companion not available, skipping poster upload")
+                        end
                     end
 
-                    -- Mettre à jour les métadonnées sur Piwigo (titre, description, mots-clés)
+                    -- 3D — Mettre à jour les métadonnées sur Piwigo (titre, description, mots-clés)
                     metaData.Remoteid = imageId
                     PiwigoAPI.updateMetadata(propertyTable, vPhoto, metaData)
 
-                    -- Enregistrer l'ID publié sur la vidéo ORIGINALE dans LrC
-                    -- (via withWriteAccessDo car nous sommes hors boucle renditions)
+                    -- 3D — Enregistrer l'ID publié sur la vidéo ORIGINALE dans LrC
                     local remoteUrl = uploadStatus.remoteurl or ""
                     catalog:withWriteAccessDo("Record published video ID", function()
                         local publishedPhotos = publishedCollection:getPublishedPhotos()
@@ -884,12 +914,12 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
 
                     -- Stocker les métadonnées custom (pwImageURL, pwHostURL, etc.)
                     local pluginData = {
-                        pwHostURL    = propertyTable.host,
-                        albumName    = albumName,
-                        albumUrl     = albumUrl,
-                        imageUrl     = remoteUrl,
-                        pwUploadDate = os.date("%Y-%m-%d"),
-                        pwUploadTime = os.date("%H:%M:%S"),
+                        pwHostURL     = propertyTable.host,
+                        albumName     = albumName,
+                        albumUrl      = albumUrl,
+                        imageUrl      = remoteUrl,
+                        pwUploadDate  = os.date("%Y-%m-%d"),
+                        pwUploadTime  = os.date("%H:%M:%S"),
                         pwCommentSync = "",
                     }
                     PiwigoAPI.storeMetaData(catalog, vPhoto, pluginData)

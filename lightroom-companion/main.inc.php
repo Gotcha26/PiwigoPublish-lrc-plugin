@@ -46,6 +46,21 @@ function companion_add_methods($arr)
         null,
         array('admin_only' => true)
     );
+
+    $service->addMethod(
+        'pwg.companion.setRepresentative',
+        'companion_set_representative',
+        array(
+            'image_id' => array(
+                'default'  => null,
+                'type'     => WS_TYPE_INT,
+                'info'     => 'Piwigo image/video ID',
+            ),
+        ),
+        'Upload a poster/thumbnail image as the representative for a video.',
+        null,
+        array('admin_only' => true)
+    );
 }
 
 // =========================================================================
@@ -233,6 +248,82 @@ function companion_enable_video_support($params, &$service)
     return array(
         'status' => 'ok',
         'message' => 'Video support has been enabled. Video extensions (mp4, m4v, ogg, ogv, webm) are now allowed.',
+    );
+}
+
+// =========================================================================
+//  pwg.companion.setRepresentative
+// =========================================================================
+function companion_set_representative($params, &$service)
+{
+    global $conf;
+
+    $image_id = (int)$params['image_id'];
+    if ($image_id <= 0)
+    {
+        return new PwgError(WS_ERR_INVALID_PARAM, 'image_id must be a positive integer');
+    }
+
+    // Verify image exists
+    $query = 'SELECT id, path FROM ' . IMAGES_TABLE . ' WHERE id = ' . $image_id . ';';
+    $result = pwg_query($query);
+    $row = pwg_db_fetch_assoc($result);
+    if (!$row)
+    {
+        return new PwgError(404, 'Image ' . $image_id . ' not found');
+    }
+
+    // Expect an uploaded file named 'file'
+    if (empty($_FILES['file']) || $_FILES['file']['error'] !== UPLOAD_ERR_OK)
+    {
+        $err = isset($_FILES['file']['error']) ? $_FILES['file']['error'] : 'no file';
+        return new PwgError(WS_ERR_INVALID_PARAM, 'No valid file uploaded (error: ' . $err . ')');
+    }
+
+    // Determine storage directory from existing image path
+    // path is relative to PHPWG_ROOT_PATH, e.g. "upload/2024/01/01/2024010...jpg"
+    $image_dir = PHPWG_ROOT_PATH . dirname($row['path']);
+    if (!is_dir($image_dir))
+    {
+        return new PwgError(500, 'Image directory not found: ' . $image_dir);
+    }
+
+    // Build representative filename: same basename, extension = uploaded file extension
+    $uploaded_ext = strtolower(pathinfo($_FILES['file']['name'], PATHINFO_EXTENSION));
+    if (!in_array($uploaded_ext, array('jpg', 'jpeg', 'png', 'webp')))
+    {
+        return new PwgError(WS_ERR_INVALID_PARAM, 'Poster must be jpg, jpeg, png or webp');
+    }
+
+    // Piwigo representative: same filename as image but with new extension
+    $image_basename = pathinfo($row['path'], PATHINFO_FILENAME);
+    $representative_filename = $image_basename . '.' . $uploaded_ext;
+    $representative_path = $image_dir . '/' . $representative_filename;
+
+    if (!move_uploaded_file($_FILES['file']['tmp_name'], $representative_path))
+    {
+        return new PwgError(500, 'Failed to move uploaded poster to ' . $representative_path);
+    }
+
+    // Invalidate Piwigo derivative cache for this image
+    $query = 'UPDATE ' . IMAGES_TABLE
+        . " SET representative_ext = '" . pwg_db_real_escape_string($uploaded_ext) . "'"
+        . ' WHERE id = ' . $image_id . ';';
+    pwg_query($query);
+
+    // Delete cached derivatives so Piwigo regenerates thumbnails
+    $image_path = PHPWG_ROOT_PATH . $row['path'];
+    if (function_exists('delete_element_derivatives'))
+    {
+        $element_info = array('id' => $image_id, 'path' => $row['path']);
+        delete_element_derivatives($element_info);
+    }
+
+    return array(
+        'status'                  => 'ok',
+        'image_id'                => $image_id,
+        'representative_ext'      => $uploaded_ext,
+        'representative_path'     => $representative_filename,
     );
 }
 

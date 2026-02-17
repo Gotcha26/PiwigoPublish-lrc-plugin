@@ -3296,4 +3296,179 @@ function PiwigoAPI.createHeadersForMultipartPut(propertyTable, boundary, length)
 end
 
 -- *************************************************
+function PiwigoAPI.uploadVideoChunked(propertyTable, filePath, metaData, chunkSizeBytes)
+    -- Upload a video file in chunks via pwg.images.upload (bypasses PHP upload_max_filesize)
+    -- chunkSizeBytes defaults to 512 KB
+    -- Returns { status, remoteid, remoteurl, statusMsg }
+
+    local callStatus = { status = false, remoteid = "", remoteurl = "", statusMsg = "" }
+    chunkSizeBytes = chunkSizeBytes or (512 * 1024)
+
+    local headers = {}
+    if propertyTable.cookieHeader ~= nil then
+        headers = { ["Cookie"] = propertyTable.cookieHeader }
+    end
+
+    -- Open file
+    local fh = io.open(filePath, "rb")
+    if not fh then
+        callStatus.statusMsg = "uploadVideoChunked - cannot open file: " .. filePath
+        log:info("PiwigoAPI." .. callStatus.statusMsg)
+        return callStatus
+    end
+
+    local fileSize = fh:seek("end")
+    fh:seek("set", 0)
+
+    local originalFilename = LrPathUtils.leafName(filePath)
+    local fileType = LrPathUtils.extension(filePath):lower()
+    local contentTypeMap = {
+        mp4 = "video/mp4", m4v = "video/mp4", mov = "video/quicktime",
+        avi = "video/x-msvideo", mpg = "video/mpeg", mpeg = "video/mpeg",
+        ogg = "video/ogg",  ogv = "video/ogg",  webm = "video/webm",
+    }
+    local contentType = contentTypeMap[fileType] or "application/octet-stream"
+
+    local totalChunks = math.ceil(fileSize / chunkSizeBytes)
+    local uploadedImageId = nil
+    log:info(string.format("PiwigoAPI.uploadVideoChunked - %s, size=%d, chunks=%d",
+        originalFilename, fileSize, totalChunks))
+
+    for chunkIdx = 0, totalChunks - 1 do
+        local data = fh:read(chunkSizeBytes)
+        if not data then break end
+
+        -- Write chunk to a temp file (LrHttp.postMultipart needs a file path)
+        local tmpPath = LrPathUtils.child(LrPathUtils.getStandardFilePath("temp"),
+            "vtk_chunk_" .. chunkIdx .. ".bin")
+        local tmpFh = io.open(tmpPath, "wb")
+        if not tmpFh then
+            fh:close()
+            callStatus.statusMsg = "uploadVideoChunked - cannot write temp chunk: " .. tmpPath
+            log:info("PiwigoAPI." .. callStatus.statusMsg)
+            return callStatus
+        end
+        tmpFh:write(data)
+        tmpFh:close()
+
+        local params = {
+            { name = "method",            value = "pwg.images.upload" },
+            { name = "category",          value = tostring(metaData.Albumid) },
+            { name = "pwg_token",         value = propertyTable.token },
+            { name = "original_sum",      value = "" },  -- filled after all chunks if needed
+            { name = "position",          value = tostring(chunkIdx) },
+            { name = "type",              value = "file" },
+            { name = "filename",          value = originalFilename },
+            {
+                name        = "file",
+                filePath    = tmpPath,
+                fileName    = originalFilename,
+                contentType = contentType,
+            },
+        }
+        if uploadedImageId then
+            table.insert(params, { name = "image_id", value = tostring(uploadedImageId) })
+        end
+        if metaData.Title and metaData.Title ~= "" then
+            table.insert(params, { name = "name", value = metaData.Title })
+        end
+
+        local httpResponse, httpHeaders = LrHttp.postMultipart(propertyTable.pwurl, params, {
+            headers = { field = "Cookie", value = propertyTable.SessionCookie }
+        })
+        LrFileUtils.delete(tmpPath)
+
+        if not httpHeaders or (httpHeaders.status ~= 200 and httpHeaders.status ~= 201) then
+            fh:close()
+            callStatus.statusMsg = "uploadVideoChunked - HTTP error on chunk " .. chunkIdx
+            log:info("PiwigoAPI." .. callStatus.statusMsg)
+            return callStatus
+        end
+
+        local ok, body = pcall(function() return JSON:decode(httpResponse) end)
+        if not ok or not body or body.stat ~= "ok" then
+            fh:close()
+            local msg = (body and body.message) or tostring(httpResponse)
+            callStatus.statusMsg = "uploadVideoChunked - API error on chunk " .. chunkIdx .. ": " .. msg
+            log:info("PiwigoAPI." .. callStatus.statusMsg)
+            return callStatus
+        end
+
+        -- After first chunk Piwigo returns the image_id
+        if body.result and body.result.image_id then
+            uploadedImageId = tostring(body.result.image_id)
+        end
+        if body.result and body.result.url and callStatus.remoteurl == "" then
+            callStatus.remoteurl = body.result.url
+        end
+
+        log:info(string.format("PiwigoAPI.uploadVideoChunked - chunk %d/%d ok, image_id=%s",
+            chunkIdx + 1, totalChunks, tostring(uploadedImageId)))
+    end
+
+    fh:close()
+
+    if not uploadedImageId then
+        callStatus.statusMsg = "uploadVideoChunked - no image_id returned by Piwigo"
+        log:info("PiwigoAPI." .. callStatus.statusMsg)
+        return callStatus
+    end
+
+    -- Finalise upload
+    local finalParams = {
+        { name = "method",      value = "pwg.images.uploadCompleted" },
+        { name = "image_id",    value = uploadedImageId },
+        { name = "pwg_token",   value = propertyTable.token },
+        { name = "category_id", value = tostring(metaData.Albumid) },
+    }
+    local finalResp = httpGet(propertyTable.pwurl, finalParams, headers)
+    if finalResp.status ~= "ok" then
+        callStatus.statusMsg = "uploadVideoChunked - uploadCompleted failed: "
+            .. (finalResp.errorMessage or "unknown")
+        log:info("PiwigoAPI." .. callStatus.statusMsg)
+        return callStatus
+    end
+
+    callStatus.status   = true
+    callStatus.remoteid = uploadedImageId
+    log:info("PiwigoAPI.uploadVideoChunked - done, image_id=" .. uploadedImageId)
+    return callStatus
+end
+
+-- *************************************************
+function PiwigoAPI.setRepresentative(propertyTable, imageId, posterPath)
+    -- Upload a poster/thumbnail image for a video via pwg.companion.setRepresentative
+    -- Returns { status, statusMsg }
+
+    local callStatus = { status = false, statusMsg = "" }
+
+    if not LrFileUtils.exists(posterPath) then
+        callStatus.statusMsg = "setRepresentative - poster file not found: " .. posterPath
+        log:info("PiwigoAPI." .. callStatus.statusMsg)
+        return callStatus
+    end
+
+    local params = {
+        { name = "method",   value = "pwg.companion.setRepresentative" },
+        { name = "image_id", value = tostring(imageId) },
+        {
+            name        = "file",
+            filePath    = posterPath,
+            fileName    = LrPathUtils.leafName(posterPath),
+            contentType = "image/jpeg",
+        },
+    }
+
+    local postResp = PiwigoAPI.httpPostMultiPart(propertyTable, params)
+    if postResp.status then
+        callStatus.status = true
+        log:info("PiwigoAPI.setRepresentative - ok for image_id=" .. tostring(imageId))
+    else
+        callStatus.statusMsg = "setRepresentative - failed: " .. (postResp.statusMsg or "")
+        log:info("PiwigoAPI." .. callStatus.statusMsg)
+    end
+    return callStatus
+end
+
+-- *************************************************
 return PiwigoAPI
