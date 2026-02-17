@@ -347,64 +347,88 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
         log:info("PublishTask - pre-scan: no videos detected in batch")
     else
         log:info("PublishTask - pre-scan: " .. batchVideoCount .. " video(s) detected in batch of " .. batchTotalCount)
-        -- Check server video support now, before rendering starts
-        local videoSupport = PiwigoAPI.getServerVideoSupport(propertyTable)
-        local warnings = {}
 
-        if not videoSupport.status then
+        -- Check if user disabled video inclusion in publish settings
+        if propertyTable.LR_includeVideoFiles == false then
+            log:info("PublishTask - video inclusion disabled by user (LR_includeVideoFiles = false)")
             videoUploadBlocked = true
-            table.insert(warnings, "- Cannot verify server video support (connection issue).")
-        elseif not videoSupport.companionAvailable then
-            videoUploadBlocked = true
-            table.insert(warnings, "- The 'Lightroom Companion' plugin is not installed on your Piwigo server.")
-            table.insert(warnings, "  Without it, video upload cannot be authorized.")
-            table.insert(warnings, "\nInstall and activate the 'Lightroom Companion' plugin in Piwigo,")
-            table.insert(warnings, "then use 'Server Info' > 'Enable Video Support' to configure the server.")
-        else
-            local cfg = videoSupport.serverConfig
-            if cfg and cfg.piwigo then
-                if cfg.piwigo.video_ready then
-                    log:info("PublishTask - server video_ready = true")
-                    if cfg.php and cfg.php.upload_max_filesize then
-                        serverMaxBytes = utils.parsePhpSize(cfg.php.upload_max_filesize)
-                        local postMax = utils.parsePhpSize(cfg.php.post_max_size or "0")
-                        if postMax and postMax > 0 and (not serverMaxBytes or postMax < serverMaxBytes) then
-                            serverMaxBytes = postMax
+            for _, vPhoto in ipairs(videoPhotos) do
+                local vName = vPhoto:getFormattedMetadata("fileName") or "unknown"
+                log:info("PublishTask - removing video (disabled by user): " .. vName)
+                exportSession:removePhoto(vPhoto)
+            end
+            if batchVideoCount >= batchTotalCount then
+                log:info("PublishTask - batch contained only videos, all disabled — nothing to render")
+                LrDialogs.message("Video Publishing Disabled",
+                    "Video inclusion is disabled in this publish service settings.\n\n"
+                    .. "Enable 'Include video files' in the Video section to publish videos.\n\n"
+                    .. "No photos to publish in this batch.",
+                    "info")
+                PWStatusManager.setPiwigoBusy(publishService, false)
+                PWStatusManager.setRenderPhotos(publishService, false)
+                return
+            end
+        end
+
+        -- Check server video support (skip if already blocked by user setting)
+        local warnings = {}
+        if not videoUploadBlocked then
+            local videoSupport = PiwigoAPI.getServerVideoSupport(propertyTable)
+
+            if not videoSupport.status then
+                videoUploadBlocked = true
+                table.insert(warnings, "- Cannot verify server video support (connection issue).")
+            elseif not videoSupport.companionAvailable then
+                videoUploadBlocked = true
+                table.insert(warnings, "- The 'Lightroom Companion' plugin is not installed on your Piwigo server.")
+                table.insert(warnings, "  Without it, video upload cannot be authorized.")
+                table.insert(warnings, "\nInstall and activate the 'Lightroom Companion' plugin in Piwigo,")
+                table.insert(warnings, "then use 'Server Info' > 'Enable Video Support' to configure the server.")
+            else
+                local cfg = videoSupport.serverConfig
+                if cfg and cfg.piwigo then
+                    if cfg.piwigo.video_ready then
+                        log:info("PublishTask - server video_ready = true")
+                        if cfg.php and cfg.php.upload_max_filesize then
+                            serverMaxBytes = utils.parsePhpSize(cfg.php.upload_max_filesize)
+                            local postMax = utils.parsePhpSize(cfg.php.post_max_size or "0")
+                            if postMax and postMax > 0 and (not serverMaxBytes or postMax < serverMaxBytes) then
+                                serverMaxBytes = postMax
+                            end
+                            if serverMaxBytes then
+                                log:info("PublishTask - server max upload = " .. serverMaxBytes .. " bytes")
+                            end
                         end
-                        if serverMaxBytes then
-                            log:info("PublishTask - server max upload = " .. serverMaxBytes .. " bytes")
+                    else
+                        videoUploadBlocked = true
+                        if not cfg.piwigo.upload_form_all_types then
+                            table.insert(warnings, "- Server does NOT accept all file types (upload_form_all_types = false)")
                         end
+                        local vExts = cfg.piwigo.video_ext_configured or {}
+                        if type(vExts) ~= "table" or #vExts == 0 then
+                            table.insert(warnings, "- No video extensions configured on the server.")
+                        end
+                        table.insert(warnings, "\nUse 'Server Info' > 'Enable Video Support' to fix this automatically.")
+                    end
+
+                    if not videoSupport.videoJsInstalled then
+                        table.insert(warnings, "- VideoJS plugin is NOT installed (videos won't play in gallery)")
+                    elseif not videoSupport.videoJsActive then
+                        table.insert(warnings, "- VideoJS plugin is installed but INACTIVE")
+                    end
+
+                    -- FFmpeg absence is non-blocking, info available via Companion admin page
+                    if cfg.ffmpeg and not cfg.ffmpeg.installed then
+                        log:info("PublishTask - FFmpeg not installed (non-blocking)")
                     end
                 else
                     videoUploadBlocked = true
-                    if not cfg.piwigo.upload_form_all_types then
-                        table.insert(warnings, "- Server does NOT accept all file types (upload_form_all_types = false)")
-                    end
-                    local vExts = cfg.piwigo.video_ext_configured or {}
-                    if type(vExts) ~= "table" or #vExts == 0 then
-                        table.insert(warnings, "- No video extensions configured on the server.")
-                    end
-                    table.insert(warnings, "\nUse 'Server Info' > 'Enable Video Support' to fix this automatically.")
+                    table.insert(warnings, "- Companion plugin responded but returned no configuration data.")
                 end
-
-                if not videoSupport.videoJsInstalled then
-                    table.insert(warnings, "- VideoJS plugin is NOT installed (videos won't play in gallery)")
-                elseif not videoSupport.videoJsActive then
-                    table.insert(warnings, "- VideoJS plugin is installed but INACTIVE")
-                end
-
-                -- FFmpeg absence is non-blocking, info available via Companion admin page
-                if cfg.ffmpeg and not cfg.ffmpeg.installed then
-                    log:info("PublishTask - FFmpeg not installed (non-blocking)")
-                end
-            else
-                videoUploadBlocked = true
-                table.insert(warnings, "- Companion plugin responded but returned no configuration data.")
             end
         end
 
         if videoUploadBlocked then
-            local warningText = table.concat(warnings, "\n")
             -- Remove blocked videos from session BEFORE rendering starts
             for _, vPhoto in ipairs(videoPhotos) do
                 local vName = vPhoto:getFormattedMetadata("fileName") or "unknown"
@@ -413,26 +437,57 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
             end
             -- If batch contained ONLY videos, skip rendering entirely
             if batchVideoCount >= batchTotalCount then
+                local reason = (#warnings > 0)
+                    and ("Video upload is not authorized:\n\n" .. table.concat(warnings, "\n") .. "\n\nNo photos to publish in this batch.")
+                    or "Video inclusion is disabled in this publish service settings.\n\nNo photos to publish in this batch."
                 log:info("PublishTask - batch contained only videos, all blocked — nothing to render")
-                LrDialogs.message("Video Upload Blocked",
-                    "Video upload is not authorized:\n\n" .. warningText ..
-                    "\n\nNo photos to publish in this batch.",
-                    "critical")
+                LrDialogs.message("Video Upload Blocked", reason, "critical")
                 PWStatusManager.setPiwigoBusy(publishService, false)
                 PWStatusManager.setRenderPhotos(publishService, false)
                 return
             else
-                LrDialogs.message("Video Upload Blocked",
-                    "Video upload is not authorized:\n\n" .. warningText ..
-                    "\n\n" .. batchVideoCount .. " video(s) skipped.\nPhotos will still be published.",
-                    "critical")
+                local reason = (#warnings > 0)
+                    and ("Video upload is not authorized:\n\n" .. table.concat(warnings, "\n") .. "\n\n" .. batchVideoCount .. " video(s) skipped.\nPhotos will still be published.")
+                    or ("Video inclusion is disabled.\n\n" .. batchVideoCount .. " video(s) skipped.\nPhotos will still be published.")
+                LrDialogs.message("Video Upload Blocked", reason, "critical")
             end
-        elseif #warnings > 0 then
-            local warningText = table.concat(warnings, "\n")
-            LrDialogs.message("Video Support Warning",
-                "Issues detected on your Piwigo server:\n\n" .. warningText ..
-                "\n\nVideo upload will proceed.",
-                "warning")
+        else
+            -- Server allows video — check per-file size BEFORE rendering
+            if serverMaxBytes then
+                local oversizedVideos = {}
+                for idx = #videoPhotos, 1, -1 do
+                    local vPhoto = videoPhotos[idx]
+                    local vName = vPhoto:getFormattedMetadata("fileName") or "unknown"
+                    local filePath = vPhoto:getRawMetadata("path")
+                    if filePath then
+                        local attrs = LrFileUtils.fileAttributes(filePath)
+                        if attrs and attrs.fileSize and attrs.fileSize > serverMaxBytes then
+                            local sizeMB = string.format("%.1f", attrs.fileSize / (1024*1024))
+                            local limitMB = string.format("%.1f", serverMaxBytes / (1024*1024))
+                            log:info("PublishTask - removing oversized video from session: " .. vName
+                                .. " (" .. sizeMB .. " MB > " .. limitMB .. " MB)")
+                            exportSession:removePhoto(vPhoto)
+                            table.insert(oversizedVideos, vName .. " (" .. sizeMB .. " MB)")
+                        end
+                    end
+                end
+                if #oversizedVideos > 0 then
+                    local limitMB = string.format("%.1f", serverMaxBytes / (1024*1024))
+                    LrDialogs.message("Video Too Large",
+                        "The following video(s) exceed the server upload limit (" .. limitMB .. " MB):\n\n"
+                        .. "- " .. table.concat(oversizedVideos, "\n- ")
+                        .. "\n\nThese videos will be skipped. Other files will still be published.",
+                        "warning")
+                end
+            end
+
+            if #warnings > 0 then
+                local warningText = table.concat(warnings, "\n")
+                LrDialogs.message("Video Support Warning",
+                    "Issues detected on your Piwigo server:\n\n" .. warningText ..
+                    "\n\nVideo upload will proceed.",
+                    "warning")
+            end
         end
     end
 
@@ -460,37 +515,11 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
         local fileFormat = lrPhoto:getRawMetadata("fileFormat")
         local isVideo = (fileFormat == "VIDEO")
 
-        -- Video guard: server-blocked videos already removed before the loop via removePhoto
+        -- Video: blocked/oversized videos already removed before the loop via removePhoto
         local videoBlocked = false
         if isVideo then
-            local videoFileName = lrPhoto:getFormattedMetadata("fileName") or "unknown"
-            log:info("PublishTask.processRenderedPhotos - video detected: " .. videoFileName)
-
-            -- Per-file size check (only if upload allowed and limit known)
-            if serverMaxBytes then
-                local filePath = lrPhoto:getRawMetadata("path")
-                if filePath then
-                    local attrs = LrFileUtils.fileAttributes(filePath)
-                    if attrs and attrs.fileSize and attrs.fileSize > serverMaxBytes then
-                        local sizeMB = string.format("%.1f", attrs.fileSize / (1024*1024))
-                        local limitMB = string.format("%.1f", serverMaxBytes / (1024*1024))
-                        log:info("PublishTask - BLOCKING video (too large): " .. videoFileName
-                            .. " (" .. sizeMB .. " MB > " .. limitMB .. " MB)")
-                        local skipOk, skipErr = pcall(function() rendition:skipRender() end)
-                        if not skipOk then
-                            log:info("PublishTask - skipRender failed (" .. tostring(skipErr) .. "), waiting for render to discard")
-                            local bSuccess, bPath = rendition:waitForRender()
-                            if bSuccess and LrFileUtils.exists(bPath) then LrFileUtils.delete(bPath) end
-                            rendition:renditionIsDone(false, "Video too large: " .. sizeMB .. " MB (limit: " .. limitMB .. " MB)")
-                        end
-                        videoBlocked = true
-                        LrDialogs.message("Video Too Large",
-                            videoFileName .. " (" .. sizeMB .. " MB) exceeds the server limit of " .. limitMB .. " MB.\n"
-                            .. "This video will be skipped.",
-                            "warning")
-                    end
-                end
-            end
+            log:info("PublishTask.processRenderedPhotos - video detected: "
+                .. (lrPhoto:getFormattedMetadata("fileName") or "unknown"))
         end
 
         -- Keyword filter check (skip if video already blocked)
