@@ -54,6 +54,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--thumbnail-only", action="store_true", dest="thumbnail_only", help="Générer uniquement la miniature")
     p.add_argument("--keep",           help="Preset à conserver lors du nettoyage (mode clean)")
     p.add_argument("--check-config",   dest="check_config", help="Fichier JSON avec les chemins à valider (mode check)")
+    p.add_argument("--ffmpeg-path",    dest="ffmpeg_path",   help="Chemin explicite vers ffmpeg (override config)")
+    p.add_argument("--exiftool-path",  dest="exiftool_path", help="Chemin explicite vers exiftool (override config)")
+    p.add_argument("--log-file",       dest="log_file",      help="Fichier log pour capturer stdout+stderr (diagnostic)")
     p.add_argument("--verbose",        action="store_true", help="Sortie détaillée")
     p.add_argument("--dry-run",        action="store_true", dest="dry_run", help="Simuler sans écrire")
     return p

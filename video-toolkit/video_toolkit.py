@@ -32,6 +32,23 @@ def main() -> int:
     # Charger la configuration
     cfg = Config(args.config if hasattr(args, "config") and args.config else None)
 
+    # Propager les overrides CLI → config (priorité sur le fichier de config)
+    if getattr(args, "ffmpeg_path", None):
+        cfg.set("ffmpeg_path", args.ffmpeg_path)
+    if getattr(args, "exiftool_path", None):
+        cfg.set("exiftool_path", args.exiftool_path)
+
+    # Rediriger stdout+stderr vers un fichier log si --log-file fourni
+    _log_fh = None
+    if getattr(args, "log_file", None):
+        try:
+            _log_fh = open(args.log_file, "w", encoding="utf-8", buffering=1)
+            sys.stdout = _log_fh
+            sys.stderr = _log_fh
+        except OSError as e:
+            # Pas bloquant — on continue sans log
+            print(f"[VTK] Impossible d'ouvrir le log file: {e}", file=sys.__stderr__)
+
     # Mode non-interactif (avec --mode)
     if args.mode:
         if args.mode == "check":

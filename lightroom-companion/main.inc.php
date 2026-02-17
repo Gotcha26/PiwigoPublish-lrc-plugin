@@ -295,10 +295,15 @@ function companion_set_representative($params, &$service)
         return new PwgError(WS_ERR_INVALID_PARAM, 'Poster must be jpg, jpeg, png or webp');
     }
 
-    // Piwigo representative: same filename as image but with new extension
+    // Piwigo representative: stored in pwg_representative/ subdirectory
     $image_basename = pathinfo($row['path'], PATHINFO_FILENAME);
     $representative_filename = $image_basename . '.' . $uploaded_ext;
-    $representative_path = $image_dir . '/' . $representative_filename;
+    $representative_dir = $image_dir . '/pwg_representative';
+    if (!is_dir($representative_dir))
+    {
+        @mkdir($representative_dir, 0755, true);
+    }
+    $representative_path = $representative_dir . '/' . $representative_filename;
 
     if (!move_uploaded_file($_FILES['file']['tmp_name'], $representative_path))
     {

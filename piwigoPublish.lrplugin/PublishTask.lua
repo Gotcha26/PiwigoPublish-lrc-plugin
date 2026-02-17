@@ -354,20 +354,30 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
                 existingImageId = utils.extractPwImageIdFromUrl(storedUrl, propertyTable.host)
             end
             if existingImageId then
-                appliedPreset = photo:getPropertyForPlugin(_PLUGIN, "pwVideoPreset") or ""
-                -- 5C: collection override takes priority over service default
-                local currentPreset = (collectionSettings.vtkPresetOverride and collectionSettings.vtkPresetOverride ~= "")
-                    and collectionSettings.vtkPresetOverride
-                    or ((propertyTable.vtkDefaultPreset and propertyTable.vtkDefaultPreset ~= "")
-                        and propertyTable.vtkDefaultPreset or "medium")
-                if appliedPreset ~= "" and appliedPreset ~= currentPreset then
-                    -- Preset changed → need re-encode (or use cached variant if it exists)
-                    republishMode = "re_upload"
+                -- Verify image still exists on Piwigo
+                local checkStatus = PiwigoAPI.checkPhoto(propertyTable, existingImageId)
+                if not checkStatus.status then
+                    -- Image was deleted from Piwigo → treat as new upload
+                    log:info("PublishTask - video image_id=" .. existingImageId .. " no longer exists on Piwigo, treating as new")
+                    existingImageId = nil
+                    republishMode = "new"
                 else
-                    -- Same preset (or no preset recorded) → check if source file changed via .vtk cache
-                    -- If hash matches → metadata only; if not → re_upload
-                    -- Default to metadata_only; the toolkit will detect hash mismatch and re-encode
-                    republishMode = "metadata_only"
+                    appliedPreset = photo:getPropertyForPlugin(_PLUGIN, "pwVideoPreset") or ""
+                    -- 5C: collection override takes priority over service default
+                    local currentPreset = (collectionSettings.vtkPresetOverride and collectionSettings.vtkPresetOverride ~= "")
+                        and collectionSettings.vtkPresetOverride
+                        or ((propertyTable.vtkDefaultPreset and propertyTable.vtkDefaultPreset ~= "")
+                            and propertyTable.vtkDefaultPreset or "medium")
+                    if appliedPreset == "" then
+                        -- No preset recorded → video was never processed by VTK → need full processing
+                        republishMode = "re_upload"
+                    elseif appliedPreset ~= currentPreset then
+                        -- Preset changed → need re-encode
+                        republishMode = "re_upload"
+                    else
+                        -- Same preset → metadata only
+                        republishMode = "metadata_only"
+                    end
                 end
             end
 
@@ -491,7 +501,8 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
             end
         else
             -- Server allows video — check per-file size BEFORE rendering (only for new/re_upload)
-            if serverMaxBytes then
+            -- Skip size check if VTK is enabled: the variant produced by VTK will be uploaded, not the original
+            if serverMaxBytes and not propertyTable.vtkEnabled then
                 local oversizedVideos = {}
                 for idx = #videoPhotos, 1, -1 do
                     local vEntry = videoPhotos[idx]
@@ -539,6 +550,7 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
     -- vtkResults[i] = { photo, existingImageId, republishMode, variantPath, thumbnailPath, status, error }
     local vtkResults         = {}
     local metadataOnlyVideos = {}  -- 4C : videos needing metadata-only update
+    local vtkUploadedByLocalId = {}  -- index: localIdentifier → { imageId, remoteUrl }
 
     if not videoUploadBlocked and batchVideoCount > 0 and propertyTable.vtkEnabled then
         log:info("PublishTask - Video Toolkit enabled, processing " .. batchVideoCount .. " video(s)")
@@ -611,14 +623,23 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
         local presetsArg  = (propertyTable.vtkPresetsFile and propertyTable.vtkPresetsFile ~= "")
             and (' --config "' .. propertyTable.vtkPresetsFile .. '"') or ""
 
-        -- Commande complète (bloquante — le toolkit s'arrête quand tout est traité)
+        -- Commande complète — stdout+stderr capturés via --log-file (Python)
+        local vtkLogPath = LrPathUtils.child(LrPathUtils.getStandardFilePath("temp"), "piwigoPublish_vtk.log")
         local cmd = '"' .. python .. '" "' .. toolkitScript .. '"'
             .. ' --mode batch'
             .. ' --batch-file "' .. batchFilePath .. '"'
             .. ' --status-file "' .. statusFilePath .. '"'
+            .. ' --log-file "' .. vtkLogPath .. '"'
             .. ffmpegArg .. exiftoolArg .. presetsArg
 
         log:info("PublishTask - VTK command: " .. cmd)
+        log:info("PublishTask - VTK log file: " .. vtkLogPath)
+        -- Log du contenu du batch file pour diagnostic
+        local bfDiag = io.open(batchFilePath, "r")
+        if bfDiag then
+            log:info("PublishTask - VTK batch content: " .. (bfDiag:read("*all") or ""))
+            bfDiag:close()
+        end
 
         -- Configurer la progression LrC pendant le traitement vidéo
         progressScope:setCaption("Video Toolkit — Processing " .. batchVideoCount .. " video(s)...")
@@ -630,6 +651,7 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
 
         LrTasks.startAsyncTask(function()
             vtkExitCode = LrTasks.execute(cmd)
+            log:info("PublishTask - LrTasks.execute returned: " .. tostring(vtkExitCode) .. " (type=" .. type(vtkExitCode) .. ")")
             vtkDone = true
         end)
 
@@ -660,67 +682,195 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
             end
         end
 
-        -- Lire les résultats du toolkit
+        -- Lire les résultats depuis le log file (source de vérité — indépendant du code de sortie)
+        -- Note: LrTasks.execute peut retourner 1 même si Python sort en 0 (bug Windows/Python 3.14)
         if vtkCancelled then
             log:info("PublishTask - VTK cancelled by user, videos will be skipped")
             LrDialogs.message("Video Toolkit Cancelled",
                 "Publication cancelled during video processing.\n\nVideos have not been uploaded.",
                 "warning")
-        elseif vtkExitCode == 0 or vtkExitCode == nil then
-            -- Lire le statut final
-            local sf = io.open(statusFilePath, "r")
-            if sf then
-                local content = sf:read("*all")
-                sf:close()
-                local ok, statusData = pcall(function() return JSON:decode(content) end)
-                if ok and statusData and statusData.results then
-                    -- Construire vtkResults indexé par chemin source
-                    local resultsByPath = {}
-                    for _, r in ipairs(statusData.results) do
-                        if r.input then
-                            resultsByPath[r.input] = r
-                        end
-                    end
-                    for _, vEntry in ipairs(videoPhotos) do
-                        if vEntry.republishMode ~= "metadata_only" then
-                            local filePath = vEntry.photo:getRawMetadata("path")
-                            local r = filePath and resultsByPath[filePath]
-                            if r then
-                                table.insert(vtkResults, {
-                                    photo           = vEntry.photo,
-                                    existingImageId = vEntry.existingImageId,
-                                    republishMode   = vEntry.republishMode,
-                                    variantPath     = r.variant   or "",
-                                    thumbnailPath   = r.thumbnail or "",
-                                    status          = r.status    or "error",
-                                    error           = r.error     or "",
-                                })
-                            else
-                                table.insert(vtkResults, {
-                                    photo           = vEntry.photo,
-                                    existingImageId = vEntry.existingImageId,
-                                    republishMode   = vEntry.republishMode,
-                                    status          = "error",
-                                    error           = "No result from Video Toolkit for " .. (filePath or "?"),
-                                })
-                            end
+        else
+            if vtkExitCode ~= 0 and vtkExitCode ~= nil then
+                log:warn("PublishTask - VTK exit code: " .. tostring(vtkExitCode) .. " — checking log file for actual status")
+            end
+            -- Lire le JSON depuis le log file (contient les résultats complets)
+            local vtkOutput = nil
+            local lf = io.open(vtkLogPath, "r")
+            if lf then
+                local raw = lf:read("*all") or ""
+                lf:close()
+                local ok, parsed = pcall(function() return JSON:decode(raw) end)
+                if ok and parsed then
+                    vtkOutput = parsed
+                else
+                    log:warn("PublishTask - VTK log parse failed: " .. raw:sub(1, 500))
+                end
+            else
+                log:warn("PublishTask - VTK log not found: " .. vtkLogPath)
+            end
+
+            if vtkOutput and vtkOutput.status == "ok" and vtkOutput.results then
+                -- Succès — construire vtkResults indexé par chemin source
+                local resultsByPath = {}
+                for _, r in ipairs(vtkOutput.results) do
+                    if r.input then resultsByPath[r.input] = r end
+                end
+                for _, vEntry in ipairs(videoPhotos) do
+                    if vEntry.republishMode ~= "metadata_only" then
+                        local filePath = vEntry.photo:getRawMetadata("path")
+                        local r = filePath and resultsByPath[filePath]
+                        if r then
+                            table.insert(vtkResults, {
+                                photo           = vEntry.photo,
+                                existingImageId = vEntry.existingImageId,
+                                republishMode   = vEntry.republishMode,
+                                variantPath     = r.variant   or "",
+                                thumbnailPath   = r.thumbnail or "",
+                                status          = r.status    or "error",
+                                error           = r.error     or "",
+                            })
+                        else
+                            table.insert(vtkResults, {
+                                photo           = vEntry.photo,
+                                existingImageId = vEntry.existingImageId,
+                                republishMode   = vEntry.republishMode,
+                                status          = "error",
+                                error           = "No result from Video Toolkit for " .. (filePath or "?"),
+                            })
                         end
                     end
                 end
+            else
+                -- Échec réel : pas de log, JSON invalide, ou status != "ok"
+                local reason = (vtkOutput and vtkOutput.status) or "no output"
+                log:warn("PublishTask - VTK failed: " .. reason)
+                LrDialogs.message("Video Toolkit Error",
+                    "Video Toolkit failed.\n\nDetails in:\n" .. vtkLogPath
+                    .. "\n\nVideos will be skipped.",
+                    "critical")
             end
-        else
-            log:warn("PublishTask - VTK exited with code: " .. tostring(vtkExitCode))
-            LrDialogs.message("Video Toolkit Error",
-                "Video Toolkit failed (exit code " .. tostring(vtkExitCode) .. ").\n\n"
-                .. "Videos will be skipped. Check Video Toolkit settings.",
-                "critical")
         end
 
         progressScope:setCaption("Publishing to Piwigo...")
         progressScope:setPortionComplete(0, 100)
 
         end -- if #batchVideos == 0 / else
+
+        -- -----------------------------------------------------------------------
+        -- Upload des variantes VTK AVANT la boucle renditions
+        -- (pour pouvoir appeler recordPublishedPhotoId dans la boucle)
+        -- -----------------------------------------------------------------------
+        if #vtkResults > 0 then
+            log:info("PublishTask - uploading " .. #vtkResults .. " video variant(s)")
+            progressScope:setCaption("Uploading video variants...")
+
+            local vtkFailedVideos = {}
+
+            for idx, vr in ipairs(vtkResults) do
+                local vPhoto = vr.photo
+                local vName  = vPhoto:getFormattedMetadata("fileName") or "unknown"
+
+                if vr.status ~= "ok" or vr.variantPath == "" then
+                    local errMsg = vr.error or "Unknown toolkit error"
+                    log:warn("PublishTask - skipping video (toolkit error): " .. vName .. " — " .. errMsg)
+                    table.insert(vtkFailedVideos, "• " .. vName .. "\n  " .. errMsg)
+                else
+                    log:info("PublishTask - uploading video variant: " .. vr.variantPath)
+                    progressScope:setCaption("Uploading video: " .. vName)
+                    progressScope:setPortionComplete(idx - 1, #vtkResults)
+
+                    local metaData = utils.getPhotoMetadata(propertyTable, vPhoto)
+                    metaData.Albumid  = albumId
+                    metaData.Remoteid = vr.existingImageId or ""
+
+                    local uploadStatus
+                    local variantAttrs = LrFileUtils.fileAttributes(vr.variantPath)
+                    local variantSize  = variantAttrs and variantAttrs.fileSize or 0
+                    local useChunked   = serverMaxBytes and (variantSize > serverMaxBytes)
+
+                    if useChunked then
+                        log:info(string.format(
+                            "PublishTask - video %s (%d bytes) > server limit (%d) → chunked upload",
+                            vName, variantSize, serverMaxBytes))
+                        progressScope:setCaption("Uploading (chunked): " .. vName)
+                        uploadStatus = PiwigoAPI.uploadVideoChunked(propertyTable, vr.variantPath, metaData)
+                    else
+                        log:info("PublishTask - video " .. vName .. " → addSimple upload")
+                        uploadStatus = PiwigoAPI.updateGallery(propertyTable, vr.variantPath, metaData)
+                    end
+
+                    if uploadStatus.status then
+                        local imageId = uploadStatus.remoteid or ""
+                        log:info("PublishTask - video variant uploaded, image_id=" .. imageId)
+
+                        -- Upload du poster
+                        if vr.thumbnailPath and vr.thumbnailPath ~= ""
+                                and LrFileUtils.exists(vr.thumbnailPath) then
+                            if companionAvailable then
+                                log:info("PublishTask - uploading poster: " .. vr.thumbnailPath)
+                                progressScope:setCaption("Uploading poster: " .. vName)
+                                local posterStatus = PiwigoAPI.setRepresentative(
+                                    propertyTable, imageId, vr.thumbnailPath)
+                                if posterStatus.status then
+                                    log:info("PublishTask - poster set for image_id=" .. imageId)
+                                else
+                                    log:warn("PublishTask - poster upload failed: "
+                                        .. (posterStatus.statusMsg or ""))
+                                end
+                            end
+                        end
+
+                        -- Mettre à jour les métadonnées sur Piwigo
+                        metaData.Remoteid = imageId
+                        PiwigoAPI.updateMetadata(propertyTable, vPhoto, metaData)
+
+                        -- Stocker le résultat pour la boucle renditions
+                        vr.uploadedImageId  = imageId
+                        vr.uploadedRemoteUrl = uploadStatus.remoteurl or ""
+
+                        -- Stocker les métadonnées custom
+                        local pluginData = {
+                            pwHostURL     = propertyTable.host,
+                            albumName     = albumName,
+                            albumUrl      = albumUrl,
+                            imageUrl      = uploadStatus.remoteurl or "",
+                            pwUploadDate  = os.date("%Y-%m-%d"),
+                            pwUploadTime  = os.date("%H:%M:%S"),
+                            pwCommentSync = "",
+                            pwVideoPreset = preset,
+                        }
+                        PiwigoAPI.storeMetaData(catalog, vPhoto, pluginData)
+                    else
+                        log:warn("PublishTask - video variant upload failed: " .. vName
+                            .. " — " .. (uploadStatus.statusMsg or ""))
+                        table.insert(vtkFailedVideos, "• " .. vName .. "\n  " .. (uploadStatus.statusMsg or ""))
+                    end
+                end
+            end
+
+            if #vtkFailedVideos > 0 then
+                LrDialogs.message("Video Toolkit — Processing Errors",
+                    #vtkFailedVideos .. " video(s) could not be processed by the Video Toolkit "
+                    .. "and were skipped:\n\n"
+                    .. table.concat(vtkFailedVideos, "\n\n")
+                    .. "\n\nCheck the Video Toolkit log for details.",
+                    "warning")
+            end
+        end
+
+        -- Construire l'index des résultats VTK par localIdentifier (pour la boucle renditions)
+        for _, vr in ipairs(vtkResults) do
+            if vr.uploadedImageId then
+                vtkUploadedByLocalId[vr.photo.localIdentifier] = {
+                    imageId   = vr.uploadedImageId,
+                    remoteUrl = vr.uploadedRemoteUrl or "",
+                }
+            end
+        end
     end
+
+    progressScope:setCaption("Publishing to Piwigo...")
+    progressScope:setPortionComplete(0, 100)
 
     -- now wait for photos to be exported and then upload to Piwigo
     for i, rendition in exportContext:renditions(renditionParams) do
@@ -746,16 +896,65 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
         local fileFormat = lrPhoto:getRawMetadata("fileFormat")
         local isVideo = (fileFormat == "VIDEO")
 
-        -- Video: blocked/oversized videos already removed before the loop via removePhoto
-        local videoBlocked = false
+        -- Video VTK: already uploaded before the loop, just consume rendition and record ID
+        local videoHandled = false
         if isVideo then
-            log:info("PublishTask.processRenderedPhotos - video detected: "
-                .. (lrPhoto:getFormattedMetadata("fileName") or "unknown"))
+            local vtkResult = vtkUploadedByLocalId[lrPhoto.localIdentifier]
+            if vtkResult then
+                -- Video was processed and uploaded by VTK — consume render and mark published
+                local vName = lrPhoto:getFormattedMetadata("fileName") or "unknown"
+                log:info("PublishTask - VTK video in renditions loop: " .. vName .. " — marking published (image_id=" .. vtkResult.imageId .. ")")
+                local success, pathOrMessage = rendition:waitForRender()
+                if success and LrFileUtils.exists(pathOrMessage) then
+                    LrFileUtils.delete(pathOrMessage)
+                end
+                rendition:recordPublishedPhotoId(vtkResult.imageId)
+                rendition:recordPublishedPhotoUrl(vtkResult.remoteUrl)
+                rendition:renditionIsDone(true)
+                videoHandled = true
+            end
+            if not videoHandled then
+                -- metadata-only videos: consume render, update metadata, mark published
+                local metaOnlyEntry = nil
+                for _, vEntry in ipairs(metadataOnlyVideos) do
+                    if vEntry.photo.localIdentifier == lrPhoto.localIdentifier then
+                        metaOnlyEntry = vEntry
+                        break
+                    end
+                end
+                if metaOnlyEntry then
+                    local vName = lrPhoto:getFormattedMetadata("fileName") or "unknown"
+                    local imageId = metaOnlyEntry.existingImageId or ""
+                    log:info("PublishTask - metadata-only video in renditions loop: " .. vName .. " (image_id=" .. imageId .. ")")
+                    local success, pathOrMessage = rendition:waitForRender()
+                    if success and LrFileUtils.exists(pathOrMessage) then
+                        LrFileUtils.delete(pathOrMessage)
+                    end
+                    if imageId ~= "" then
+                        local metaData = utils.getPhotoMetadata(propertyTable, lrPhoto)
+                        metaData.Albumid  = albumId
+                        metaData.Remoteid = imageId
+                        PiwigoAPI.updateMetadata(propertyTable, lrPhoto, metaData)
+                        log:info("PublishTask - metadata updated for image_id=" .. imageId)
+                        rendition:recordPublishedPhotoId(imageId)
+                        rendition:recordPublishedPhotoUrl(tostring(rendition.publishedPhotoId or ""))
+                        rendition:renditionIsDone(true)
+                    else
+                        log:warn("PublishTask - metadata-only: no image_id for " .. vName)
+                        rendition:uploadFailed("No Piwigo image_id found")
+                    end
+                    videoHandled = true
+                end
+            end
+            if not videoHandled then
+                log:info("PublishTask.processRenderedPhotos - video detected: "
+                    .. (lrPhoto:getFormattedMetadata("fileName") or "unknown"))
+            end
         end
 
-        -- Keyword filter check (skip if video already blocked)
+        -- Keyword filter check (skip if video already handled/blocked)
         local kwBlocked = false
-        if not videoBlocked and kwFilterActive then
+        if not videoHandled and kwFilterActive then
             local keywords = utils.getPhotoDirectKeywords(lrPhoto)
             local allowed, reason = utils.checkKeywordFilter(keywords, includePatterns, excludePatterns)
             if not allowed then
@@ -772,7 +971,7 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
             end
         end
 
-        if not kwBlocked and not videoBlocked then
+        if not kwBlocked and not videoHandled then
             -- Detect photo already published in this service (multi-album support)
             local existingPwImageId = nil
             if remoteId == "" then
@@ -896,173 +1095,6 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
                 rendition:uploadFailed(pathOrMessage or "Render failed")
             end
         end -- end if not kwBlocked
-    end
-
-    -- -----------------------------------------------------------------------
-    -- Phase 2D — Upload des variantes vidéo (post-boucle renditions)
-    -- -----------------------------------------------------------------------
-    if #vtkResults > 0 then
-        log:info("PublishTask - uploading " .. #vtkResults .. " video variant(s)")
-        progressScope:setCaption("Uploading video variants...")
-
-        local vtkFailedVideos = {}
-
-        for idx, vr in ipairs(vtkResults) do
-            local vPhoto = vr.photo
-            local vName  = vPhoto:getFormattedMetadata("fileName") or "unknown"
-
-            if vr.status ~= "ok" or vr.variantPath == "" then
-                local errMsg = vr.error or "Unknown toolkit error"
-                log:warn("PublishTask - skipping video (toolkit error): " .. vName .. " — " .. errMsg)
-                table.insert(vtkFailedVideos, "• " .. vName .. "\n  " .. errMsg)
-            else
-                log:info("PublishTask - uploading video variant: " .. vr.variantPath)
-                progressScope:setCaption("Uploading video: " .. vName)
-                progressScope:setPortionComplete(idx - 1, #vtkResults)
-
-                -- Métadonnées depuis la vidéo originale dans le catalogue LrC
-                local metaData = utils.getPhotoMetadata(propertyTable, vPhoto)
-                metaData.Albumid  = albumId
-                -- 4B : si republication, passer l'image_id existant pour que Piwigo remplace la vidéo
-                metaData.Remoteid = vr.existingImageId or ""
-
-                -- 3B — Upload de la variante :
-                -- Si le fichier dépasse la limite PHP du serveur → upload chunked
-                -- Sinon → addSimple standard
-                local uploadStatus
-                local variantAttrs = LrFileUtils.fileAttributes(vr.variantPath)
-                local variantSize  = variantAttrs and variantAttrs.fileSize or 0
-                local useChunked   = serverMaxBytes and (variantSize > serverMaxBytes)
-
-                if useChunked then
-                    log:info(string.format(
-                        "PublishTask - video %s (%d bytes) > server limit (%d) → chunked upload",
-                        vName, variantSize, serverMaxBytes))
-                    progressScope:setCaption("Uploading (chunked): " .. vName)
-                    uploadStatus = PiwigoAPI.uploadVideoChunked(propertyTable, vr.variantPath, metaData)
-                else
-                    log:info("PublishTask - video " .. vName .. " → addSimple upload")
-                    uploadStatus = PiwigoAPI.updateGallery(propertyTable, vr.variantPath, metaData)
-                end
-
-                if uploadStatus.status then
-                    local imageId = uploadStatus.remoteid or ""
-                    log:info("PublishTask - video variant uploaded, image_id=" .. imageId)
-
-                    -- 3C — Upload du poster via pwg.companion.setRepresentative
-                    if vr.thumbnailPath and vr.thumbnailPath ~= ""
-                            and LrFileUtils.exists(vr.thumbnailPath) then
-                        if companionAvailable then
-                            log:info("PublishTask - uploading poster: " .. vr.thumbnailPath)
-                            progressScope:setCaption("Uploading poster: " .. vName)
-                            local posterStatus = PiwigoAPI.setRepresentative(
-                                propertyTable, imageId, vr.thumbnailPath)
-                            if posterStatus.status then
-                                log:info("PublishTask - poster set for image_id=" .. imageId)
-                            else
-                                log:warn("PublishTask - poster upload failed: "
-                                    .. (posterStatus.statusMsg or ""))
-                            end
-                        else
-                            log:info("PublishTask - companion not available, skipping poster upload")
-                        end
-                    end
-
-                    -- 3D — Mettre à jour les métadonnées sur Piwigo (titre, description, mots-clés)
-                    metaData.Remoteid = imageId
-                    PiwigoAPI.updateMetadata(propertyTable, vPhoto, metaData)
-
-                    -- 3D — Enregistrer l'ID publié sur la vidéo ORIGINALE dans LrC
-                    local remoteUrl = uploadStatus.remoteurl or ""
-                    catalog:withWriteAccessDo("Record published video ID", function()
-                        local publishedPhotos = publishedCollection:getPublishedPhotos()
-                        for _, pubPhoto in ipairs(publishedPhotos) do
-                            if pubPhoto:getPhoto().localIdentifier == vPhoto.localIdentifier then
-                                pubPhoto:setRemoteId(imageId)
-                                pubPhoto:setRemoteUrl(remoteUrl)
-                                break
-                            end
-                        end
-                    end, { timeout = 5 })
-
-                    -- Stocker les métadonnées custom (pwImageURL, pwHostURL, pwVideoPreset, etc.)
-                    local pluginData = {
-                        pwHostURL     = propertyTable.host,
-                        albumName     = albumName,
-                        albumUrl      = albumUrl,
-                        imageUrl      = remoteUrl,
-                        pwUploadDate  = os.date("%Y-%m-%d"),
-                        pwUploadTime  = os.date("%H:%M:%S"),
-                        pwCommentSync = "",
-                        pwVideoPreset = preset,  -- 4A : stocker le preset appliqué
-                    }
-                    PiwigoAPI.storeMetaData(catalog, vPhoto, pluginData)
-                else
-                    log:warn("PublishTask - video variant upload failed: " .. vName
-                        .. " — " .. (uploadStatus.statusMsg or ""))
-                    LrDialogs.message("Video Upload Failed",
-                        "Could not upload video variant for:\n" .. vName
-                        .. "\n\nError: " .. (uploadStatus.statusMsg or "Unknown error"),
-                        "warning")
-                end
-            end
-        end
-
-        if #vtkFailedVideos > 0 then
-            LrDialogs.message("Video Toolkit — Processing Errors",
-                #vtkFailedVideos .. " video(s) could not be processed by the Video Toolkit "
-                .. "and were skipped:\n\n"
-                .. table.concat(vtkFailedVideos, "\n\n")
-                .. "\n\nCheck the Video Toolkit log for details.",
-                "warning")
-        end
-
-        progressScope:setPortionComplete(#vtkResults, #vtkResults)
-    end
-
-    -- -----------------------------------------------------------------------
-    -- Phase 4C — Republication métadonnées seules (vidéos sans re-upload)
-    -- -----------------------------------------------------------------------
-    if metadataOnlyVideos and #metadataOnlyVideos > 0 then
-        log:info("PublishTask - updating metadata for " .. #metadataOnlyVideos .. " video(s) (metadata-only)")
-        progressScope:setCaption("Updating video metadata...")
-
-        local metaOnlyFailed = {}
-
-        for _, vEntry in ipairs(metadataOnlyVideos) do
-            local vPhoto    = vEntry.photo
-            local imageId   = vEntry.existingImageId or ""
-            local vName     = vPhoto:getFormattedMetadata("fileName") or "unknown"
-
-            if imageId == "" then
-                local errMsg = "No Piwigo image_id found (photo may not have been published yet)"
-                log:warn("PublishTask - metadata-only: no image_id for " .. vName .. ", skipping")
-                table.insert(metaOnlyFailed, "• " .. vName .. "\n  " .. errMsg)
-            else
-                log:info("PublishTask - metadata-only update for image_id=" .. imageId .. " (" .. vName .. ")")
-                progressScope:setCaption("Updating metadata: " .. vName)
-
-                local metaData = utils.getPhotoMetadata(propertyTable, vPhoto)
-                metaData.Albumid  = albumId
-                metaData.Remoteid = imageId
-
-                local updateStatus = PiwigoAPI.updateMetadata(propertyTable, vPhoto, metaData)
-                if updateStatus.status then
-                    log:info("PublishTask - metadata updated for image_id=" .. imageId)
-                else
-                    local errMsg = updateStatus.statusMsg or "Unknown error"
-                    log:warn("PublishTask - metadata update failed for " .. vName .. ": " .. errMsg)
-                    table.insert(metaOnlyFailed, "• " .. vName .. "\n  " .. errMsg)
-                end
-            end
-        end
-
-        if #metaOnlyFailed > 0 then
-            LrDialogs.message("Video Metadata Update — Errors",
-                #metaOnlyFailed .. " video(s) could not have their metadata updated on Piwigo:\n\n"
-                .. table.concat(metaOnlyFailed, "\n\n"),
-                "warning")
-        end
     end
 
     progressScope:done()

@@ -31,6 +31,18 @@ local PiwigoAPI = {}
 -- L O C A L   F U N C T I O N S
 -- *************************************************
 
+-- Strip PHP warnings/notices that Piwigo servers sometimes prepend to JSON responses.
+-- Finds the first '{' or '[' and returns the substring from there.
+local function stripPhpWarnings(body)
+    if not body then return body end
+    local j = body:find("[{%[]")
+    if j and j > 1 then
+        log:warn("PiwigoAPI - stripped " .. (j-1) .. " bytes of PHP output before JSON")
+        return body:sub(j)
+    end
+    return body
+end
+
 -- *************************************************
 local function httpGet(url, params, headers)
     -- generic function to call LrHttp.Get
@@ -70,7 +82,8 @@ local function httpGet(url, params, headers)
         return getResponse
     end
 
-    -- Try decoding JSON
+    -- Try decoding JSON (strip PHP warnings/notices if present)
+    body = stripPhpWarnings(body)
     local decoded = JSON:decode(body)
     if not decoded then
         log:info("PWAPI.httpGet - calling " .. getUrl)
@@ -111,17 +124,13 @@ local function httpPost(propertyTable, params, headers)
     local body = utils.buildBodyFromParams(params)
 
     log:info("PiwigoAPI.pwConnect - connecting to " .. propertyTable.pwurl)
-    log:info("PiwigoAPI.pwConnect - body:\n" .. utils.serialiseVar(body))
 
     local httpResponse, httpHeaders = LrHttp.post(propertyTable.pwurl, body, headers)
-
-    log:info("PiwigoAPI.pwConnect - response headers:\n" .. utils.serialiseVar(httpHeaders))
-    log:info("PiwigoAPI.pwConnect - response body:\n" .. tostring(httpResponse))
 
     if (httpHeaders.status == 201) or (httpHeaders.status == 200) then
         -- successful connection to Piwigo
         -- Now check login result
-        local rtnBody = JSON:decode(httpResponse)
+        local rtnBody = JSON:decode(stripPhpWarnings(httpResponse))
         if rtnBody and rtnBody.stat == "ok" then
             -- login ok - store session cookies
             local cookies = {}
@@ -1311,12 +1320,10 @@ function PiwigoAPI.pwConnect(propertyTable)
         -- successful connection to Piwigo
         -- Now check login result
         -- Decode JSON safely
-        local ok, rtnBody = pcall(JSON.decode, JSON, httpResponse)
+        local ok, rtnBody = pcall(JSON.decode, JSON, stripPhpWarnings(httpResponse))
         if not ok or type(rtnBody) ~= "table" then
             log:info("PiwigoAPI.pwConnect - connecting to " .. propertyTable.pwurl)
-            log:info("PiwigoAPI.pwConnect - body:\n" .. utils.serialiseVar(body))
-            log:info("PiwigoAPI.pwConnect - response headers:\n" .. utils.serialiseVar(httpHeaders))
-            log:info("PiwigoAPI.pwConnect - response body:\n" .. tostring(httpResponse))
+            log:info("PiwigoAPI.pwConnect - invalid/unreadable server response")
             LrDialogs.message("Cannot log in to Piwigo", "Invalid or unreadable server response")
             return false
         end
@@ -1343,17 +1350,13 @@ function PiwigoAPI.pwConnect(propertyTable)
             propertyTable.cookieHeader = table.concat(propertyTable.cookies, "; ")
             propertyTable.Connected = true
         else
-            log:info("PiwigoAPI.pwConnect - connecting to " .. propertyTable.pwurl)
-            log:info("PiwigoAPI.pwConnect - body:\n" .. utils.serialiseVar(body))
+            log:info("PiwigoAPI.pwConnect - login rejected by server: " .. tostring(rtnBody.err or "?"))
             LrDialogs.message("Cannot log in to Piwigo", tostring(rtnBody.err or "Unknown error") ..
                 (rtnBody.message and (", " .. rtnBody.message) or ""))
             return false
         end
     else
-        log:info("PiwigoAPI.pwConnect - connecting to " .. propertyTable.pwurl)
-        log:info("PiwigoAPI.pwConnect - body:\n" .. utils.serialiseVar(body))
-        log:info("PiwigoAPI.pwConnect - response headers:\n" .. utils.serialiseVar(httpHeaders))
-        log:info("PiwigoAPI.pwConnect - response body:\n" .. tostring(httpResponse))
+        log:info("PiwigoAPI.pwConnect - HTTP error connecting to " .. propertyTable.pwurl)
         local statusCode, statusDesc
         status = httpHeaders and httpHeaders.status
         if httpHeaders and httpHeaders.error then
@@ -1445,7 +1448,6 @@ function PiwigoAPI.getInfos(propertyTable)
                 rtnStatus.result = apiResult
             end
         end
-        log:info("PiwigoAPI.getInfos - result keys: " .. utils.serialiseVar(apiResult))
     else
         rtnStatus.message = "Cannot get host information from Piwigo - " ..
             ((getResponse.status .. " - " .. (getResponse.errorMessage or "Unknown error")) or "Unknown error")
@@ -1492,8 +1494,6 @@ function PiwigoAPI.getServerVideoSupport(propertyTable)
     if getResponse.status == "ok" and getResponse.response and getResponse.response.result then
         -- pwg.plugins.getList may return plugins under .plugins key or directly as result
         local responseResult = getResponse.response.result
-        log:info("PiwigoAPI.getServerVideoSupport - plugin list response keys: " ..
-            utils.serialiseVar(responseResult))
 
         -- Try to find the plugins array in various possible structures
         local plugins = nil
@@ -1865,7 +1865,7 @@ function PiwigoAPI.pwCategoriesMove(propertyTable, info, thisCat, newCat, callSt
 
     local parseResp
     if httpResponse then
-        parseResp = JSON:decode(httpResponse)
+        parseResp = JSON:decode(stripPhpWarnings(httpResponse))
     end
     if httpHeaders.status == 201 or httpHeaders.status == 200 then
         if parseResp and parseResp.stat == "ok" then
@@ -2036,7 +2036,7 @@ function PiwigoAPI.pwCategoriesDelete(propertyTable, info, metaData, callStatus)
 
     local parseResp
     if httpResponse then
-        parseResp = JSON:decode(httpResponse)
+        parseResp = JSON:decode(stripPhpWarnings(httpResponse))
     end
     if httpHeaders.status == 201 or httpHeaders.status == 200 then
         if parseResp and parseResp.stat == "ok" then
@@ -2116,7 +2116,7 @@ function PiwigoAPI.pwCategoriesSetinfo(propertyTable, info, metaData)
 
     local body
     if httpResponse then
-        body = JSON:decode(httpResponse)
+        body = JSON:decode(stripPhpWarnings(httpResponse))
     end
     if httpHeaders.status == 201 or httpHeaders.status == 200 then
         if body and body.stat == "ok" then
@@ -2393,7 +2393,7 @@ function PiwigoAPI.updateGallery(propertyTable, exportFilename, metaData)
 
     if httpHeaders.status == 201 or httpHeaders.status == 200 then
         local rv, response = pcall(function()
-            return JSON:decode(httpResponse)
+            return JSON:decode(stripPhpWarnings(httpResponse))
         end)
         if not (rv) then
             log:info("PiwigoAPI.updateGallery - params \n" .. utils.serialiseVar(params))
@@ -2659,7 +2659,7 @@ function PiwigoAPI.deletePhoto(propertyTable, pwCatID, pwImageID, callStatus)
 
     local body
     if httpResponse then
-        body = JSON:decode(httpResponse)
+        body = JSON:decode(stripPhpWarnings(httpResponse))
     end
 
     if httpHeaders.status == 201 or httpHeaders.status == 200 then
@@ -2903,7 +2903,6 @@ function PiwigoAPI.setAlbumCover(publishService)
     log:info("publishservice" .. publishService:getName())
     local catalog = LrApplication.activeCatalog()
     local publishSettings = publishService:getPublishSettings()
-    log:info("publishSettings\n" .. utils.serialiseVar(publishSettings))
 
     if not publishSettings then
         LrDialogs.message("PiwigoAPI.setAlbumCover - Can't find PublishSettings for this publish collection", "",
@@ -3152,7 +3151,7 @@ function PiwigoAPI.httpPostMultiPart(propertyTable, params)
 
     local body
     if httpResponse then
-        body = JSON:decode(httpResponse)
+        body = JSON:decode(stripPhpWarnings(httpResponse))
     end
     if httpHeaders then
         postHeaders.status = httpHeaders.status
@@ -3388,7 +3387,7 @@ function PiwigoAPI.uploadVideoChunked(propertyTable, filePath, metaData, chunkSi
             return callStatus
         end
 
-        local ok, body = pcall(function() return JSON:decode(httpResponse) end)
+        local ok, body = pcall(function() return JSON:decode(stripPhpWarnings(httpResponse)) end)
         if not ok or not body or body.stat ~= "ok" then
             fh:close()
             local msg = (body and body.message) or tostring(httpResponse)
