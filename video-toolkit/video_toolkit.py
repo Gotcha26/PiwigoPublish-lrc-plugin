@@ -21,7 +21,7 @@ import os
 # Ajouter le répertoire du script au path
 sys.path.insert(0, os.path.dirname(__file__))
 
-from src.cli import build_parser, run_probe, run_batch, run_status, InteractiveCLI
+from src.cli import build_parser, run_probe, run_process, run_batch, run_status, run_clean, InteractiveCLI
 from src.config import Config
 
 
@@ -36,15 +36,14 @@ def main() -> int:
     if args.mode:
         if args.mode == "probe":
             return run_probe(args, cfg)
+        if args.mode == "process":
+            return run_process(args, cfg)
         if args.mode == "batch":
             return run_batch(args, cfg)
         if args.mode == "status":
             return run_status(args, cfg)
         if args.mode == "clean":
-            # Phase 1A : non implémenté encore
-            import json
-            print(json.dumps({"status": "error", "error": "Mode 'clean' disponible en Phase 1D"}))
-            return 1
+            return run_clean(args, cfg)
 
     # Mode interactif
     cli = InteractiveCLI(cfg)

@@ -26,7 +26,8 @@ from .config import Config
 from .ffprobe import FFprobe, ProbeError
 from .hasher import partial_hash
 from .presets import PresetManager, PRESET_ORDER
-from .status import StatusManager
+from .processor import VideoProcessor
+from .status import StatusManager, GlobalStatusFile, STATE_PROCESSING, STATE_COMPLETE, STATE_ERROR
 from .ui import Colors, OutputFormatter, clear_screen, pause
 
 # ---------------------------------------------------------------------------
@@ -40,17 +41,20 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--mode",
-        choices=["probe", "batch", "status", "clean"],
+        choices=["probe", "process", "batch", "status", "clean"],
         help="Mode d'exécution (sans --mode : mode interactif)",
     )
-    p.add_argument("--input",       help="Fichier vidéo source")
-    p.add_argument("--preset",      help="Preset : small/medium/large/xlarge/xxl/origin")
-    p.add_argument("--config",      help="Chemin vers le fichier de configuration JSON")
-    p.add_argument("--output-dir",  help="Dossier de sortie (défaut : même que la source)")
-    p.add_argument("--batch-file",  help="Fichier JSON liste de vidéos (mode batch)")
-    p.add_argument("--status-file", help="Fichier statut global pour le polling Lightroom")
-    p.add_argument("--verbose",     action="store_true", help="Sortie détaillée")
-    p.add_argument("--dry-run",     action="store_true", help="Simuler sans écrire")
+    p.add_argument("--input",          help="Fichier vidéo source")
+    p.add_argument("--preset",         help="Preset : small/medium/large/xlarge/xxl/origin")
+    p.add_argument("--config",         help="Chemin vers le fichier de configuration JSON")
+    p.add_argument("--output-dir",     help="Dossier de sortie (défaut : même que la source)")
+    p.add_argument("--batch-file",     help="Fichier JSON liste de vidéos (mode batch)")
+    p.add_argument("--status-file",    help="Fichier statut global pour le polling Lightroom")
+    p.add_argument("--force",          action="store_true", help="Forcer le re-traitement même si cache valide")
+    p.add_argument("--thumbnail-only", action="store_true", dest="thumbnail_only", help="Générer uniquement la miniature")
+    p.add_argument("--keep",           help="Preset à conserver lors du nettoyage (mode clean)")
+    p.add_argument("--verbose",        action="store_true", help="Sortie détaillée")
+    p.add_argument("--dry-run",        action="store_true", dest="dry_run", help="Simuler sans écrire")
     return p
 
 
@@ -88,6 +92,69 @@ def run_probe(args: argparse.Namespace, cfg: Config) -> int:
 
 
 # ---------------------------------------------------------------------------
+# Mode process (non-interactif — appelé par Lightroom)
+# ---------------------------------------------------------------------------
+
+def run_process(args: argparse.Namespace, cfg: Config) -> int:
+    """Traite une vidéo unique selon le preset donné. Écrit le résultat JSON sur stdout."""
+    if not args.input:
+        _json_error("--input requis pour le mode process")
+        return 1
+
+    preset_key = args.preset or cfg.get("default_preset", "medium")
+    dry_run = getattr(args, "dry_run", False)
+    force = getattr(args, "force", False)
+    thumbnail_only = getattr(args, "thumbnail_only", False)
+
+    processor = _build_processor(cfg)
+
+    global_sf = None
+    if args.status_file:
+        global_sf = GlobalStatusFile(args.status_file)
+        global_sf.update(STATE_PROCESSING, progress=0, current_file=args.input, total=1, done=0)
+
+    def _progress(pct: int) -> None:
+        if global_sf:
+            global_sf.update(STATE_PROCESSING, progress=pct, current_file=args.input, total=1, done=0)
+
+    result = processor.process(
+        input_path=args.input,
+        preset_key=preset_key,
+        output_dir=args.output_dir or None,
+        force=force,
+        thumbnail_only=thumbnail_only,
+        dry_run=dry_run,
+        progress_callback=_progress,
+    )
+
+    if result.error:
+        if global_sf:
+            global_sf.mark_error(result.error)
+        _json_error(result.error)
+        return 1
+
+    output = {
+        "status": "ok",
+        "skipped": result.skipped,
+        "input": result.input_path,
+        "variant": result.variant_path,
+        "thumbnail": result.thumbnail_path,
+        "preset": result.preset_key,
+        "width": result.width,
+        "height": result.height,
+        "duration": result.duration,
+        "size": result.size,
+        "thumbnail_size": result.thumbnail_size,
+    }
+
+    if global_sf:
+        global_sf.mark_complete(files=[result.variant_path, result.thumbnail_path])
+
+    print(json.dumps(output, indent=2, ensure_ascii=False))
+    return 0
+
+
+# ---------------------------------------------------------------------------
 # Mode batch (non-interactif — appelé par Lightroom)
 # ---------------------------------------------------------------------------
 
@@ -109,25 +176,139 @@ def run_batch(args: argparse.Namespace, cfg: Config) -> int:
         _json_error(f"Erreur lecture batch : {e}")
         return 1
 
-    # Phase 1A : mode probe seulement — retourner les infos probe pour chaque vidéo
     videos = batch.get("videos", [])
-    ffprobe_bin = cfg.resolve_tool("ffprobe") or "ffprobe"
-    prober = FFprobe(ffprobe_bin)
+    total = len(videos)
+    dry_run = getattr(args, "dry_run", False)
 
-    results = []
+    global_sf = None
+    status_file = args.status_file or batch.get("status_file")
+    if status_file:
+        global_sf = GlobalStatusFile(status_file)
+        global_sf.update(STATE_PROCESSING, progress=0, total=total, done=0)
+
+    processor = _build_processor(cfg)
+
+    # Construire les jobs depuis le batch JSON
+    jobs = []
     for item in videos:
-        input_file = item.get("input", "")
-        try:
-            info = prober.probe(input_file)
-            h = partial_hash(input_file)
-            d = info.to_dict()
-            d["hash"] = h
-            d["status"] = "ok"
-            results.append(d)
-        except (ProbeError, OSError) as e:
-            results.append({"input": input_file, "status": "error", "error": str(e)})
+        jobs.append({
+            "input":          item.get("input", ""),
+            "preset":         item.get("preset") or cfg.get("default_preset", "medium"),
+            "output_dir":     item.get("output_dir"),
+            "force":          item.get("force", False),
+            "thumbnail_only": item.get("thumbnail_only", False),
+            "dry_run":        dry_run,
+        })
 
-    print(json.dumps({"results": results}, indent=2, ensure_ascii=False))
+    def _batch_progress(done: int, total_: int, current: str) -> None:
+        if global_sf and total_ > 0:
+            pct = int(done * 100 / total_)
+            global_sf.update(STATE_PROCESSING, progress=pct, current_file=current,
+                             total=total_, done=done)
+
+    results_out = []
+    for idx, job in enumerate(jobs):
+        _batch_progress(idx, total, job["input"])
+        r = processor.process(
+            input_path=job["input"],
+            preset_key=job["preset"],
+            output_dir=job.get("output_dir"),
+            force=job.get("force", False),
+            thumbnail_only=job.get("thumbnail_only", False),
+            dry_run=job.get("dry_run", False),
+        )
+        entry = {
+            "input":     r.input_path,
+            "variant":   r.variant_path,
+            "thumbnail": r.thumbnail_path,
+            "preset":    r.preset_key,
+            "size":      r.size,
+            "skipped":   r.skipped,
+            "status":    "error" if r.error else "ok",
+        }
+        if r.error:
+            entry["error"] = r.error
+        results_out.append(entry)
+
+    _batch_progress(total, total, "")
+
+    has_errors = any(r["status"] == "error" for r in results_out)
+    output = {
+        "status": "error" if has_errors else "ok",
+        "total": total,
+        "results": results_out,
+    }
+
+    if global_sf:
+        if has_errors:
+            errors = [r["error"] for r in results_out if r.get("error")]
+            global_sf.mark_error("; ".join(errors[:3]))
+        else:
+            global_sf.mark_complete(files=[r["variant"] for r in results_out if r.get("variant")])
+
+    print(json.dumps(output, indent=2, ensure_ascii=False))
+    return 1 if has_errors else 0
+
+
+# ---------------------------------------------------------------------------
+# Mode clean (non-interactif)
+# ---------------------------------------------------------------------------
+
+def run_clean(args: argparse.Namespace, cfg: Config) -> int:
+    """Supprime les variantes d'une vidéo (garde éventuellement un preset)."""
+    if not args.input:
+        _json_error("--input requis pour le mode clean")
+        return 1
+
+    input_path = Path(args.input)
+    if not input_path.exists():
+        _json_error(f"Fichier introuvable : {args.input}")
+        return 1
+
+    keep_preset = getattr(args, "keep", None)
+    dry_run = getattr(args, "dry_run", False)
+
+    from .presets import BUILTIN_PRESETS
+    stem = input_path.stem
+    parent = input_path.parent
+
+    deleted: list[str] = []
+    skipped: list[str] = []
+
+    for key, preset in BUILTIN_PRESETS.items():
+        if not preset.suffix:
+            continue  # Origin = pas de variante fichier
+        if keep_preset and key == keep_preset.lower():
+            continue
+
+        variant = parent / f"{stem}{preset.suffix}.mp4"
+        if variant.exists():
+            if not dry_run:
+                variant.unlink()
+            deleted.append(str(variant))
+
+    # Poster
+    poster = parent / f"{stem}_poster.jpg"
+    if poster.exists() and not keep_preset:
+        if not dry_run:
+            poster.unlink()
+        deleted.append(str(poster))
+
+    # Fichier statut .vtk/
+    from .status import VTK_DIR
+    status_file = parent / VTK_DIR / f"{stem}.json"
+    if status_file.exists() and not keep_preset:
+        if not dry_run:
+            status_file.unlink()
+        deleted.append(str(status_file))
+
+    output = {
+        "status": "ok",
+        "dry_run": dry_run,
+        "deleted": deleted,
+        "skipped": skipped,
+    }
+    print(json.dumps(output, indent=2, ensure_ascii=False))
     return 0
 
 
@@ -177,7 +358,7 @@ class InteractiveCLI:
             self._print_header()
             self._print_main_menu()
 
-            choice = input(self.c.prompt("Votre choix (0-4): ")).strip()
+            choice = input(self.c.prompt("Votre choix (0-5): ")).strip()
 
             if choice == "0":
                 print(f"\n{self.c.DIM}Au revoir.{self.c.RESET}\n")
@@ -185,10 +366,12 @@ class InteractiveCLI:
             elif choice == "1":
                 self._menu_probe()
             elif choice == "2":
-                self._menu_presets()
+                self._menu_process()
             elif choice == "3":
-                self._menu_tools()
+                self._menu_presets()
             elif choice == "4":
+                self._menu_tools()
+            elif choice == "5":
                 self._menu_config()
             else:
                 print(self.c.error(f'Choix invalide : "{choice}"'))
@@ -217,15 +400,16 @@ class InteractiveCLI:
     def _print_main_menu(self) -> None:
         c = self.c
 
-        print(c.title("ANALYSE & TEST"))
+        print(c.title("ANALYSE & TRAITEMENT"))
         print(c.separator())
         print(c.menu_option("1", "Probe          - Analyser une vidéo (résolution, codecs, durée...)"))
+        print(c.menu_option("2", "Traiter        - Transcoder une vidéo selon un preset"))
         print()
         print(c.title("CONFIGURATION"))
         print(c.separator())
-        print(c.menu_option("2", "Presets        - Voir et gérer les presets vidéo"))
-        print(c.menu_option("3", "Outils         - Vérifier FFmpeg / FFprobe / ExifTool"))
-        print(c.menu_option("4", "Paramètres     - Configuration générale"))
+        print(c.menu_option("3", "Presets        - Voir et gérer les presets vidéo"))
+        print(c.menu_option("4", "Outils         - Vérifier FFmpeg / FFprobe / ExifTool"))
+        print(c.menu_option("5", "Paramètres     - Configuration générale"))
         print()
         print(c.menu_option("0", f"{c.DIM}Quitter{c.RESET}"))
         print()
@@ -301,7 +485,114 @@ class InteractiveCLI:
             pause(self.c)
             return
 
-    # --- 2. Menu Presets ---
+    # --- 2. Menu Process ---
+
+    def _menu_process(self) -> None:
+        """Menu interactif de traitement vidéo (probe + transcode + miniature)."""
+        while True:
+            clear_screen()
+            print()
+            print(self.c.box_header("TRAITEMENT — Transcoder une vidéo", width=70))
+            print()
+
+            # Vérifier FFmpeg
+            ffmpeg_path = self.cfg.resolve_tool("ffmpeg")
+            if not ffmpeg_path:
+                print(f"  {self.c.error_marker()} FFmpeg non trouvé — requis pour le transcodage.")
+                print(f"  {self.c.DIM}Configurez le chemin dans Outils (option 4).{self.c.RESET}")
+                pause(self.c)
+                return
+
+            default_preset = self.cfg.get("default_preset", "medium")
+
+            print(f"  {self.c.DIM}Entrez le chemin vers un fichier vidéo (x pour annuler) :{self.c.RESET}")
+            path = input(self.c.prompt("  > ")).strip()
+
+            if path.lower() == "x" or not path:
+                return
+
+            video_path = Path(path.strip('"').strip("'"))
+            if not video_path.exists():
+                print(self.c.error(f"Fichier introuvable : {video_path}"))
+                pause(self.c)
+                continue
+
+            # Choix du preset
+            print()
+            print(self.c.title("Preset de transcodage"))
+            print(self.c.separator())
+            for i, key in enumerate(PRESET_ORDER, 1):
+                p = self.presets.get_preset(key)
+                marker = f" {self.c.OK}← défaut{self.c.RESET}" if key == default_preset else ""
+                print(f"  {self.c.YELLOW}{i}{self.c.RESET}. {p.name:<8} {self.c.DIM}{p.max_width}×{p.max_height}  {p.video_bitrate} kbps{self.c.RESET}{marker}")
+            print(f"  {self.c.YELLOW}0{self.c.RESET}. Annuler")
+            print()
+
+            preset_choice = input(self.c.prompt(f"Preset (1-{len(PRESET_ORDER)}, ENTRÉE={default_preset}): ")).strip()
+            if preset_choice == "0":
+                continue
+            if preset_choice == "":
+                preset_key = default_preset
+            else:
+                try:
+                    idx = int(preset_choice) - 1
+                    if 0 <= idx < len(PRESET_ORDER):
+                        preset_key = PRESET_ORDER[idx]
+                    else:
+                        print(self.c.error(f'Choix invalide : "{preset_choice}"'))
+                        pause(self.c)
+                        continue
+                except ValueError:
+                    print(self.c.error(f'Choix invalide : "{preset_choice}"'))
+                    pause(self.c)
+                    continue
+
+            print()
+            print(f"  {self.c.DIM}Traitement en cours : {video_path.name} → preset {preset_key}...{self.c.RESET}")
+            print()
+
+            processor = _build_processor(self.cfg)
+            last_pct = [0]
+
+            def _show_progress(pct: int) -> None:
+                if pct != last_pct[0]:
+                    last_pct[0] = pct
+                    bar = "█" * (pct // 5) + "░" * (20 - pct // 5)
+                    print(f"\r  [{bar}] {pct:3d}%", end="", flush=True)
+
+            result = processor.process(
+                input_path=video_path,
+                preset_key=preset_key,
+                progress_callback=_show_progress,
+            )
+            print()  # après la barre de progression
+
+            # Rapport
+            self.fmt.print_section_header("RÉSULTAT TRAITEMENT")
+
+            if result.error:
+                print(self.c.error(f"Erreur : {result.error}"))
+            elif result.skipped:
+                print(self.c.success("Variante déjà à jour — aucun traitement nécessaire."))
+                self.fmt.aligned_output([
+                    ("Variante",   result.variant_path),
+                    ("Miniature",  result.thumbnail_path),
+                ])
+            else:
+                self.fmt.aligned_output([
+                    ("Variante",      result.variant_path),
+                    ("Résolution",    f"{result.width}×{result.height}"),
+                    ("Taille",        _format_size(result.size)),
+                    ("Miniature",     result.thumbnail_path),
+                    ("Taille poster", _format_size(result.thumbnail_size)),
+                ])
+                print(self.c.success("Traitement terminé."))
+
+            self.fmt.print_section_divider()
+            pause(self.c)
+            return
+
+    # --- 3. Menu Presets ---
 
     def _menu_presets(self) -> None:
         clear_screen()
@@ -391,7 +682,7 @@ class InteractiveCLI:
                 if choice == "0":
                     return
                 elif choice == "1":
-                    self._menu_config()
+                    self._menu_config()  # option 5 du menu principal
                 else:
                     print(self.c.error(f'Choix invalide : "{choice}"'))
                     pause(self.c)
@@ -530,6 +821,20 @@ class InteractiveCLI:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+def _build_processor(cfg: Config) -> VideoProcessor:
+    """Construit un VideoProcessor avec les chemins d'outils depuis la config."""
+    from .presets import PresetManager as PM
+    return VideoProcessor(
+        ffmpeg_path=cfg.resolve_tool("ffmpeg") or "ffmpeg",
+        ffprobe_path=cfg.resolve_tool("ffprobe") or "ffprobe",
+        exiftool_path=cfg.resolve_tool("exiftool") or "exiftool",
+        preset_manager=PM(cfg.get_presets_file()),
+        thumbnail_timestamp_pct=cfg.get("poster_timestamp_pct", 10),
+        thumbnail_max_width=cfg.get("thumbnail_width", 1280),
+        copy_metadata=cfg.get("copy_metadata", True),
+    )
+
 
 def _json_error(msg: str) -> None:
     """Écrit une erreur JSON sur stderr (pour les appels Lightroom)."""
