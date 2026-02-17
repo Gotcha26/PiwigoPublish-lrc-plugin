@@ -355,8 +355,11 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
             end
             if existingImageId then
                 appliedPreset = photo:getPropertyForPlugin(_PLUGIN, "pwVideoPreset") or ""
-                local currentPreset = (propertyTable.vtkDefaultPreset and propertyTable.vtkDefaultPreset ~= "")
-                    and propertyTable.vtkDefaultPreset or "medium"
+                -- 5C: collection override takes priority over service default
+                local currentPreset = (collectionSettings.vtkPresetOverride and collectionSettings.vtkPresetOverride ~= "")
+                    and collectionSettings.vtkPresetOverride
+                    or ((propertyTable.vtkDefaultPreset and propertyTable.vtkDefaultPreset ~= "")
+                        and propertyTable.vtkDefaultPreset or "medium")
                 if appliedPreset ~= "" and appliedPreset ~= currentPreset then
                     -- Preset changed → need re-encode (or use cached variant if it exists)
                     republishMode = "re_upload"
@@ -547,9 +550,13 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
             LrPathUtils.parent(_PLUGIN.path),
             "video-toolkit/video_toolkit.py"
         )
-        local preset = (propertyTable.vtkDefaultPreset and propertyTable.vtkDefaultPreset ~= "")
-            and propertyTable.vtkDefaultPreset
-            or "medium"
+        -- 5C: collection override takes priority over service default
+        local preset = (collectionSettings.vtkPresetOverride and collectionSettings.vtkPresetOverride ~= "")
+            and collectionSettings.vtkPresetOverride
+            or ((propertyTable.vtkDefaultPreset and propertyTable.vtkDefaultPreset ~= "")
+                and propertyTable.vtkDefaultPreset or "medium")
+        log:info("PublishTask - video preset effective: " .. preset
+            .. (collectionSettings.vtkPresetOverride ~= "" and " (collection override)" or " (service default)"))
 
         -- Fichier statut global pour le polling
         local statusFilePath = LrPathUtils.child(
@@ -1545,6 +1552,7 @@ local function initCollectionSettingsDefaults(collectionSettings)
         KwFilterInclude        = "",
         KwFilterExclude        = "",
         syncSortOrderOverride  = "default",
+        vtkPresetOverride      = "",   -- 5C: "" = use service default
     }
     for key, defaultVal in pairs(defaults) do
         if collectionSettings[key] == nil then
@@ -1696,11 +1704,45 @@ function PublishTask.viewForCollectionSettings(f, publishSettings, info)
         },
     }
 
+    -- 5C — Video preset override per collection
+    local vtkPresetItems = {
+        { title = "Use service default", value = "" },
+        { title = "Small (480p)",        value = "small"  },
+        { title = "Medium (720p)",       value = "medium" },
+        { title = "Large (1080p)",       value = "large"  },
+        { title = "XLarge (1440p)",      value = "xlarge" },
+        { title = "XXL (2160p)",         value = "xxl"    },
+        { title = "Origin (no transcode)", value = "origin" },
+    }
+    local vtkVideoUI = f:group_box {
+        title = "Video Preset Override",
+        font = "<system/bold>",
+        size = 'regular',
+        fill_horizontal = 1,
+        bind_to_object = assert(collectionSettings),
+        f:spacer { height = 2 },
+        f:row {
+            fill_horizontal = 1,
+            f:static_text {
+                title = "Video preset:",
+                font = "<system>",
+                alignment = 'right',
+            },
+            f:popup_menu {
+                value = bind 'vtkPresetOverride',
+                items = vtkPresetItems,
+                tooltip = "Override the service-level video preset for this album only. 'Use service default' keeps the global setting.",
+            },
+        },
+        f:spacer { height = 2 },
+    }
+
     local UI = f:column {
         spacing = f:control_spacing(),
         pwAlbumUI,
         sortOrderUI,
         kwFilterUI,
+        vtkVideoUI,
         --pubSettingsUI,
     }
     return UI
