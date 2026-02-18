@@ -550,10 +550,13 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
     -- vtkResults[i] = { photo, existingImageId, republishMode, variantPath, thumbnailPath, status, error }
     local vtkResults         = {}
     local metadataOnlyVideos = {}  -- 4C : videos needing metadata-only update
-    local vtkUploadedByLocalId = {}  -- index: localIdentifier → { imageId, remoteUrl }
 
     if not videoUploadBlocked and batchVideoCount > 0 and propertyTable.vtkEnabled then
         log:info("PublishTask - Video Toolkit enabled, processing " .. batchVideoCount .. " video(s)")
+        -- Remove ALL videos from export session to prevent LrC "Ce fichier est une vidéo" dialog
+        for _, vEntry in ipairs(videoPhotos) do
+            exportSession:removePhoto(vEntry.photo)
+        end
 
         -- Résoudre les chemins des outils (config manuelle > auto-détection > fallback PATH)
         local python = utils.resolveTool(propertyTable.vtkPythonPath, "python")
@@ -840,6 +843,20 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
                             pwVideoPreset = preset,
                         }
                         PiwigoAPI.storeMetaData(catalog, vPhoto, pluginData)
+
+                        -- Mark video as "Published" in LrC (no rendition available — removed via removePhoto)
+                        catalog:withWriteAccessDo("Mark video published", function()
+                            local publishedPhotos = publishedCollection:getPublishedPhotos()
+                            for _, pubPhoto in ipairs(publishedPhotos) do
+                                if pubPhoto:getPhoto().localIdentifier == vPhoto.localIdentifier then
+                                    pubPhoto:setRemoteId(tostring(imageId))
+                                    pubPhoto:setRemoteUrl(uploadStatus.remoteurl or "")
+                                    pubPhoto:setEditedFlag(false)
+                                    log:info("PublishTask - marked video published: " .. vName .. " (image_id=" .. imageId .. ")")
+                                    break
+                                end
+                            end
+                        end, { timeout = 5 })
                     else
                         log:warn("PublishTask - video variant upload failed: " .. vName
                             .. " — " .. (uploadStatus.statusMsg or ""))
@@ -858,15 +875,6 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
             end
         end
 
-        -- Construire l'index des résultats VTK par localIdentifier (pour la boucle renditions)
-        for _, vr in ipairs(vtkResults) do
-            if vr.uploadedImageId then
-                vtkUploadedByLocalId[vr.photo.localIdentifier] = {
-                    imageId   = vr.uploadedImageId,
-                    remoteUrl = vr.uploadedRemoteUrl or "",
-                }
-            end
-        end
     end
 
     progressScope:setCaption("Publishing to Piwigo...")
@@ -896,65 +904,16 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
         local fileFormat = lrPhoto:getRawMetadata("fileFormat")
         local isVideo = (fileFormat == "VIDEO")
 
-        -- Video VTK: already uploaded before the loop, just consume rendition and record ID
-        local videoHandled = false
+        -- Video: blocked/VTK videos already removed before the loop via removePhoto
+        local videoBlocked = false
         if isVideo then
-            local vtkResult = vtkUploadedByLocalId[lrPhoto.localIdentifier]
-            if vtkResult then
-                -- Video was processed and uploaded by VTK — consume render and mark published
-                local vName = lrPhoto:getFormattedMetadata("fileName") or "unknown"
-                log:info("PublishTask - VTK video in renditions loop: " .. vName .. " — marking published (image_id=" .. vtkResult.imageId .. ")")
-                local success, pathOrMessage = rendition:waitForRender()
-                if success and LrFileUtils.exists(pathOrMessage) then
-                    LrFileUtils.delete(pathOrMessage)
-                end
-                rendition:recordPublishedPhotoId(vtkResult.imageId)
-                rendition:recordPublishedPhotoUrl(vtkResult.remoteUrl)
-                rendition:renditionIsDone(true)
-                videoHandled = true
-            end
-            if not videoHandled then
-                -- metadata-only videos: consume render, update metadata, mark published
-                local metaOnlyEntry = nil
-                for _, vEntry in ipairs(metadataOnlyVideos) do
-                    if vEntry.photo.localIdentifier == lrPhoto.localIdentifier then
-                        metaOnlyEntry = vEntry
-                        break
-                    end
-                end
-                if metaOnlyEntry then
-                    local vName = lrPhoto:getFormattedMetadata("fileName") or "unknown"
-                    local imageId = metaOnlyEntry.existingImageId or ""
-                    log:info("PublishTask - metadata-only video in renditions loop: " .. vName .. " (image_id=" .. imageId .. ")")
-                    local success, pathOrMessage = rendition:waitForRender()
-                    if success and LrFileUtils.exists(pathOrMessage) then
-                        LrFileUtils.delete(pathOrMessage)
-                    end
-                    if imageId ~= "" then
-                        local metaData = utils.getPhotoMetadata(propertyTable, lrPhoto)
-                        metaData.Albumid  = albumId
-                        metaData.Remoteid = imageId
-                        PiwigoAPI.updateMetadata(propertyTable, lrPhoto, metaData)
-                        log:info("PublishTask - metadata updated for image_id=" .. imageId)
-                        rendition:recordPublishedPhotoId(imageId)
-                        rendition:recordPublishedPhotoUrl(tostring(rendition.publishedPhotoId or ""))
-                        rendition:renditionIsDone(true)
-                    else
-                        log:warn("PublishTask - metadata-only: no image_id for " .. vName)
-                        rendition:uploadFailed("No Piwigo image_id found")
-                    end
-                    videoHandled = true
-                end
-            end
-            if not videoHandled then
-                log:info("PublishTask.processRenderedPhotos - video detected: "
-                    .. (lrPhoto:getFormattedMetadata("fileName") or "unknown"))
-            end
+            log:info("PublishTask.processRenderedPhotos - video detected: "
+                .. (lrPhoto:getFormattedMetadata("fileName") or "unknown"))
         end
 
-        -- Keyword filter check (skip if video already handled/blocked)
+        -- Keyword filter check
         local kwBlocked = false
-        if not videoHandled and kwFilterActive then
+        if not videoBlocked and kwFilterActive then
             local keywords = utils.getPhotoDirectKeywords(lrPhoto)
             local allowed, reason = utils.checkKeywordFilter(keywords, includePatterns, excludePatterns)
             if not allowed then
@@ -971,7 +930,7 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
             end
         end
 
-        if not kwBlocked and not videoHandled then
+        if not kwBlocked and not videoBlocked then
             -- Detect photo already published in this service (multi-album support)
             local existingPwImageId = nil
             if remoteId == "" then
@@ -1095,6 +1054,45 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
                 rendition:uploadFailed(pathOrMessage or "Render failed")
             end
         end -- end if not kwBlocked
+    end
+
+    -- -----------------------------------------------------------------------
+    -- Phase 4C — Metadata-only video updates (videos already on Piwigo, same preset)
+    -- -----------------------------------------------------------------------
+    if #metadataOnlyVideos > 0 then
+        log:info("PublishTask - updating metadata for " .. #metadataOnlyVideos .. " video(s) (metadata-only)")
+        progressScope:setCaption("Updating video metadata...")
+
+        for _, vEntry in ipairs(metadataOnlyVideos) do
+            local vPhoto  = vEntry.photo
+            local imageId = vEntry.existingImageId or ""
+            local vName   = vPhoto:getFormattedMetadata("fileName") or "unknown"
+
+            if imageId ~= "" then
+                log:info("PublishTask - metadata-only update for image_id=" .. imageId .. " (" .. vName .. ")")
+                local metaData = utils.getPhotoMetadata(propertyTable, vPhoto)
+                metaData.Albumid  = albumId
+                metaData.Remoteid = imageId
+                PiwigoAPI.updateMetadata(propertyTable, vPhoto, metaData)
+                log:info("PublishTask - metadata updated for image_id=" .. imageId)
+
+                -- Mark video as "Published" in LrC
+                catalog:withWriteAccessDo("Mark video published", function()
+                    local publishedPhotos = publishedCollection:getPublishedPhotos()
+                    for _, pubPhoto in ipairs(publishedPhotos) do
+                        if pubPhoto:getPhoto().localIdentifier == vPhoto.localIdentifier then
+                            pubPhoto:setRemoteId(tostring(imageId))
+                            pubPhoto:setRemoteUrl("")
+                            pubPhoto:setEditedFlag(false)
+                            log:info("PublishTask - marked metadata-only video published: " .. vName)
+                            break
+                        end
+                    end
+                end, { timeout = 5 })
+            else
+                log:warn("PublishTask - metadata-only: no image_id for " .. vName .. ", skipping")
+            end
+        end
     end
 
     progressScope:done()
