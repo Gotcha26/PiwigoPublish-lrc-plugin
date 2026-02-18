@@ -238,10 +238,18 @@ class VideoProcessor:
         thumb_size = 0
         if not status.has_thumbnail() or force:
             try:
+                # Extract thumbnail from the transcoded variant (SDR colors) when available,
+                # not from the HDR source which would produce washed-out colors.
+                thumb_source = (
+                    variant_path
+                    if t_result and not preset.is_origin and variant_path.exists()
+                    else input_path
+                )
+                thumb_duration = t_result.duration if t_result else info.duration
                 th_result = self._ffmpeg.thumbnail(
-                    input_path=input_path,
+                    input_path=thumb_source,
                     output_path=thumbnail_path,
-                    duration=info.duration,
+                    duration=thumb_duration,
                     timestamp_pct=self._thumb_pct,
                     max_width=self._thumb_max_w,
                     dry_run=dry_run,

@@ -664,6 +664,14 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
         -- Configurer la progression LrC pendant le traitement vidéo
         progressScope:setCaption("Video Toolkit — Processing " .. batchVideoCount .. " video(s)...")
 
+        -- Inform user that transcoding may take a long time
+        LrDialogs.message(
+            "Video Toolkit — Processing",
+            "Video Toolkit is about to process " .. batchVideoCount .. " video(s).\n\n"
+            .. "HDR videos will be transcoded to SDR — this can take several minutes per video.\n\n"
+            .. "Lightroom will appear frozen during processing. Please wait.",
+            "info")
+
         -- Lancer le .bat (LrTasks.execute bloque le thread courant)
         local vtkCancelled = false
         local vtkExitCode = LrTasks.execute('"' .. batPath .. '"')
