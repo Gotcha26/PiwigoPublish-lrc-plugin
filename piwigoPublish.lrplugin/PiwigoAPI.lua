@@ -1782,11 +1782,12 @@ function PiwigoAPI.pwCategoriesAdd(propertyTable, info, metaData, callStatus)
             name = "comment",
             value = description
         })
-        table.insert(Params, {
-            name = "status",
-            value = albumstatus
-        })
     end
+    table.insert(Params, {
+        name = "status",
+        value = albumstatus
+    })
+
 
     if metaData.parentCat ~= "" then
         table.insert(Params, {
@@ -2399,6 +2400,18 @@ function PiwigoAPI.updateMetadata(propertyTable, lrPhoto, metaData)
         table.insert(params, {
             name = "comment",
             value = metaData.Caption
+        })
+    end
+
+    -- GPS coordinates
+    if metaData.latitude and metaData.longitude then
+        table.insert(params, {
+            name = "latitude",
+            value = tostring(metaData.latitude)
+        })
+        table.insert(params, {
+            name = "longitude",
+            value = tostring(metaData.longitude)
         })
     end
 

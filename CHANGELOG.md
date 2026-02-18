@@ -1,4 +1,10 @@
 # Changelog
+## [20260218.33] - 2026-02-18
+### Fixed
+Fix #52 New "private" album aren't private
+### Added
+GPS coordinates can now be sent to Piwigo without republishing image - via Send Metadata to Piwigo for Selected Photos option
+
 ## [20260208.32] - 2026-02-08
 ### Fixed
 Fix #41 Issue with Import albums - public/private setting

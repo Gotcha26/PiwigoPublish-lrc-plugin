@@ -532,9 +532,14 @@ function utils.getPhotoMetadata(publishSettings, lrPhoto)
     end
     local useDate = LrDate.timeToUserFormat(rawDate, "%Y-%m-%d %H:%M:%S")
     metaData.dateCreated = useDate or ""
-
     metaData.tagString = utils.BuildTagString(publishSettings, lrPhoto)
 
+    -- GPS coordinates
+    local gps = lrPhoto:getRawMetadata("gps")
+    if gps then
+        metaData.latitude = gps.latitude
+        metaData.longitude = gps.longitude
+    end
     return metaData
 end
 
