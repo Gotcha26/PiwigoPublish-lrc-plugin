@@ -729,6 +729,10 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
                                 republishMode   = vEntry.republishMode,
                                 variantPath     = r.variant   or "",
                                 thumbnailPath   = r.thumbnail or "",
+                                videoWidth      = r.width     or 0,
+                                videoHeight     = r.height    or 0,
+                                videoDuration   = r.duration  or 0,
+                                videoSize       = r.size      or 0,
                                 status          = r.status    or "error",
                                 error           = r.error     or "",
                             })
@@ -821,6 +825,16 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
                                         .. (posterStatus.statusMsg or ""))
                                 end
                             end
+                        end
+
+                        -- Set video dimensions on Piwigo (via Companion)
+                        if companionAvailable and vr.videoWidth > 0 and vr.videoHeight > 0 then
+                            log:info("PublishTask - setting video info: "
+                                .. vr.videoWidth .. "x" .. vr.videoHeight
+                                .. " size=" .. vr.videoSize)
+                            PiwigoAPI.setVideoInfo(
+                                propertyTable, imageId,
+                                vr.videoWidth, vr.videoHeight, vr.videoSize)
                         end
 
                         -- Mettre à jour les métadonnées sur Piwigo
@@ -1075,6 +1089,43 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
                 metaData.Remoteid = imageId
                 PiwigoAPI.updateMetadata(propertyTable, vPhoto, metaData)
                 log:info("PublishTask - metadata updated for image_id=" .. imageId)
+
+                -- setVideoInfo depuis le fichier .vtk (dimensions de la variante déjà transcodée)
+                if companionAvailable then
+                    local srcPath   = vPhoto:getRawMetadata("path") or ""
+                    local preset    = vEntry.appliedPreset or ""
+                    if srcPath ~= "" and preset ~= "" then
+                        local stem    = LrPathUtils.removeExtension(LrPathUtils.leafName(srcPath))
+                        local vtkFile = LrPathUtils.child(LrPathUtils.parent(srcPath), ".vtk")
+                        vtkFile       = LrPathUtils.child(vtkFile, stem .. ".json")
+                        local fh = io.open(vtkFile, "r")
+                        if fh then
+                            local raw = fh:read("*all"); fh:close()
+                            local ok, vtk = pcall(function() return JSON:decode(raw) end)
+                            if ok and vtk and vtk.variants and vtk.variants[preset] then
+                                local v = vtk.variants[preset]
+                                local vw = v.width  or 0
+                                local vh = v.height or 0
+                                local vs = v.size   or 0
+                                -- Déduire width/height depuis resolution si absent
+                                if (vw == 0 or vh == 0) and v.resolution then
+                                    vw, vh = v.resolution:match("^(%d+)x(%d+)$")
+                                    vw = tonumber(vw) or 0
+                                    vh = tonumber(vh) or 0
+                                end
+                                if vw > 0 and vh > 0 then
+                                    log:info("PublishTask - setVideoInfo (metadata-only) image_id="
+                                        .. imageId .. " " .. vw .. "x" .. vh .. " size=" .. vs)
+                                    PiwigoAPI.setVideoInfo(propertyTable, imageId, vw, vh, vs)
+                                end
+                            else
+                                log:info("PublishTask - no .vtk variant data for preset=" .. preset .. " (" .. vName .. ")")
+                            end
+                        else
+                            log:info("PublishTask - .vtk file not found for " .. vName)
+                        end
+                    end
+                end
 
                 -- Mark video as "Published" in LrC
                 catalog:withWriteAccessDo("Mark video published", function()
