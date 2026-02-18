@@ -226,6 +226,9 @@ def run_batch(args: argparse.Namespace, cfg: Config) -> int:
             "variant":   r.variant_path,
             "thumbnail": r.thumbnail_path,
             "preset":    r.preset_key,
+            "width":     r.width,
+            "height":    r.height,
+            "duration":  r.duration,
             "size":      r.size,
             "skipped":   r.skipped,
             "status":    "error" if r.error else "ok",
@@ -466,7 +469,8 @@ class InteractiveCLI:
 
             # Rapport
             self.fmt.print_section_header("RÉSULTAT PROBE")
-            self.fmt.aligned_output([
+
+            rows = [
                 ("Fichier",        video_path.name),
                 ("Résolution",     info.resolution),
                 ("Durée",          info.duration_str),
@@ -478,7 +482,16 @@ class InteractiveCLI:
                 ("Taille",         _format_size(info.size)),
                 ("Container",      info.container),
                 ("Hash (partiel)", h),
-            ])
+            ]
+
+            # HDR detection
+            if info.is_hdr:
+                hdr_label = "HDR (PQ)" if info.color_transfer == "smpte2084" else "HDR (HLG)"
+                rows.append(("Colorimétrie", f"{self.c.YELLOW}{hdr_label}{self.c.RESET} → tonemap auto SDR"))
+            elif info.color_transfer:
+                rows.append(("Colorimétrie", f"SDR ({info.color_transfer})"))
+
+            self.fmt.aligned_output(rows)
 
             # Suggestion de preset adapté
             print()

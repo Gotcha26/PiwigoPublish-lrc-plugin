@@ -30,6 +30,15 @@ class VideoInfo:
     fps: float
     size: int                   # octets
     container: str              # mp4, mov, mkv...
+    color_transfer: str = ""    # e.g. "smpte2084" (PQ), "arib-std-b67" (HLG)
+    color_primaries: str = ""   # e.g. "bt2020"
+    color_space: str = ""       # e.g. "bt2020nc"
+
+    @property
+    def is_hdr(self) -> bool:
+        """True if the source uses HDR transfer (PQ or HLG)."""
+        hdr_transfers = {"smpte2084", "arib-std-b67"}
+        return self.color_transfer.lower() in hdr_transfers
 
     @property
     def resolution(self) -> str:
@@ -58,6 +67,10 @@ class VideoInfo:
             "fps": self.fps,
             "size": self.size,
             "container": self.container,
+            "color_transfer": self.color_transfer,
+            "color_primaries": self.color_primaries,
+            "color_space": self.color_space,
+            "is_hdr": self.is_hdr,
         }
 
 
@@ -194,6 +207,11 @@ def _parse_probe_data(path: str, data: dict) -> VideoInfo:
     fmt_name = fmt.get("format_name", "")
     container = _normalize_container(fmt_name, path)
 
+    # Colorimetry (HDR detection)
+    color_transfer = video_stream.get("color_transfer", "")
+    color_primaries = video_stream.get("color_primaries", "")
+    color_space = video_stream.get("color_space", "")
+
     return VideoInfo(
         path=path,
         width=width,
@@ -206,6 +224,9 @@ def _parse_probe_data(path: str, data: dict) -> VideoInfo:
         fps=fps,
         size=size,
         container=container,
+        color_transfer=color_transfer,
+        color_primaries=color_primaries,
+        color_space=color_space,
     )
 
 

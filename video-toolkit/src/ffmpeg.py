@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
+from .ffprobe import VideoInfo
 from .presets import VideoPreset, PresetManager
 
 
@@ -66,16 +67,20 @@ class FFmpeg:
         src_duration: float,
         progress_callback: Callable[[int], None] | None = None,
         dry_run: bool = False,
+        video_info: VideoInfo | None = None,
     ) -> TranscodeResult:
         """
         Transcode une vidéo selon le preset donné.
 
         - preset Origin  → remux sans réencodage
         - autres presets → réencodage H.264/AAC avec downscale si nécessaire
+        - HDR sources    → automatic tonemap to SDR (when not Origin)
         - progress_callback(pct: int) est appelé pendant le traitement (0..100)
         """
         input_path = str(input_path)
         output_path = str(output_path)
+
+        is_hdr = video_info.is_hdr if video_info else False
 
         if preset.is_origin:
             cmd = self._build_remux_cmd(input_path, output_path)
@@ -87,7 +92,7 @@ class FFmpeg:
                 src_width, src_height, preset
             )
             cmd = self._build_transcode_cmd(
-                input_path, output_path, preset, scale_filter
+                input_path, output_path, preset, scale_filter, is_hdr=is_hdr
             )
 
         if dry_run:
@@ -207,9 +212,29 @@ class FFmpeg:
         output_path: str,
         preset: VideoPreset,
         scale_filter: str,
+        is_hdr: bool = False,
     ) -> list[str]:
         vb = preset.video_bitrate
         ab = preset.audio_bitrate
+
+        # Build video filter chain
+        if is_hdr:
+            # HDR → SDR tonemap pipeline:
+            # 1. Convert to linear light in BT.2020 space (zscale)
+            # 2. Tonemap from linear HDR to linear SDR (hable algorithm)
+            # 3. Convert from BT.2020 to BT.709 color space
+            # 4. Scale to target resolution
+            vf = (
+                "zscale=t=linear:npl=100,"
+                "format=gbrpf32le,"
+                "zscale=p=bt709,"
+                "tonemap=tonemap=hable:desat=0,"
+                "zscale=t=bt709:m=bt709:r=tv,"
+                "format=yuv420p,"
+                f"{scale_filter}"
+            )
+        else:
+            vf = scale_filter
 
         cmd = [
             self.binary,
@@ -222,7 +247,7 @@ class FFmpeg:
             "-b:v", f"{vb}k",
             "-maxrate", f"{int(vb * 1.2)}k",
             "-bufsize", f"{vb * 2}k",
-            "-vf", scale_filter,
+            "-vf", vf,
             "-pix_fmt", preset.pixel_format,
             # Audio
             "-c:a", preset.audio_codec,

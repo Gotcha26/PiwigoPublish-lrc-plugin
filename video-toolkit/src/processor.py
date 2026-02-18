@@ -116,6 +116,17 @@ class VideoProcessor:
         except ProbeError as e:
             return self._error_result(str(input_path), preset_key, str(e))
 
+        # --- 2b. Auto-downgrade preset pour SDR : origin = remux sans réencodage ---
+        # Si la source n'est pas HDR et que le preset n'est pas déjà "origin",
+        # on bascule sur "origin" (copie directe, sans transcode inutile).
+        # Le suffix du preset demandé est conservé pour nommer la variante
+        # (ex: preset "medium" SDR → remux → fichier nommé "..._medium.mp4").
+        # Le preset_key d'origine est conservé dans le résultat pour Lightroom.
+        output_suffix = preset.suffix  # suffix du preset demandé, avant downgrade éventuel
+        if not info.is_hdr and not preset.is_origin:
+            preset = self._presets.get_preset("origin")
+            preset_hash = preset.hash()
+
         # --- 3. Hash source ---
         src_hash = partial_hash(input_path)
 
@@ -130,12 +141,15 @@ class VideoProcessor:
             video_codec=info.video_codec,
             audio_codec=info.audio_codec,
             fps=info.fps,
+            is_hdr=info.is_hdr,
+            color_transfer=info.color_transfer,
         )
 
         # --- 5. Chemins de sortie ---
         stem = input_path.stem
-        suffix = preset.suffix  # "_medium", "_small", "" (origin)
-        variant_name = f"{stem}{suffix}.mp4" if suffix else f"{stem}.mp4"
+        # output_suffix : suffix du preset demandé (conservé même si downgrade SDR→origin)
+        # preset "origin" explicitement demandé → suffix "" (pas de suffixe, nom source)
+        variant_name = f"{stem}{output_suffix}.mp4" if output_suffix else f"{stem}.mp4"
         variant_path = out_dir / variant_name
         thumbnail_path = out_dir / f"{stem}_poster.jpg"
 
@@ -193,6 +207,7 @@ class VideoProcessor:
                     src_duration=info.duration,
                     progress_callback=_transcode_progress,
                     dry_run=dry_run,
+                    video_info=info,
                 )
             except FFmpegError as e:
                 status.set_state(STATE_ERROR, error=str(e))

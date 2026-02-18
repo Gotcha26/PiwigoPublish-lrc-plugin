@@ -78,6 +78,8 @@ class StatusManager:
         video_codec: str,
         audio_codec: str,
         fps: float,
+        is_hdr: bool = False,
+        color_transfer: str = "",
     ) -> None:
         self._data["source"] = {
             "path": str(self._video),
@@ -90,6 +92,8 @@ class StatusManager:
             "video_codec": video_codec,
             "audio_codec": audio_codec,
             "fps": fps,
+            "is_hdr": is_hdr,
+            "color_transfer": color_transfer,
         }
 
     def get_source(self) -> dict:
