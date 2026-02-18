@@ -3473,4 +3473,38 @@ function PiwigoAPI.setRepresentative(propertyTable, imageId, posterPath)
 end
 
 -- *************************************************
+function PiwigoAPI.setVideoInfo(propertyTable, imageId, width, height, filesize)
+    -- Set video dimensions and filesize via pwg.companion.setVideoInfo
+    -- Returns { status, statusMsg }
+
+    local callStatus = { status = false, statusMsg = "" }
+
+    local params = {
+        { name = "method",   value = "pwg.companion.setVideoInfo" },
+        { name = "image_id", value = tostring(imageId) },
+    }
+
+    if width and width > 0 then
+        table.insert(params, { name = "width", value = tostring(width) })
+    end
+    if height and height > 0 then
+        table.insert(params, { name = "height", value = tostring(height) })
+    end
+    if filesize and filesize > 0 then
+        table.insert(params, { name = "filesize", value = tostring(filesize) })
+    end
+
+    local postResp = PiwigoAPI.httpPostMultiPart(propertyTable, params)
+    if postResp.status then
+        callStatus.status = true
+        log:info("PiwigoAPI.setVideoInfo - ok for image_id=" .. tostring(imageId)
+            .. " (" .. tostring(width) .. "x" .. tostring(height) .. ")")
+    else
+        callStatus.statusMsg = "setVideoInfo - failed: " .. (postResp.statusMsg or "")
+        log:info("PiwigoAPI." .. callStatus.statusMsg)
+    end
+    return callStatus
+end
+
+-- *************************************************
 return PiwigoAPI

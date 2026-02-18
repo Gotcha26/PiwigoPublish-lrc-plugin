@@ -1,7 +1,7 @@
 <?php
 /*
 Plugin Name: Lightroom Companion
-Version: 1.2.0
+Version: 1.3.0
 Description: Companion plugin for the PiwigoPublish Lightroom plugin. Exposes server diagnostics, provides automatic video upload configuration, and includes an administration page.
 Plugin URI: https://github.com/your-repo/piwigo-companion
 Author: Gotcha
@@ -58,6 +58,36 @@ function companion_add_methods($arr)
             ),
         ),
         'Upload a poster/thumbnail image as the representative for a video.',
+        null,
+        array('admin_only' => true)
+    );
+
+    $service->addMethod(
+        'pwg.companion.setVideoInfo',
+        'companion_set_video_info',
+        array(
+            'image_id' => array(
+                'default'  => null,
+                'type'     => WS_TYPE_INT,
+                'info'     => 'Piwigo image/video ID',
+            ),
+            'width' => array(
+                'default'  => null,
+                'type'     => WS_TYPE_INT,
+                'info'     => 'Video width in pixels',
+            ),
+            'height' => array(
+                'default'  => null,
+                'type'     => WS_TYPE_INT,
+                'info'     => 'Video height in pixels',
+            ),
+            'filesize' => array(
+                'default'  => null,
+                'type'     => WS_TYPE_INT,
+                'info'     => 'Video file size in bytes (optional)',
+            ),
+        ),
+        'Sets video dimensions and optional filesize in the Piwigo images table.',
         null,
         array('admin_only' => true)
     );
@@ -329,6 +359,69 @@ function companion_set_representative($params, &$service)
         'image_id'                => $image_id,
         'representative_ext'      => $uploaded_ext,
         'representative_path'     => $representative_filename,
+    );
+}
+
+// =========================================================================
+//  pwg.companion.setVideoInfo
+// =========================================================================
+function companion_set_video_info($params, &$service)
+{
+    $image_id = (int)$params['image_id'];
+    if ($image_id <= 0)
+    {
+        return new PwgError(WS_ERR_INVALID_PARAM, 'image_id must be a positive integer');
+    }
+
+    // Verify image exists
+    $query = 'SELECT id FROM ' . IMAGES_TABLE . ' WHERE id = ' . $image_id . ';';
+    $result = pwg_query($query);
+    $row = pwg_db_fetch_assoc($result);
+    if (!$row)
+    {
+        return new PwgError(404, 'Image ' . $image_id . ' not found');
+    }
+
+    // Build SET clause from provided parameters
+    $updates = array();
+
+    if (isset($params['width']) && $params['width'] !== null)
+    {
+        $width = (int)$params['width'];
+        if ($width > 0) $updates[] = 'width = ' . $width;
+    }
+
+    if (isset($params['height']) && $params['height'] !== null)
+    {
+        $height = (int)$params['height'];
+        if ($height > 0) $updates[] = 'height = ' . $height;
+    }
+
+    if (isset($params['filesize']) && $params['filesize'] !== null)
+    {
+        // Piwigo stores filesize in KB in the images table
+        $filesize_bytes = (int)$params['filesize'];
+        if ($filesize_bytes > 0)
+        {
+            $filesize_kb = (int)ceil($filesize_bytes / 1024);
+            $updates[] = 'filesize = ' . $filesize_kb;
+        }
+    }
+
+    if (empty($updates))
+    {
+        return new PwgError(WS_ERR_INVALID_PARAM, 'At least one of width, height, or filesize must be provided');
+    }
+
+    $query = 'UPDATE ' . IMAGES_TABLE
+        . ' SET ' . implode(', ', $updates)
+        . ' WHERE id = ' . $image_id . ';';
+    pwg_query($query);
+
+    return array(
+        'status'   => 'ok',
+        'image_id' => $image_id,
+        'updated'  => $updates,
     );
 }
 
