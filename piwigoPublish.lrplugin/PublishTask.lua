@@ -372,11 +372,12 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
                         -- No preset recorded → video was never processed by VTK → need full processing
                         republishMode = "re_upload"
                     elseif appliedPreset ~= currentPreset then
-                        -- Preset changed → need re-encode
+                        -- Preset changed → need re-encode (force=true in batch)
                         republishMode = "re_upload"
                     else
-                        -- Same preset → metadata only
-                        republishMode = "metadata_only"
+                        -- Same preset → still re_upload (VTK cache decides whether to re-encode)
+                        -- processRenderedPhotos is only called for full republish, not metadata-only
+                        republishMode = "re_upload"
                     end
                 end
             end
@@ -635,7 +636,23 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
             .. ' --log-file "' .. vtkLogPath .. '"'
             .. ffmpegArg .. exiftoolArg .. presetsArg
 
+        -- Supprimer l'ancien log pour éviter de lire des résultats périmés si VTK crash
+        if LrFileUtils.exists(vtkLogPath) then
+            LrFileUtils.delete(vtkLogPath)
+        end
+
+        -- Écrire un fichier .bat temporaire pour contourner le problème de guillemets
+        -- imbriqués avec LrTasks.execute sur Windows (cmd /c + guillemets multiples)
+        local batPath = LrPathUtils.child(LrPathUtils.getStandardFilePath("temp"), "piwigoPublish_vtk_run.bat")
+        local batFh = io.open(batPath, "w")
+        if batFh then
+            batFh:write("@echo off\r\n")
+            batFh:write(cmd .. "\r\n")
+            batFh:close()
+        end
+
         log:info("PublishTask - VTK command: " .. cmd)
+        log:info("PublishTask - VTK bat file: " .. batPath)
         log:info("PublishTask - VTK log file: " .. vtkLogPath)
         -- Log du contenu du batch file pour diagnostic
         local bfDiag = io.open(batchFilePath, "r")
@@ -647,41 +664,17 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
         -- Configurer la progression LrC pendant le traitement vidéo
         progressScope:setCaption("Video Toolkit — Processing " .. batchVideoCount .. " video(s)...")
 
-        -- Lancer en async + polling du fichier statut
-        local vtkDone      = false
-        local vtkExitCode  = nil
+        -- Lancer le .bat (LrTasks.execute bloque le thread courant)
         local vtkCancelled = false
+        local vtkExitCode = LrTasks.execute('"' .. batPath .. '"')
+        log:info("PublishTask - LrTasks.execute returned: " .. tostring(vtkExitCode) .. " (type=" .. type(vtkExitCode) .. ")")
 
-        LrTasks.startAsyncTask(function()
-            vtkExitCode = LrTasks.execute(cmd)
-            log:info("PublishTask - LrTasks.execute returned: " .. tostring(vtkExitCode) .. " (type=" .. type(vtkExitCode) .. ")")
-            vtkDone = true
-        end)
-
-        -- Polling toutes les 500ms
-        while not vtkDone do
-            LrTasks.sleep(0.5)
-
-            if progressScope:isCanceled() then
-                log:info("PublishTask - VTK polling cancelled by user")
-                vtkCancelled = true
-                break
-            end
-
-            -- Lire la progression depuis le fichier statut
-            local sf = io.open(statusFilePath, "r")
-            if sf then
-                local content = sf:read("*all")
-                sf:close()
-                local ok, statusData = pcall(function() return JSON:decode(content) end)
-                if ok and statusData then
-                    local pct = tonumber(statusData.progress) or 0
-                    progressScope:setPortionComplete(pct, 100)
-                    if statusData.current_file and statusData.current_file ~= "" then
-                        local fname = LrPathUtils.leafName(statusData.current_file)
-                        progressScope:setCaption("Video Toolkit — " .. fname)
-                    end
-                end
+        -- Si le log file n'existe pas encore, attendre un peu (VTK peut écrire avec un léger délai)
+        if not LrFileUtils.exists(vtkLogPath) then
+            log:info("PublishTask - waiting for VTK log file...")
+            for _ = 1, 20 do  -- max 10 secondes
+                LrTasks.sleep(0.5)
+                if LrFileUtils.exists(vtkLogPath) then break end
             end
         end
 
@@ -859,17 +852,12 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
                         PiwigoAPI.storeMetaData(catalog, vPhoto, pluginData)
 
                         -- Mark video as "Published" in LrC (no rendition available — removed via removePhoto)
+                        -- addPhotoByRemoteId works for both new and existing published photos
                         catalog:withWriteAccessDo("Mark video published", function()
-                            local publishedPhotos = publishedCollection:getPublishedPhotos()
-                            for _, pubPhoto in ipairs(publishedPhotos) do
-                                if pubPhoto:getPhoto().localIdentifier == vPhoto.localIdentifier then
-                                    pubPhoto:setRemoteId(tostring(imageId))
-                                    pubPhoto:setRemoteUrl(uploadStatus.remoteurl or "")
-                                    pubPhoto:setEditedFlag(false)
-                                    log:info("PublishTask - marked video published: " .. vName .. " (image_id=" .. imageId .. ")")
-                                    break
-                                end
-                            end
+                            publishedCollection:addPhotoByRemoteId(
+                                vPhoto, tostring(imageId),
+                                uploadStatus.remoteurl or "", true)
+                            log:info("PublishTask - marked video published: " .. vName .. " (image_id=" .. imageId .. ")")
                         end, { timeout = 5 })
                     else
                         log:warn("PublishTask - video variant upload failed: " .. vName
