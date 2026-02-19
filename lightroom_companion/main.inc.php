@@ -1,10 +1,11 @@
 <?php
 /*
 Plugin Name: Lightroom Companion
-Version: 1.5.0
+Version: 1.5.1
 Description: Companion plugin for the PiwigoPublish Lightroom plugin. Exposes server diagnostics, provides automatic video upload configuration, extended video metadata storage, and includes an administration page.
-Plugin URI: https://github.com/your-repo/piwigo-companion
+Plugin URI: https://piwigo.org/ext/extension_view.php?eid=1058
 Author: Gotcha
+Author URI: https://github.com/Piwigo/PiwigoPublish-lrc-plugin
 Has Settings: webmaster
 */
 
@@ -788,7 +789,7 @@ function companion_get_bdr_layout()
     return 'cards';
 }
 
-function companion_inject_cards($content, &$smarty)
+function companion_inject_cards($content, $smarty)
 {
     $search = '{if isset($VTK_VIDEO_ORIG)}';
     // Already injected? Don't double-inject.
@@ -819,7 +820,7 @@ function companion_inject_cards($content, &$smarty)
     return substr($content, 0, $end + 1) . $inject . substr($content, $end + 1);
 }
 
-function companion_inject_sidebar($content, &$smarty)
+function companion_inject_sidebar($content, $smarty)
 {
     $search = '{if isset($VTK_VIDEO_ORIG)}';
     if (strpos($content, $search) !== false) return $content;
@@ -844,7 +845,7 @@ function companion_inject_sidebar($content, &$smarty)
     return substr($content, 0, $end + 1) . $inject . substr($content, $end + 1);
 }
 
-function companion_inject_default($content, &$smarty)
+function companion_inject_default($content, $smarty)
 {
     $search = '{if isset($VTK_VIDEO_ORIG)}';
     if (strpos($content, $search) !== false) return $content;
@@ -871,7 +872,7 @@ function companion_inject_default($content, &$smarty)
     return substr($content, 0, $inject_pos) . $inject . substr($content, $inject_pos);
 }
 
-function companion_inject_auto($content, &$smarty)
+function companion_inject_auto($content, $smarty)
 {
     // Try BDR cards anchor first
     if (strpos($content, '<div id="info-content"') !== false)
