@@ -37,6 +37,8 @@ def main() -> int:
         cfg.set("ffmpeg_path", args.ffmpeg_path)
     if getattr(args, "exiftool_path", None):
         cfg.set("exiftool_path", args.exiftool_path)
+    if getattr(args, "hwaccel", None):
+        cfg.set("hardware_accel", args.hwaccel)
 
     # Rediriger stdout+stderr vers un fichier log si --log-file fourni
     _log_fh = None
@@ -78,6 +80,15 @@ def main() -> int:
                     found = cfg.resolve_tool(tool)
                     tools_out[tool] = found or "not found"
 
+            # Detect GPU encoders
+            from src.hwaccel import HWAccelDetector
+            ffmpeg_resolved = tools_out.get("ffmpeg", "ffmpeg")
+            if ffmpeg_resolved and not ffmpeg_resolved.startswith("not found"):
+                detector = HWAccelDetector(ffmpeg_resolved)
+                gpu_list = [{"name": e.name, "codec": e.codec} for e in detector.list_available()]
+            else:
+                gpu_list = []
+
             any_invalid = any(v.startswith("not found at:") for v in tools_out.values() if v)
             ok = (tools_out["ffprobe"] not in (None, "not found")
                   and not tools_out["ffprobe"].startswith("not found at:")
@@ -88,6 +99,7 @@ def main() -> int:
                 "ffmpeg":         tools_out["ffmpeg"],
                 "ffprobe":        tools_out["ffprobe"],
                 "exiftool":       tools_out["exiftool"],
+                "gpu_encoders":   gpu_list,
             }))
             return 0 if ok else 1
         if args.mode == "probe":

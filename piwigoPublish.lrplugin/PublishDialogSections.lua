@@ -73,10 +73,36 @@ local function connectionDialog(f, propertyTable, pwInstance)
 		bind_to_object = propertyTable,
 
 		-- TOP: icon + version block
-		UIHelpers.createPluginHeader(f, share, iconPath, pluginVersion),
+		f:row {
+			spacing = f:dialog_spacing(),
+
+			-- Left: icon + name + version
+			UIHelpers.createPluginHeader(f, share, iconPath, pluginVersion),
+
+			-- Right: connection status (2 lines, aligned with left column)
+			f:column {
+				spacing = f:label_spacing(),
+				fill_horizontal = 1,
+				f:static_text {
+					title = LrView.bind {
+						key = 'ConStatus',
+						transform = function(v)
+							if v and v:find("Connected") then
+								return "✓  " .. v
+							else
+								return "✗  " .. (v or "Not Connected")
+							end
+						end,
+					},
+					font = "<system/small>",
+					text_color = LrColor(0.5, 0.5, 0.5),
+					alignment = 'left',
+					fill_horizontal = 1,
+				},
+			},
+		},
 
 		-- PW Host
-		f:spacer { height = 1 },
 		f:row {
 			f:static_text {
 				title = "",
@@ -139,7 +165,6 @@ local function connectionDialog(f, propertyTable, pwInstance)
 		},
 
 		-- Username
-		f:spacer { height = 1 },
 		f:row {
 			f:static_text {
 				title = "",
@@ -161,7 +186,6 @@ local function connectionDialog(f, propertyTable, pwInstance)
 		},
 
 		-- Password
-		f:spacer { height = 1 },
 		f:row {
 			f:static_text {
 				title = "",
@@ -182,16 +206,6 @@ local function connectionDialog(f, propertyTable, pwInstance)
 			},
 		},
 
-		-- Status row
-		f:spacer { height = 1 },
-		f:row {
-			f:static_text {
-				title = bind 'ConStatus',
-				font = "<system/bold>",
-				alignment = 'center',
-				fill_horizontal = 1,
-			},
-		},
 	}
 end
 
@@ -943,342 +957,10 @@ local function prefsDialog(f, propertyTable)
 end
 --
 -- *************************************************
--- Video Toolkit dialog section (Phase 2A)
--- *************************************************
-local VTK_PRESETS = { "small", "medium", "large", "xlarge", "xxl", "origin" }
-local VTK_PRESET_LABELS = { "Small (480p)", "Medium (720p)", "Large (1080p)", "XLarge (1440p)", "XXL (2160p)", "Origin (no transcode)" }
-
-local function videoDialog(f, propertyTable)
-	local bind = LrView.bind
-	local share = LrView.share
-
-	-- Build preset items list for popup_menu
-	local presetItems = {}
-	for i, key in ipairs(VTK_PRESETS) do
-		presetItems[#presetItems + 1] = { title = VTK_PRESET_LABELS[i], value = key }
-	end
-
-	return {
-		title = "Video Settings",
-		bind_to_object = propertyTable,
-
-		f:group_box {
-			title = "Video Toolkit",
-			font = "<system>",
-			fill_horizontal = 1,
-
-			f:spacer { height = 2 },
-
-			-- Enable/disable toggle
-			f:row {
-				fill_horizontal = 1,
-				f:checkbox {
-					title = "Enable Video Toolkit (local transcoding)",
-					fill_horizontal = 1,
-					value = bind "vtkEnabled",
-					tooltip = "When enabled, videos are transcoded locally by the Video Toolkit before upload.",
-				},
-			},
-
-			f:row {
-				fill_horizontal = 1,
-				f:checkbox {
-					title = "Include video files",
-					fill_horizontal = 1,
-					value = bind "vtkIncludeVideo",
-					tooltip = "Include video files in publications. Requires Video Toolkit to be enabled.",
-					enabled = bind "vtkEnabled",
-				},
-			},
-
-			f:spacer { height = 4 },
-
-			-- Preset + poster settings (enabled only when vtkEnabled = true)
-			f:separator { fill_horizontal = 1 },
-			f:row { f:static_text { title = "Encoding Settings", fill_horizontal = 1 } },
-			f:column {
-				fill_horizontal = 1,
-				enabled = bind "vtkEnabled",
-
-				f:spacer { height = 2 },
-
-				f:row {
-					f:static_text {
-						title = "Default preset:",
-						alignment = 'right',
-						width = share 'vtk_label_w',
-					},
-					f:popup_menu {
-						value = bind "vtkDefaultPreset",
-						items = presetItems,
-						tooltip = "Preset applied to all videos unless overridden per collection.",
-					},
-				},
-
-				f:spacer { height = 2 },
-
-				f:row {
-					f:static_text {
-						title = "Poster thumbnail:",
-						alignment = 'right',
-						width = share 'vtk_label_w',
-					},
-					f:checkbox {
-						title = "Generate poster (JPG)",
-						fill_horizontal = 1,
-						value = bind "vtkGeneratePoster",
-						tooltip = "Extract a JPG thumbnail from the video and upload as representative image.",
-					},
-				},
-
-				f:row {
-					f:static_text {
-						title = "Poster at:",
-						alignment = 'right',
-						width = share 'vtk_label_w',
-					},
-					f:edit_field {
-						value = bind "vtkPosterTimestamp",
-						width_in_chars = 4,
-						tooltip = "Percentage of video duration for the thumbnail frame (0–95).",
-						enabled = bind "vtkGeneratePoster",
-					},
-					f:static_text {
-						title = "% of duration",
-						alignment = 'left',
-					},
-				},
-			},
-
-			f:spacer { height = 4 },
-
-			-- Advanced paths (collapsible group_box)
-			f:separator { fill_horizontal = 1 },
-			f:row { f:static_text { title = "Advanced — Tool Paths", fill_horizontal = 1 } },
-			f:column {
-				fill_horizontal = 1,
-				enabled = bind "vtkEnabled",
-
-				f:spacer { height = 2 },
-
-				f:row {
-					f:static_text {
-						title = "Toolkit:",
-						alignment = 'right',
-						width = share 'vtk_label_w',
-				},
-					f:edit_field {
-						value = bind "vtkToolkitPath",
-						placeholder_string = "(auto: <plugin>/video-toolkit/video_toolkit.py)",
-						fill_horizontal = 1,
-						tooltip = "Path to video_toolkit.py. Leave empty to use the bundled toolkit next to the plugin.",
-				},
-				},
-
-				f:row {
-					f:static_text {
-						title = "Python:",
-						alignment = 'right',
-						width = share 'vtk_label_w',
-					},
-					f:edit_field {
-						value = bind "vtkPythonPath",
-						fill_horizontal = 1,
-						tooltip = "Full path to python.exe (leave blank for auto-detect).",
-						placeholder_string = "(auto-detect)",
-					},
-				},
-
-				f:row {
-					f:static_text {
-						title = "FFmpeg:",
-						alignment = 'right',
-						width = share 'vtk_label_w',
-					},
-					f:edit_field {
-						value = bind "vtkFFmpegPath",
-						fill_horizontal = 1,
-						tooltip = "Full path to ffmpeg.exe (leave blank for auto-detect).",
-						placeholder_string = "(auto-detect)",
-					},
-				},
-
-				f:row {
-					f:static_text {
-						title = "FFprobe:",
-						alignment = 'right',
-						width = share 'vtk_label_w',
-					},
-					f:edit_field {
-						value = bind "vtkFFprobePath",
-						fill_horizontal = 1,
-						tooltip = "Full path to ffprobe.exe (leave blank for auto-detect).",
-						placeholder_string = "(auto-detect)",
-					},
-				},
-
-				f:row {
-					f:static_text {
-						title = "ExifTool:",
-						alignment = 'right',
-						width = share 'vtk_label_w',
-					},
-					f:edit_field {
-						value = bind "vtkExifToolPath",
-						fill_horizontal = 1,
-						tooltip = "Full path to exiftool.exe (leave blank for auto-detect, optional).",
-						placeholder_string = "(auto-detect, optional)",
-					},
-				},
-
-				f:row {
-					f:static_text {
-						title = "Presets file:",
-						alignment = 'right',
-						width = share 'vtk_label_w',
-					},
-					f:edit_field {
-						value = bind "vtkPresetsFile",
-						fill_horizontal = 1,
-						tooltip = "Path to a custom presets.json file (leave blank for built-in presets).",
-						placeholder_string = "(built-in presets)",
-					},
-				},
-
-				f:spacer { height = 2 },
-			},
-
-			f:spacer { height = 4 },
-
-			-- Status + action buttons
-			f:separator { fill_horizontal = 1 },
-			f:row { f:static_text { title = "Status", fill_horizontal = 1 } },
-			f:column {
-				fill_horizontal = 1,
-				enabled = bind "vtkEnabled",
-
-				f:spacer { height = 2 },
-
-				f:row {
-					f:static_text {
-						title = LrView.bind {
-							keys = { "vtkEnabled", "vtkPythonPath", "vtkFFmpegPath" },
-							operation = function(_, values, _)
-								if not values.vtkEnabled then
-									return "Video Toolkit disabled."
-								end
-								return "Use 'Check Tools' to verify installation."
-							end,
-						},
-						fill_horizontal = 1,
-						alignment = 'left',
-						font = "<system>",
-					},
-				},
-
-				f:spacer { height = 2 },
-
-				f:row {
-					f:push_button {
-						title = "Check Tools...",
-						font = "<system>",
-						width = share 'buttonwidth',
-						enabled = bind "vtkEnabled",
-						tooltip = "Run Video Toolkit to verify Python, FFmpeg and ExifTool installations.",
-						action = function(_)
-							LrTasks.startAsyncTask(function()
-								local python     = utils.resolveTool(propertyTable.vtkPythonPath, "python")
-								local plugin     = rawget(_G, "_PLUGIN")
-								local toolkitPath = utils.resolveToolkitPath(propertyTable.vtkToolkitPath, plugin.path)
-								local isWindows  = (LrSystemInfo.osVersion():lower():find("win") ~= nil)
-								local installCmd = isWindows and "winget install --id Gyan.FFmpeg" or "brew install ffmpeg"
-
-								local tools = {
-									{ key = "vtkFFmpegPath",   name = "FFmpeg",   val = propertyTable.vtkFFmpegPath },
-									{ key = "vtkFFprobePath",  name = "FFprobe",  val = propertyTable.vtkFFprobePath },
-									{ key = "vtkExifToolPath", name = "ExifTool", val = propertyTable.vtkExifToolPath },
-								}
-								for _, t in ipairs(tools) do
-									if t.val and t.val ~= "" and not utils.fileExists(t.val) then
-										LrDialogs.message("Video Toolkit — Invalid Path",
-											"The configured path for " .. t.name .. " is invalid:\n" .. t.val .. "\n\nFix the path in Advanced settings, or clear the field to let the toolkit detect it automatically.", "critical")
-										return
-									end
-								end
-
-								if not utils.fileExists(python) then
-									LrDialogs.message("Video Toolkit — Python Not Found",
-										"Python was not found at:\n" .. python .. "\n\nFix the path in Advanced settings, or clear the field for auto-detect.", "critical")
-									return
-								end
-								if not utils.fileExists(toolkitPath) then
-									LrDialogs.message("Video Toolkit — Script Not Found",
-										"video_toolkit.py not found at:\n" .. toolkitPath .. "\n\nFix the path in Advanced settings, or clear the field for auto-detect.", "critical")
-									return
-								end
-
-								local outFile = LrPathUtils.child(LrPathUtils.getStandardFilePath("temp"), "vtk_check.json")
-								local innerCmd = '"' .. python .. '" "' .. toolkitPath .. '" --mode check > "' .. outFile .. '" 2>&1'
-								local cmd = isWindows and ('cmd /c "' .. innerCmd .. '"') or innerCmd
-								local result = LrTasks.execute(cmd)
-								local checkOutput = ""
-								local fh = io.open(outFile, "r")
-								if fh then checkOutput = fh:read("*a"); fh:close() end
-
-								if result == 0 then
-									local ok, parsed = pcall(JSON.decode, JSON, checkOutput)
-									if ok and parsed then
-										local function fillIfEmpty(key, val)
-											if val and val ~= "not found" and (not propertyTable[key] or propertyTable[key] == "") then
-												propertyTable[key] = val
-											end
-										end
-										fillIfEmpty("vtkFFmpegPath",  parsed.ffmpeg)
-										fillIfEmpty("vtkFFprobePath", parsed.ffprobe)
-										fillIfEmpty("vtkExifToolPath", parsed.exiftool)
-									end
-									if not (propertyTable.vtkPythonPath and propertyTable.vtkPythonPath ~= "") then
-										propertyTable.vtkPythonPath = python
-									end
-									if not (propertyTable.vtkToolkitPath and propertyTable.vtkToolkitPath ~= "") then
-										propertyTable.vtkToolkitPath = toolkitPath
-									end
-									LrDialogs.message("Video Toolkit — OK",
-										"All tools verified and working.\n\nDetected paths have been filled in Advanced settings.", "info")
-								else
-									LrDialogs.message("Video Toolkit — FFprobe Not Found",
-										"Python and the toolkit are working, but ffprobe was not found.\n\n"
-										.. "Install FFmpeg (includes ffprobe):\n  " .. installCmd .. "\n\n"
-										.. "Or set the FFprobe path in Advanced settings.", "critical")
-								end
-						end)
-						end,
-					},
-					f:push_button {
-						title = "Pre-render Now...",
-						font = "<system>",
-						width = share 'buttonwidth',
-						enabled = bind "vtkEnabled",
-						tooltip = "Pre-process all videos in the current publish service without publishing them.",
-						action = function(_)
-							LrDialogs.message("Pre-render",
-								"Pre-render will be available in a future update.\n\nFor now, videos are processed automatically during publish.",
-								"info")
-						end,
-					},
-				},
-
-				f:spacer { height = 2 },
-			},
-		},
-	}
-end
-
--- *************************************************
 function PublishDialogSections.sectionsForTopOfDialog(f, propertyTable)
 	local conDlg = connectionDialog(f, propertyTable)
 	local prefDlg = prefsDialog(f, propertyTable)
-	local videoDlg = videoDialog(f, propertyTable)
+	local videoDlg = vtk_ui.videoDialog(f, propertyTable)
 	if utils.nilOrEmpty(propertyTable.host) or utils.nilOrEmpty(propertyTable.userName) or utils.nilOrEmpty(propertyTable.userPW) then
 		propertyTable.Connected = false
 		propertyTable.ConCheck = true

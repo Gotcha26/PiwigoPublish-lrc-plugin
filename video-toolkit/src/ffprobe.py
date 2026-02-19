@@ -12,6 +12,8 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from . import SUBPROCESS_FLAGS
+
 
 # ---------------------------------------------------------------------------
 # Dataclass VideoInfo
@@ -106,6 +108,7 @@ class FFprobe:
                 capture_output=True,
                 text=True,
                 timeout=30,
+                **SUBPROCESS_FLAGS,
             )
         except FileNotFoundError:
             raise ProbeError(f"ffprobe introuvable : '{self.binary}'")
@@ -131,6 +134,7 @@ class FFprobe:
                 [self.binary, "-version"],
                 capture_output=True,
                 timeout=5,
+                **SUBPROCESS_FLAGS,
             )
             return r.returncode == 0
         except (FileNotFoundError, subprocess.TimeoutExpired):
@@ -144,6 +148,7 @@ class FFprobe:
                 capture_output=True,
                 text=True,
                 timeout=5,
+                **SUBPROCESS_FLAGS,
             )
             if r.returncode == 0:
                 first_line = r.stdout.splitlines()[0]

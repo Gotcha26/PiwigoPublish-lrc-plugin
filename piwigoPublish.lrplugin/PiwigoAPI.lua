@@ -3507,4 +3507,51 @@ function PiwigoAPI.setVideoInfo(propertyTable, imageId, width, height, filesize)
 end
 
 -- *************************************************
+function PiwigoAPI.setVideoMeta(propertyTable, imageId, origData, convData)
+    -- Send extended video metadata to pwg.companion.setVideoMeta
+    -- origData / convData : { width, height, fps, bitrate, codec, format, filesize }
+    local callStatus = { status = false, statusMsg = "" }
+
+    local params = {
+        { name = "method",   value = "pwg.companion.setVideoMeta" },
+        { name = "image_id", value = tostring(imageId) },
+    }
+
+    local function addField(prefix, key, val)
+        if val and val ~= 0 and val ~= "" then
+            table.insert(params, { name = prefix .. "_" .. key, value = tostring(val) })
+        end
+    end
+
+    if origData then
+        addField("orig", "width",    origData.width)
+        addField("orig", "height",   origData.height)
+        addField("orig", "fps",      origData.fps)
+        addField("orig", "bitrate",  origData.bitrate)
+        addField("orig", "codec",    origData.codec)
+        addField("orig", "format",   origData.format)
+        addField("orig", "filesize", origData.filesize)
+    end
+    if convData then
+        addField("conv", "width",    convData.width)
+        addField("conv", "height",   convData.height)
+        addField("conv", "fps",      convData.fps)
+        addField("conv", "bitrate",  convData.bitrate)
+        addField("conv", "codec",    convData.codec)
+        addField("conv", "format",   convData.format)
+        addField("conv", "filesize", convData.filesize)
+    end
+
+    local postResp = PiwigoAPI.httpPostMultiPart(propertyTable, params)
+    if postResp.status then
+        callStatus.status = true
+        log:info("PiwigoAPI.setVideoMeta - ok for image_id=" .. tostring(imageId))
+    else
+        callStatus.statusMsg = "setVideoMeta failed: " .. (postResp.statusMsg or "")
+        log:warn("PiwigoAPI." .. callStatus.statusMsg)
+    end
+    return callStatus
+end
+
+-- *************************************************
 return PiwigoAPI

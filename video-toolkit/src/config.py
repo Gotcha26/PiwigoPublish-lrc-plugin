@@ -44,6 +44,7 @@ class Config:
         "thumbnail_height": 720,
         "thumbnail_quality": 85,
         "copy_metadata": True,
+        "hardware_accel": "auto",
         "vtk_dir_name": ".vtk",
     }
 
@@ -85,7 +86,7 @@ class Config:
     def resolve_tool(self, tool: str) -> str | None:
         """
         Résout le chemin d'un outil (ffmpeg, ffprobe, python, exiftool).
-        Ordre : config → PATH → emplacements courants Windows.
+        Ordre : config → PATH → emplacements courants (Windows/macOS/Linux).
         Retourne le chemin trouvé ou None.
         """
         configured = self._data.get(f"{tool}_path", "").strip()
@@ -97,12 +98,17 @@ class Config:
         if found:
             return found
 
-        # Emplacements courants Windows
+        # Emplacements courants par plateforme
         if sys.platform == "win32":
             candidates = _windows_candidates(tool)
-            for candidate in candidates:
-                if Path(candidate).is_file():
-                    return candidate
+        elif sys.platform == "darwin":
+            candidates = _macos_candidates(tool)
+        else:
+            candidates = _linux_candidates(tool)
+
+        for candidate in candidates:
+            if Path(candidate).is_file():
+                return candidate
 
         return None
 
@@ -148,6 +154,54 @@ def _windows_candidates(tool: str) -> list[str]:
             f"{program_files}\\ExifTool\\exiftool.exe",
             f"{home}\\exiftool.exe",
             "C:\\Windows\\exiftool.exe",
+        ],
+    }
+    return candidates_map.get(tool, [])
+
+
+def _macos_candidates(tool: str) -> list[str]:
+    """Emplacements courants sur macOS pour ffmpeg, ffprobe, exiftool."""
+    home = str(Path.home())
+    candidates_map: dict[str, list[str]] = {
+        "ffmpeg": [
+            "/opt/homebrew/bin/ffmpeg",          # Apple Silicon Homebrew
+            "/usr/local/bin/ffmpeg",             # Intel Homebrew / manual
+            f"{home}/.local/bin/ffmpeg",
+        ],
+        "ffprobe": [
+            "/opt/homebrew/bin/ffprobe",
+            "/usr/local/bin/ffprobe",
+            f"{home}/.local/bin/ffprobe",
+        ],
+        "exiftool": [
+            "/opt/homebrew/bin/exiftool",
+            "/usr/local/bin/exiftool",
+            f"{home}/.local/bin/exiftool",
+        ],
+    }
+    return candidates_map.get(tool, [])
+
+
+def _linux_candidates(tool: str) -> list[str]:
+    """Emplacements courants sur Linux pour ffmpeg, ffprobe, exiftool."""
+    home = str(Path.home())
+    candidates_map: dict[str, list[str]] = {
+        "ffmpeg": [
+            "/usr/bin/ffmpeg",
+            "/usr/local/bin/ffmpeg",
+            f"{home}/.local/bin/ffmpeg",
+            "/snap/bin/ffmpeg",
+        ],
+        "ffprobe": [
+            "/usr/bin/ffprobe",
+            "/usr/local/bin/ffprobe",
+            f"{home}/.local/bin/ffprobe",
+            "/snap/bin/ffprobe",
+        ],
+        "exiftool": [
+            "/usr/bin/exiftool",
+            "/usr/local/bin/exiftool",
+            f"{home}/.local/bin/exiftool",
         ],
     }
     return candidates_map.get(tool, [])

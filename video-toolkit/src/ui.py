@@ -8,6 +8,7 @@ catégorisées, annulation systématique, rapports structurés.
 import os
 import sys
 import ctypes
+from pathlib import Path
 
 
 # ---------------------------------------------------------------------------
@@ -40,11 +41,14 @@ def _detect_color_support() -> bool:
         return True
     if os.environ.get("ConEmuANSI") == "ON":
         return True
+    # Vérifier isatty (toutes plateformes)
+    if not (hasattr(sys.stdout, "isatty") and sys.stdout.isatty()):
+        return False
     # Activation Windows
     if sys.platform == "win32":
         return _activate_windows_ansi()
-    # Unix : vérifier isatty
-    return hasattr(sys.stdout, "isatty") and sys.stdout.isatty()
+    # Unix : isatty déjà vérifié
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -214,8 +218,11 @@ class OutputFormatter:
         self.print_section_header("FICHIERS GÉNÉRÉS")
         if output_dir:
             rel = output_dir
-            if plugin_path and output_dir.startswith(plugin_path):
-                rel = output_dir[len(plugin_path):].lstrip("/\\")
+            if plugin_path:
+                try:
+                    rel = str(Path(output_dir).relative_to(Path(plugin_path)))
+                except ValueError:
+                    pass  # output_dir n'est pas sous plugin_path
             print(f"  {self.c.DIM}Sortie :{self.c.RESET} {self.c.VALUE}{rel}{self.c.RESET}\n")
         for filename, detail, description in files:
             print(f"    {self.c.ok_marker()} {self.c.KEY}{filename:<35}{self.c.RESET} ({detail})")
@@ -227,7 +234,13 @@ class OutputFormatter:
 # ---------------------------------------------------------------------------
 
 def clear_screen():
-    os.system("cls" if sys.platform == "win32" else "clear")
+    if not (hasattr(sys.stdout, "isatty") and sys.stdout.isatty()):
+        return
+    if sys.platform == "win32":
+        os.system("cls")
+    else:
+        sys.stdout.write("\033[2J\033[H")
+        sys.stdout.flush()
 
 
 def pause(c: Colors, message: str = "Appuyez sur ENTRÉE pour continuer..."):

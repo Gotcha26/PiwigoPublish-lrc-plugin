@@ -47,6 +47,8 @@ class ProcessResult:
     thumbnail_size: int
     skipped: bool               # True si la variante était déjà à jour
     error: str = ""
+    orig: dict | None = None    # métadonnées source (width, height, fps, bitrate, codec, format, filesize)
+    conv: dict | None = None    # métadonnées variante (idem)
 
 
 # ---------------------------------------------------------------------------
@@ -68,8 +70,9 @@ class VideoProcessor:
         thumbnail_timestamp_pct: int = 10,
         thumbnail_max_width: int = 1280,
         copy_metadata: bool = True,
+        hwaccel_mode: str = "auto",
     ):
-        self._ffmpeg = FFmpeg(ffmpeg_path)
+        self._ffmpeg = FFmpeg(ffmpeg_path, hwaccel_mode=hwaccel_mode)
         self._ffprobe = FFprobe(ffprobe_path)
         self._exiftool = ExifTool(exiftool_path)
 
@@ -164,6 +167,16 @@ class VideoProcessor:
                 else:
                     t_size = 0
 
+                # Métadonnées étendues orig/conv (même en cache hit)
+                orig_meta = self._video_meta(info)
+                conv_meta = None
+                if variant_path.exists():
+                    try:
+                        conv_info = self._ffprobe.probe(variant_path)
+                        conv_meta = self._video_meta(conv_info)
+                    except ProbeError:
+                        pass
+
                 return ProcessResult(
                     input_path=str(input_path),
                     variant_path=str(variant_path),
@@ -175,6 +188,8 @@ class VideoProcessor:
                     size=Path(variant_path).stat().st_size if variant_path.exists() else 0,
                     thumbnail_size=t_size,
                     skipped=True,
+                    orig=orig_meta,
+                    conv=conv_meta,
                 )
 
         # --- 7. Transcode ---
@@ -294,6 +309,16 @@ class VideoProcessor:
             else (variant_path.stat().st_size if variant_path.exists() else 0)
         )
 
+        # --- 11. Métadonnées étendues orig/conv ---
+        orig_meta = self._video_meta(info)
+        conv_meta = None
+        if not dry_run and not thumbnail_only and variant_path.exists():
+            try:
+                conv_info = self._ffprobe.probe(variant_path)
+                conv_meta = self._video_meta(conv_info)
+            except ProbeError:
+                pass  # non critique
+
         return ProcessResult(
             input_path=str(input_path),
             variant_path=str(variant_path),
@@ -305,6 +330,8 @@ class VideoProcessor:
             size=variant_size,
             thumbnail_size=thumb_size,
             skipped=False,
+            orig=orig_meta,
+            conv=conv_meta,
         )
 
     # -------------------------------------------------------------------
@@ -353,6 +380,19 @@ class VideoProcessor:
     # -------------------------------------------------------------------
     # Helpers
     # -------------------------------------------------------------------
+
+    @staticmethod
+    def _video_meta(info: VideoInfo) -> dict:
+        """Extrait les métadonnées vidéo étendues pour orig/conv."""
+        return {
+            "width": info.width,
+            "height": info.height,
+            "fps": info.fps,
+            "bitrate": info.video_bitrate,      # kbps
+            "codec": info.video_codec,
+            "format": info.container,
+            "filesize": info.size,
+        }
 
     @staticmethod
     def _error_result(input_path: str, preset_key: str, error: str) -> ProcessResult:

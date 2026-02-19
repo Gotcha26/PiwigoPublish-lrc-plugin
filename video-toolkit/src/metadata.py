@@ -18,6 +18,8 @@ import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from . import SUBPROCESS_FLAGS
+
 
 # ---------------------------------------------------------------------------
 # Tags copiés par défaut
@@ -140,6 +142,7 @@ class ExifTool:
                 encoding="utf-8",
                 errors="replace",
                 timeout=60,
+                **SUBPROCESS_FLAGS,
             )
         except FileNotFoundError:
             return ExifToolResult(
@@ -199,6 +202,7 @@ class ExifTool:
                 encoding="utf-8",
                 errors="replace",
                 timeout=30,
+                **SUBPROCESS_FLAGS,
             )
         except (FileNotFoundError, subprocess.TimeoutExpired):
             return None
@@ -223,6 +227,7 @@ class ExifTool:
                 [self.binary, "-ver"],
                 capture_output=True,
                 timeout=5,
+                **SUBPROCESS_FLAGS,
             )
             return r.returncode == 0
         except (FileNotFoundError, subprocess.TimeoutExpired):
@@ -236,6 +241,7 @@ class ExifTool:
                 capture_output=True,
                 text=True,
                 timeout=5,
+                **SUBPROCESS_FLAGS,
             )
             if r.returncode == 0:
                 return r.stdout.strip()

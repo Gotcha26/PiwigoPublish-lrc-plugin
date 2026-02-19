@@ -1292,6 +1292,25 @@ function utils.getLogfilePath()
 end
 
 -- *************************************************
+-- Returns the path to the VTK result file (JSON, written to temp by VTK).
+function utils.getVtkResultPath()
+    return LrPathUtils.child(LrPathUtils.getStandardFilePath("temp"), "piwigoPublish_vtk_result.json")
+end
+
+-- *************************************************
+-- Truncate the plugin log file to zero without deleting it.
+-- Returns: true on success, false on failure.
+function utils.clearLogFiles()
+    local path = utils.getLogfilePath()
+    if LrFileUtils.exists(path) then
+        local fh = io.open(path, "w")
+        if fh then fh:close(); return true end
+        return false
+    end
+    return true  -- no file = already empty
+end
+
+-- *************************************************
 function utils.pwBusyMessage(callingFunction, displayFunction)
     -- display Piwigo Busy message
 

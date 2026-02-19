@@ -1,39 +1,39 @@
 # Video Toolkit — Installation
 
-## Dépendances
+## Dependencies
 
-### Requis
+### Required
 
 - **Python** 3.8+
-- **FFmpeg** 5.0+ (transccodage vidéo + analyse avec ffprobe)
+- **FFmpeg** 5.0+ (video transcoding + analysis via ffprobe)
 
-### Optionnel
+### Optional
 
-- **ExifTool** 12+ (copie de métadonnées — sans lui, les métadonnées ne sont pas copiées)
+- **ExifTool** 12+ (metadata copying — without it, GPS, date and keywords are not copied to the compressed file)
 
-## Installation par système
+## Installation by Platform
 
 ### Windows
 
-#### Via winget (recommandé)
-```bash
-winget install ffmpeg
-winget install exiftool
+#### Via winget (recommended — built into Windows 11)
+```cmd
+winget install Python.Python.3
+winget install Gyan.FFmpeg
+winget install OliverBetz.ExifTool
 ```
 
 #### Via Chocolatey
-```bash
-choco install ffmpeg
-choco install exiftool
+```cmd
+choco install python ffmpeg exiftool
 ```
 
-#### Manuel
-1. Télécharger FFmpeg : https://ffmpeg.org/download.html
-   - Extraire le ZIP dans `C:\ffmpeg\`
-   - Ajouter `C:\ffmpeg\bin` à la variable PATH (ou configurer dans le toolkit)
+#### Manual
+1. Download FFmpeg: https://ffmpeg.org/download.html
+   - Extract the ZIP to `C:\ffmpeg\`
+   - Add `C:\ffmpeg\bin` to the PATH environment variable (or configure the path in Lightroom's Advanced settings)
 
-2. Télécharger ExifTool : https://exiftool.org/
-   - Mettre le `.exe` dans `C:\exiftool\` (ou un dossier dans PATH)
+2. Download ExifTool: https://exiftool.org/
+   - Place `exiftool.exe` in `C:\exiftool\` (or any folder that is in PATH)
 
 ### macOS
 
@@ -43,14 +43,14 @@ brew install ffmpeg
 brew install exiftool
 ```
 
-### Linux (Debian/Ubuntu)
+### Linux (Debian / Ubuntu)
 
 ```bash
 sudo apt update
-sudo apt install python3 ffmpeg exiftool
+sudo apt install python3 ffmpeg libimage-exiftool-perl
 ```
 
-### Linux (Fedora/RHEL)
+### Linux (Fedora / RHEL)
 
 ```bash
 sudo dnf install python3 ffmpeg perl-Image-ExifTool
@@ -62,32 +62,28 @@ sudo dnf install python3 ffmpeg perl-Image-ExifTool
 sudo pacman -S python ffmpeg perl-image-exiftool
 ```
 
-## Configuration du toolkit
+## Configuring the Toolkit
 
-### Mode 1 : Auto-détection (recommandé)
+### Option 1: Auto-detection (recommended)
 
-Les outils sont détectés automatiquement si :
-- Ils sont dans le PATH système
-- Ou aux emplacements courants (Windows: `C:\ffmpeg\bin\ffmpeg.exe`, etc.)
+Tools are detected automatically if they are:
+- In the system PATH
+- Or at common installation locations (Windows: `C:\ffmpeg\bin\ffmpeg.exe`, etc.)
 
-Lancez le toolkit en mode interactif pour vérifier :
+**From Lightroom**: open the publish service settings → Video Settings → click **"Check Tools…"**. This validates all tools, fills in the path fields automatically, and shows a clear result.
+
+**From the command line**, run the interactive menu to check tool status:
 ```bash
 cd video-toolkit
 python video_toolkit.py
-# Menu "Outils" affichera l'état de chaque outil
+# Tools menu shows the status of each dependency
 ```
 
-### Mode 2 : Configurer manuellement
+### Option 2: Configure manually
 
-Si l'auto-détection échoue, configurez les chemins dans le menu "Paramètres" du toolkit interactif.
+If auto-detection fails, set the paths directly in Lightroom under **Video Settings → Advanced — Tool Paths**.
 
-```bash
-python video_toolkit.py
-# → Paramètres (option 4)
-# → Modifier FFmpeg path / FFprobe path / ExifTool path
-```
-
-Ou éditer directement `~/.piwigoPublish/video-toolkit.json` :
+Alternatively, edit `~/.piwigoPublish/video-toolkit.json`:
 
 ```json
 {
@@ -97,15 +93,15 @@ Ou éditer directement `~/.piwigoPublish/video-toolkit.json` :
 }
 ```
 
-## Vérification
+## Verification
 
 ```bash
 python video_toolkit.py --mode probe --input sample_video.mp4
 ```
 
-Doit retourner un JSON avec résolution, durée, codecs, etc.
+Should return a JSON object with resolution, duration, codecs, etc.
 
 ```bash
 python video_toolkit.py
-# Menu interactif → Outils (option 3) pour vérifier l'état des dépendances
+# Interactive menu → Tools (option 3) to check dependency status
 ```

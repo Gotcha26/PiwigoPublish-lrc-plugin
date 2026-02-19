@@ -51,6 +51,8 @@ _G.utils = require "utils"
 _G.PiwigoAPI = require "PiwigoAPI"
 _G.PWImportService = require "PWImportService"
 _G.PWStatusManager = require "PWStatusManager"
+_G.vtk_core = require "vtk_core"
+_G.vtk_ui   = require "vtk_ui"
 
 -- Global initializations
 -- Detect macOS vs Windows based on path separator in Lightroom's standard paths
@@ -62,15 +64,14 @@ _G.log = import 'LrLogger' ('PiwigoPublishPlugin')
 if prefs.debugEnabled == nil then
     prefs.debugEnabled = false
 end
-if prefs.debugToFile == nil then 
-    prefs.debugToFile = false
+if prefs.clearLogOnReload == nil then
+    prefs.clearLogOnReload = false
 end
 if prefs.debugEnabled then
-    if prefs.debugToFile then
-        log:enable("logfile")
-    else
-        log:enable("print")
+    if prefs.clearLogOnReload then
+        utils.clearLogFiles()  -- truncate log at each reload (dev mode)
     end
+    log:enable("logfile")
 else
     log:disable()
 end

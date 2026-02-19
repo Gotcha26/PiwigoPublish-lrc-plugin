@@ -41,7 +41,7 @@ return {
 	allowColorSpaces = nil,
 	canExportVideo = true,
 	allowVideoExportPresets = {
-		{ formatID = "original" },  -- LrC ne ré-encode pas ; Video Toolkit gère le transcodage
+		{ formatID = "original" },  -- LrC does not re-encode; Video Toolkit handles transcoding
 	},
 	supportsCustomSortOrder = true,
 	hidePrintResolution = true,
@@ -76,6 +76,7 @@ return {
 		{ key = "vtkFFprobePath",        default = '' },
 		{ key = "vtkExifToolPath",       default = '' },
 		{ key = "vtkPresetsFile",        default = '' },
+		{ key = "vtkHardwareAccel",     default = 'auto' },
 	},
 
 	metadataThatTriggersRepublish = function(publishSettings, photoId, fieldName)

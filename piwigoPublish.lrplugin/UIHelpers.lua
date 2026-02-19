@@ -29,36 +29,25 @@ UIHelpers = {}
 -- Returns a row containing icon + plugin name + version
 -- *************************************************
 function UIHelpers.createPluginHeader(f, share, iconPath, pluginVersion)
-	local INDENT_PIXELS = 14
-	
 	return f:row {
+		spacing = f:control_spacing(),
 		f:picture {
 			alignment = 'left',
 			value = iconPath,
 		},
 		f:column {
-			spacing = f:control_spacing(),
-			f:spacer { height = 1 },
-			f:row {
-				f:spacer { width = INDENT_PIXELS },
-				f:static_text {
-					title = "Piwigo Publisher Plugin",
-					font = "<system/bold>",
-					alignment = 'left',
-					width = share 'labelWidth',
-				},
+			spacing = f:label_spacing(),
+			f:static_text {
+				title = "Piwigo Publisher",
+				font = "<system/bold>",
+				alignment = 'left',
+				width = share 'labelWidth',
 			},
-			f:row {
-				f:spacer { width = INDENT_PIXELS },
-				f:static_text {
-					title = "Plugin Version",
-					alignment = 'left',
-				},
-				f:static_text {
-					title = pluginVersion,
-					alignment = 'left',
-					width = share 'labelWidth',
-				},
+			f:static_text {
+				title = pluginVersion,
+				font = "<system/small>",
+				text_color = LrColor(0.5, 0.5, 0.5),
+				alignment = 'left',
 			},
 		},
 	}

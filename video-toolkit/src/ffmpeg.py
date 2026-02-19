@@ -16,7 +16,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
+from . import SUBPROCESS_FLAGS
 from .ffprobe import VideoInfo
+from .hwaccel import HWAccelDetector, HWAccelConfig
 from .presets import VideoPreset, PresetManager
 
 
@@ -49,8 +51,10 @@ class ThumbnailResult:
 class FFmpeg:
     """Wrapper autour de l'exécutable ffmpeg pour transcode + miniature."""
 
-    def __init__(self, ffmpeg_path: str = "ffmpeg"):
+    def __init__(self, ffmpeg_path: str = "ffmpeg", hwaccel_mode: str = "auto"):
         self.binary = ffmpeg_path
+        self._hwaccel_mode = hwaccel_mode
+        self._detector = HWAccelDetector(ffmpeg_path)
 
     # -------------------------------------------------------------------
     # Public API
@@ -84,6 +88,7 @@ class FFmpeg:
 
         if preset.is_origin:
             cmd = self._build_remux_cmd(input_path, output_path)
+            hw_config = None
         else:
             out_w, out_h = preset_manager.compute_output_resolution(
                 src_width, src_height, preset
@@ -91,8 +96,12 @@ class FFmpeg:
             scale_filter = preset_manager.build_ffmpeg_scale_filter(
                 src_width, src_height, preset
             )
+            hw_config = self._detector.resolve(
+                self._hwaccel_mode, preset.crf, preset.h264_profile, is_hdr
+            )
             cmd = self._build_transcode_cmd(
-                input_path, output_path, preset, scale_filter, is_hdr=is_hdr
+                input_path, output_path, preset, scale_filter,
+                is_hdr=is_hdr, hw_config=hw_config,
             )
 
         if dry_run:
@@ -105,7 +114,18 @@ class FFmpeg:
                 size=0,
             )
 
-        self._run(cmd, src_duration, progress_callback)
+        if hw_config is not None:
+            try:
+                self._run(cmd, src_duration, progress_callback)
+            except FFmpegError:
+                # GPU failed — fallback to CPU silently
+                cpu_cmd = self._build_transcode_cmd(
+                    input_path, output_path, preset, scale_filter,
+                    is_hdr=is_hdr, hw_config=None,
+                )
+                self._run(cpu_cmd, src_duration, progress_callback)
+        else:
+            self._run(cmd, src_duration, progress_callback)
 
         out_file = Path(output_path)
         size = out_file.stat().st_size if out_file.exists() else 0
@@ -179,6 +199,7 @@ class FFmpeg:
                 [self.binary, "-version"],
                 capture_output=True,
                 timeout=5,
+                **SUBPROCESS_FLAGS,
             )
             return r.returncode == 0
         except (FileNotFoundError, subprocess.TimeoutExpired):
@@ -192,6 +213,7 @@ class FFmpeg:
                 capture_output=True,
                 text=True,
                 timeout=5,
+                **SUBPROCESS_FLAGS,
             )
             if r.returncode == 0:
                 first_line = r.stdout.splitlines()[0]
@@ -213,17 +235,14 @@ class FFmpeg:
         preset: VideoPreset,
         scale_filter: str,
         is_hdr: bool = False,
+        hw_config: HWAccelConfig | None = None,
     ) -> list[str]:
         vb = preset.video_bitrate
         ab = preset.audio_bitrate
 
         # Build video filter chain
         if is_hdr:
-            # HDR → SDR tonemap pipeline:
-            # 1. Convert to linear light in BT.2020 space (zscale)
-            # 2. Tonemap from linear HDR to linear SDR (hable algorithm)
-            # 3. Convert from BT.2020 to BT.709 color space
-            # 4. Scale to target resolution
+            # HDR → SDR tonemap pipeline (always CPU — hw_config is None here)
             vf = (
                 "zscale=t=linear:npl=100,"
                 "format=gbrpf32le,"
@@ -234,16 +253,35 @@ class FFmpeg:
                 f"{scale_filter}"
             )
         else:
-            vf = scale_filter
+            vf_prefix = hw_config.extra_vf_prefix if hw_config else ""
+            vf = f"{vf_prefix}{scale_filter}"
 
-        cmd = [
-            self.binary,
-            "-i", input_path,
+        # Codec effectif
+        video_codec = hw_config.effective_codec if hw_config else preset.video_codec
+
+        # Paramètre qualité : GPU override ou CRF standard
+        if hw_config and hw_config.quality_override:
+            quality_args = hw_config.quality_override
+        elif hw_config:
+            # VideoToolbox : pas de param qualité → bitrate seul
+            quality_args = []
+        else:
+            quality_args = ["-crf", str(preset.crf)]
+
+        # Pre-input args (hwaccel flags avant -i)
+        pre_input = hw_config.pre_input_args if hw_config else []
+
+        cmd = [self.binary]
+        cmd += pre_input
+        cmd += ["-i", input_path]
+        cmd += [
             # Vidéo
-            "-c:v", preset.video_codec,
+            "-c:v", video_codec,
             "-profile:v", preset.h264_profile,
             "-level:v", "4.0",
-            "-crf", str(preset.crf),
+        ]
+        cmd += quality_args
+        cmd += [
             "-b:v", f"{vb}k",
             "-maxrate", f"{int(vb * 1.2)}k",
             "-bufsize", f"{vb * 2}k",
@@ -318,6 +356,7 @@ class FFmpeg:
                 text=True,
                 encoding="utf-8",
                 errors="replace",
+                **SUBPROCESS_FLAGS,
             )
         except FileNotFoundError:
             raise FFmpegError(f"ffmpeg introuvable : '{self.binary}'")
@@ -352,6 +391,7 @@ class FFmpeg:
                 encoding="utf-8",
                 errors="replace",
                 timeout=60,
+                **SUBPROCESS_FLAGS,
             )
         except FileNotFoundError:
             raise FFmpegError(f"ffmpeg introuvable : '{self.binary}'")

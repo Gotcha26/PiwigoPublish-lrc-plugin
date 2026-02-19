@@ -11,8 +11,9 @@ global $template, $conf, $page;
 $page['tab'] = isset($_GET['tab']) ? $_GET['tab'] : 'video';
 
 $tabsheet = new tabsheet();
-$tabsheet->add('video',  'Video',   get_admin_plugin_menu_link(dirname(__FILE__).'/admin.php') . '&tab=video');
-$tabsheet->add('server', 'Server',  get_admin_plugin_menu_link(dirname(__FILE__).'/admin.php') . '&tab=server');
+$tabsheet->add('video',    'Video',    get_admin_plugin_menu_link(dirname(__FILE__).'/admin.php') . '&tab=video');
+$tabsheet->add('server',   'Server',   get_admin_plugin_menu_link(dirname(__FILE__).'/admin.php') . '&tab=server');
+$tabsheet->add('settings', 'Settings', get_admin_plugin_menu_link(dirname(__FILE__).'/admin.php') . '&tab=settings');
 $tabsheet->select($page['tab']);
 $tabsheet->assign();
 
@@ -26,9 +27,43 @@ if (isset($_POST['action']) && $_POST['action'] === 'enable_video_support')
 {
     check_pwg_token();
     $dummy_service = null;
-    $result = companion_enable_video_support(array(), $dummy_service);
-    $action_status  = $result['status'];
-    $action_message = $result['message'];
+    companion_enable_video_support(array(), $dummy_service);
+    redirect(get_admin_plugin_menu_link(dirname(__FILE__).'/admin.php') . '&tab=video');
+}
+
+if (isset($_POST['action']) && $_POST['action'] === 'disable_video_support')
+{
+    check_pwg_token();
+    $dummy_service = null;
+    companion_disable_video_support(array(), $dummy_service);
+    redirect(get_admin_plugin_menu_link(dirname(__FILE__).'/admin.php') . '&tab=video');
+}
+
+if (isset($_POST['action']) && $_POST['action'] === 'save_settings')
+{
+    check_pwg_token();
+
+    $new_config = companion_get_all_config();
+
+    $max_size = (int)($_POST['thumb_max_size'] ?? 350);
+    $new_config['thumb_max_size']     = max(50, min(1280, $max_size));
+    $new_config['thumb_no_upscale']   = isset($_POST['thumb_no_upscale']);
+    $new_config['film_strip']         = isset($_POST['film_strip']);
+    $new_config['overlay_video_icon'] = isset($_POST['overlay_video_icon']);
+    $new_config['overlay_video_pos']  = in_array(($_POST['overlay_video_pos'] ?? ''), array('bottom-right', 'bottom-left'))
+        ? $_POST['overlay_video_pos']
+        : 'bottom-right';
+    $new_config['overlay_play']         = isset($_POST['overlay_play']);
+    $play_size = (int)($_POST['overlay_play_size'] ?? 20);
+    $new_config['overlay_play_size']    = max(5, min(50, $play_size));
+    $play_opacity = (int)($_POST['overlay_play_opacity'] ?? 70);
+    $new_config['overlay_play_opacity'] = max(10, min(100, $play_opacity));
+
+    conf_update_param('companion_config', json_encode($new_config));
+    $conf['companion_config'] = json_encode($new_config);
+
+    $action_status  = 'ok';
+    $action_message = 'Settings saved.';
 }
 
 // =========================================================================
@@ -155,10 +190,21 @@ if (function_exists('userprefs_get_param'))
 // =========================================================================
 //  Assign to template
 // =========================================================================
+// Read plugin version from main file header
+$lrc_plugin_version = '?';
+$main_file = dirname(__FILE__) . '/main.inc.php';
+if (file_exists($main_file))
+{
+    $header = file_get_contents($main_file, false, null, 0, 512);
+    if (preg_match('/Version:\s*([^\r\n]+)/', $header, $m))
+        $lrc_plugin_version = trim($m[1]);
+}
+
 $template->assign(array(
-    'LRC_ADMIN_URL'      => get_admin_plugin_menu_link(dirname(__FILE__).'/admin.php'),
-    'PWG_TOKEN'          => get_pwg_token(),
-    'LRC_TAB'            => $page['tab'],
+    'LRC_ADMIN_URL'        => get_admin_plugin_menu_link(dirname(__FILE__).'/admin.php'),
+    'PWG_TOKEN'            => get_pwg_token(),
+    'LRC_TAB'              => $page['tab'],
+    'LRC_PLUGIN_VERSION'   => $lrc_plugin_version,
 
     // Action result
     'LRC_ACTION_STATUS'  => $action_status,
@@ -190,6 +236,8 @@ $template->assign(array(
 
     // Piwigo
     'LRC_PIWIGO_VER'     => PHPWG_VERSION,
+    'LRC_PUBLIC_THEME'   => companion_get_public_theme(),
+    'LRC_PARENT_THEME'   => companion_get_parent_theme(),
     'LRC_UPLOAD_ALL'     => $upload_all,
     'LRC_VIDEO_EXTS'     => implode(', ', $found_video_exts),
     'LRC_VIDEO_READY'    => $video_ready,
@@ -206,6 +254,12 @@ $template->assign(array(
     // OS
     'LRC_OS'             => PHP_OS,
     'LRC_WEBSERVER'      => $_SERVER['SERVER_SOFTWARE'] ?? 'unknown',
+
+    // Settings
+    'LRC_CFG'            => companion_get_all_config(),
+    'LRC_HAS_GD'              => function_exists('imagecreatetruecolor'),
+    'LRC_HAS_VIDEO_ICON'      => file_exists(dirname(__FILE__) . '/assets/video-icon.png'),
+    'LRC_COMPANION_BLOCK'     => companion_has_video_block(),
 ));
 
 // Render template

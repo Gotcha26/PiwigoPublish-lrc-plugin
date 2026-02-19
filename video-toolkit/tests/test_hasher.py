@@ -101,6 +101,6 @@ class TestPartialHash:
         finally:
             p.unlink()
 
-    def test_nonexistent_file_raises(self):
+    def test_nonexistent_file_raises(self, tmp_path):
         with pytest.raises((FileNotFoundError, OSError)):
-            partial_hash(Path("/nonexistent/file.mp4"))
+            partial_hash(tmp_path / "__nonexistent__.mp4")

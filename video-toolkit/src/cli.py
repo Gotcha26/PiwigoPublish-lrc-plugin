@@ -59,6 +59,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--log-file",       dest="log_file",      help="Fichier log pour capturer stdout+stderr (diagnostic)")
     p.add_argument("--verbose",        action="store_true", help="Sortie détaillée")
     p.add_argument("--dry-run",        action="store_true", dest="dry_run", help="Simuler sans écrire")
+    p.add_argument("--hwaccel",        choices=["auto", "cpu", "gpu"], default=None,
+                   help="Hardware acceleration: auto/cpu/gpu (default: from config)")
     return p
 
 
@@ -110,7 +112,7 @@ def run_process(args: argparse.Namespace, cfg: Config) -> int:
     force = getattr(args, "force", False)
     thumbnail_only = getattr(args, "thumbnail_only", False)
 
-    processor = _build_processor(cfg)
+    processor = _build_processor(cfg, getattr(args, "hwaccel", None))
 
     global_sf = None
     if args.status_file:
@@ -150,6 +152,10 @@ def run_process(args: argparse.Namespace, cfg: Config) -> int:
         "size": result.size,
         "thumbnail_size": result.thumbnail_size,
     }
+    if result.orig:
+        output["orig"] = result.orig
+    if result.conv:
+        output["conv"] = result.conv
 
     if global_sf:
         global_sf.mark_complete(files=[result.variant_path, result.thumbnail_path])
@@ -190,7 +196,7 @@ def run_batch(args: argparse.Namespace, cfg: Config) -> int:
         global_sf = GlobalStatusFile(status_file)
         global_sf.update(STATE_PROCESSING, progress=0, total=total, done=0)
 
-    processor = _build_processor(cfg)
+    processor = _build_processor(cfg, getattr(args, "hwaccel", None))
 
     # Construire les jobs depuis le batch JSON
     jobs = []
@@ -235,6 +241,10 @@ def run_batch(args: argparse.Namespace, cfg: Config) -> int:
         }
         if r.error:
             entry["error"] = r.error
+        if r.orig:
+            entry["orig"] = r.orig
+        if r.conv:
+            entry["conv"] = r.conv
         results_out.append(entry)
 
     _batch_progress(total, total, "")
@@ -691,6 +701,35 @@ class InteractiveCLI:
             else:
                 print(self.c.success("Tous les outils requis sont disponibles."))
 
+            # Section encodeurs GPU
+            print()
+            print(self.c.title("Encodeurs GPU détectés"))
+            print(self.c.separator())
+            print()
+            ffmpeg_path = self.cfg.resolve_tool("ffmpeg")
+            if ffmpeg_path:
+                from .hwaccel import HWAccelDetector, _ENCODER_REGISTRY
+                detector = HWAccelDetector(ffmpeg_path)
+                available = detector.list_available()
+                available_codecs = {e.codec for e in available}
+                os_key = sys.platform if sys.platform in ("win32", "darwin") else "linux"
+                all_candidates = _ENCODER_REGISTRY.get(os_key, [])
+                if all_candidates:
+                    for enc in all_candidates:
+                        if enc.codec in available_codecs:
+                            print(f"  {self.c.ok_marker()} {self.c.VALUE}{enc.codec:<22}{self.c.RESET} {enc.name}")
+                        else:
+                            print(f"  {self.c.error_marker()} {self.c.DIM}{enc.codec:<22}{self.c.RESET} {enc.name} — non disponible")
+                else:
+                    print(f"  {self.c.DIM}Aucun encodeur GPU connu pour cette plateforme{self.c.RESET}")
+                if not available:
+                    print(f"\n  {self.c.DIM}Aucun encodeur GPU détecté — le CPU sera utilisé{self.c.RESET}")
+                else:
+                    hw_mode = self.cfg.get("hardware_accel", "auto")
+                    print(f"\n  {self.c.DIM}Mode actuel :{self.c.RESET} {self.c.VALUE}{hw_mode}{self.c.RESET}")
+            else:
+                print(f"  {self.c.DIM}FFmpeg non trouvé — impossible de détecter les encodeurs GPU{self.c.RESET}")
+
             print()
             if missing:
                 print(f"  {self.c.YELLOW}1{self.c.RESET}. Configurer les chemins manuellement")
@@ -723,6 +762,7 @@ class InteractiveCLI:
             ffprobe_path = self.cfg.get("ffprobe_path", "") or self.c.DIM + "(auto)" + self.c.RESET
             exiftool_path = self.cfg.get("exiftool_path", "") or self.c.DIM + "(auto)" + self.c.RESET
             presets_file = str(self.cfg.get_presets_file())
+            hw_accel = self.cfg.get("hardware_accel", "auto")
 
             poster_status = f"{self.c.OK}activé{self.c.RESET}" if generate_poster else f"{self.c.DIM}désactivé{self.c.RESET}"
 
@@ -735,12 +775,13 @@ class InteractiveCLI:
             print(self.c.config_line("5. FFprobe path",         ffprobe_path))
             print(self.c.config_line("6. ExifTool path",        exiftool_path))
             print(self.c.config_line("7. Fichier presets",      presets_file))
+            print(self.c.config_line("8. Accélération GPU",     hw_accel))
             print()
             print(self.c.separator())
             print(f"  {self.c.DIM}Numéro pour modifier, 0 pour revenir{self.c.RESET}")
             print()
 
-            choice = input(self.c.prompt("Votre choix (0-7): ")).strip()
+            choice = input(self.c.prompt("Votre choix (0-8): ")).strip()
 
             if choice == "0":
                 return
@@ -757,6 +798,8 @@ class InteractiveCLI:
                 self._edit_tool_path(key_map[choice])
             elif choice == "7":
                 self._edit_presets_file()
+            elif choice == "8":
+                self._edit_hardware_accel()
             else:
                 print(self.c.error(f'Choix invalide : "{choice}"'))
                 pause(self.c)
@@ -834,14 +877,40 @@ class InteractiveCLI:
         print(self.c.success(f"Fichier presets : {val}"))
         pause(self.c)
 
+    def _edit_hardware_accel(self) -> None:
+        print()
+        print(self.c.title("Accélération GPU"))
+        print(self.c.separator())
+        modes = [("auto", "Auto (détecte le GPU disponible)"),
+                 ("cpu",  "CPU uniquement (libx264)"),
+                 ("gpu",  "GPU (force, fallback CPU si échec)")]
+        for i, (key, desc) in enumerate(modes, 1):
+            print(f"  {self.c.YELLOW}{i}{self.c.RESET}. {desc}")
+        print()
+        choice = input(self.c.prompt("Choix (1-3, x pour annuler): ")).strip()
+        if choice.lower() == "x":
+            return
+        try:
+            idx = int(choice) - 1
+            if 0 <= idx < len(modes):
+                self.cfg.set("hardware_accel", modes[idx][0])
+                self.cfg.save()
+                print(self.c.success(f"Accélération GPU : {modes[idx][0]}"))
+            else:
+                print(self.c.error(f'Choix invalide : "{choice}"'))
+        except ValueError:
+            print(self.c.error(f'Choix invalide : "{choice}"'))
+        pause(self.c)
+
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _build_processor(cfg: Config) -> VideoProcessor:
+def _build_processor(cfg: Config, hwaccel_mode: str | None = None) -> VideoProcessor:
     """Construit un VideoProcessor avec les chemins d'outils depuis la config."""
     from .presets import PresetManager as PM
+    effective_hwaccel = hwaccel_mode or cfg.get("hardware_accel", "auto")
     return VideoProcessor(
         ffmpeg_path=cfg.resolve_tool("ffmpeg") or "ffmpeg",
         ffprobe_path=cfg.resolve_tool("ffprobe") or "ffprobe",
@@ -850,6 +919,7 @@ def _build_processor(cfg: Config) -> VideoProcessor:
         thumbnail_timestamp_pct=cfg.get("poster_timestamp_pct", 10),
         thumbnail_max_width=cfg.get("thumbnail_width", 1280),
         copy_metadata=cfg.get("copy_metadata", True),
+        hwaccel_mode=effective_hwaccel,
     )
 
 
@@ -883,8 +953,9 @@ def _suggest_preset(width: int, height: int) -> str:
 def _get_tool_version(tool: str, path: str) -> str | None:
     """Extrait la version d'un outil (ffmpeg, ffprobe, exiftool)."""
     import subprocess
+    from . import SUBPROCESS_FLAGS
     try:
-        r = subprocess.run([path, "-version"], capture_output=True, text=True, timeout=5)
+        r = subprocess.run([path, "-version"], capture_output=True, text=True, timeout=5, **SUBPROCESS_FLAGS)
         first = r.stdout.splitlines()[0] if r.stdout else ""
         parts = first.split()
         if tool in ("ffmpeg", "ffprobe") and len(parts) >= 3:
@@ -941,8 +1012,8 @@ def _print_install_instructions(c: Colors, tool: str, tool_name: str) -> None:
         print(f"  {c.DIM}Aucune instruction d'installation pour {tool_name}{c.RESET}\n")
         return
 
-    platform = "Windows" if sys.platform == "win32" else ("macOS" if sys.platform == "darwin" else "Linux")
-    methods = instructions.get(platform, instructions.get("Linux", []))
+    os_label = "Windows" if sys.platform == "win32" else ("macOS" if sys.platform == "darwin" else "Linux")
+    methods = instructions.get(os_label, instructions.get("Linux", []))
 
     print(f"  {c.BOLD}{tool_name}{c.RESET}")
     for label, cmd in methods:

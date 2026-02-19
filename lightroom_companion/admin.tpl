@@ -72,7 +72,7 @@
 
 <div class="lrc-wrap">
 
-  <h2>Lightroom Companion</h2>
+  <h2>Lightroom Companion <small style="font-size:0.55em; font-style:italic; font-weight:normal">v{$LRC_PLUGIN_VERSION}</small></h2>
 
   {* Tabsheet natif Piwigo *}
   {include file='tabsheet.tpl'}
@@ -143,21 +143,28 @@
       </tr>
     </table>
 
-    {if not $LRC_VIDEO_READY}
-      {if $LRC_CFG_WRITABLE}
-        <div class="lrc-action">
+    {if $LRC_CFG_WRITABLE}
+      <div class="lrc-action">
+        {if not $LRC_VIDEO_READY}
           <form method="post" action="{$LRC_ADMIN_URL}&tab=video">
             <input type="hidden" name="action" value="enable_video_support">
             <input type="hidden" name="pwg_token" value="{$PWG_TOKEN}">
             <input type="submit" class="submit" value="Enable Video Support">
           </form>
           <p class="lrc-note">Adds <code>upload_form_all_types = true</code> and video extensions (mp4, m4v, ogg, ogv, webm) to <code>local/config/config.inc.php</code>.</p>
-        </div>
-      {else}
-        <p class="lrc-err" style="margin-top:10px">Config file is not writable. Add manually to <code>local/config/config.inc.php</code>:</p>
-        <div class="lrc-pre">$conf['upload_form_all_types'] = true;
+        {elseif $LRC_COMPANION_BLOCK}
+          <form method="post" action="{$LRC_ADMIN_URL}&tab=video">
+            <input type="hidden" name="action" value="disable_video_support">
+            <input type="hidden" name="pwg_token" value="{$PWG_TOKEN}">
+            <input type="submit" class="submit" value="Disable Video Support" style="background:#c0392b">
+          </form>
+          <p class="lrc-note">Removes the Companion block from <code>local/config/config.inc.php</code>. Video uploads will no longer be allowed.</p>
+        {/if}
+      </div>
+    {elseif not $LRC_VIDEO_READY}
+      <p class="lrc-err" style="margin-top:10px">Config file is not writable. Add manually to <code>local/config/config.inc.php</code>:</p>
+      <div class="lrc-pre">$conf['upload_form_all_types'] = true;
 $conf['file_ext'] = array_merge($conf['picture_ext'], array('mp4', 'm4v', 'ogg', 'ogv', 'webm'));</div>
-      {/if}
     {/if}
 
     {* --- VideoJS plugin --- *}
@@ -277,6 +284,15 @@ $conf['file_ext'] = array_merge($conf['picture_ext'], array('mp4', 'm4v', 'ogg',
     <table class="lrc-table">
       <tr><td class="lrc-label">Version</td><td>{$LRC_PIWIGO_VER}</td></tr>
       <tr>
+        <td class="lrc-label">Guest theme</td>
+        <td>
+          <code>{$LRC_PUBLIC_THEME}</code>
+          {if $LRC_PARENT_THEME neq $LRC_PUBLIC_THEME}
+            <span class="lrc-note" style="margin-left:8px">&#8627; parent: <code>{$LRC_PARENT_THEME}</code></span>
+          {/if}
+        </td>
+      </tr>
+      <tr>
         <td class="lrc-label">Config file writable</td>
         <td>
           {if $LRC_CFG_WRITABLE}
@@ -289,5 +305,135 @@ $conf['file_ext'] = array_merge($conf['picture_ext'], array('mp4', 'm4v', 'ogg',
     </table>
 
   {/if}{* end tab server *}
+
+  {* ================================================================= *}
+  {* TAB SETTINGS                                                        *}
+  {* ================================================================= *}
+  {if $LRC_TAB eq 'settings'}
+
+    {if not $LRC_HAS_GD}
+      <div class="lrc-status-banner lrc-banner-err">
+        <div class="lrc-status-icon">&#33;</div>
+        <div class="lrc-status-text">
+          <strong class="lrc-err">GD library not available</strong>
+          <small>Thumbnail processing requires the PHP GD extension. Posters will be stored as-is.</small>
+        </div>
+      </div>
+    {/if}
+
+    <form method="post" action="{$LRC_ADMIN_URL}&tab=settings">
+      <input type="hidden" name="action" value="save_settings">
+      <input type="hidden" name="pwg_token" value="{$PWG_TOKEN}">
+
+      {* --- Thumbnail size --- *}
+      <div class="lrc-section">Video Thumbnail</div>
+      <table class="lrc-table">
+        <tr>
+          <td class="lrc-label">Max size (px)</td>
+          <td>
+            <input type="number" name="thumb_max_size" value="{$LRC_CFG.thumb_max_size}"
+                   min="50" max="1280" style="width:80px"> px
+            <span style="color:var(--lrc-color-note); font-size:0.87em; margin-left:8px">(longest side)</span>
+          </td>
+        </tr>
+        <tr>
+          <td class="lrc-label">No upscale</td>
+          <td>
+            <label>
+              <input type="checkbox" name="thumb_no_upscale" value="1"
+                     {if $LRC_CFG.thumb_no_upscale}checked{/if}>
+              Don't enlarge small images
+            </label>
+          </td>
+        </tr>
+      </table>
+
+      {* --- Film strip --- *}
+      <div class="lrc-section">Film Strip Effect</div>
+      <table class="lrc-table">
+        <tr>
+          <td class="lrc-label">35mm film border</td>
+          <td>
+            <label>
+              <input type="checkbox" name="film_strip" value="1"
+                     {if $LRC_CFG.film_strip}checked{/if}>
+              Add perforated film borders (square output)
+            </label>
+          </td>
+        </tr>
+      </table>
+      <p class="lrc-note">The thumbnail becomes square with black letterbox and 35mm-style sprocket holes on the sides.</p>
+
+      {* --- Overlays --- *}
+      <div class="lrc-section">Overlays</div>
+      <table class="lrc-table">
+        <tr>
+          <td class="lrc-label">Video icon (corner)</td>
+          <td>
+            <label>
+              <input type="checkbox" name="overlay_video_icon" value="1"
+                     {if $LRC_CFG.overlay_video_icon}checked{/if}
+                     {if not $LRC_HAS_VIDEO_ICON}disabled{/if}>
+              Show video file icon
+            </label>
+            {if not $LRC_HAS_VIDEO_ICON}
+              <span class="lrc-warn" style="font-size:0.87em; margin-left:8px">
+                (missing: <code>assets/video-icon.png</code>)
+              </span>
+            {/if}
+          </td>
+        </tr>
+        <tr>
+          <td class="lrc-label">Icon position</td>
+          <td>
+            <label>
+              <input type="radio" name="overlay_video_pos" value="bottom-right"
+                     {if $LRC_CFG.overlay_video_pos eq 'bottom-right'}checked{/if}>
+              Bottom-right
+            </label>
+            &nbsp;&nbsp;
+            <label>
+              <input type="radio" name="overlay_video_pos" value="bottom-left"
+                     {if $LRC_CFG.overlay_video_pos eq 'bottom-left'}checked{/if}>
+              Bottom-left
+            </label>
+          </td>
+        </tr>
+        <tr>
+          <td class="lrc-label">Play button (center)</td>
+          <td>
+            <label>
+              <input type="checkbox" name="overlay_play" value="1"
+                     {if $LRC_CFG.overlay_play}checked{/if}>
+              Show play button overlay
+            </label>
+            <span class="lrc-note" style="margin-left:8px; font-size:0.87em">drawn natively, no PNG needed</span>
+          </td>
+        </tr>
+        <tr>
+          <td class="lrc-label">Play button size</td>
+          <td>
+            <input type="number" name="overlay_play_size" min="5" max="50"
+                   value="{$LRC_CFG.overlay_play_size|default:20}" style="width:60px"> %
+            <span class="lrc-note" style="margin-left:6px">of the shortest side (5–50%)</span>
+          </td>
+        </tr>
+        <tr>
+          <td class="lrc-label">Play button opacity</td>
+          <td>
+            <input type="number" name="overlay_play_opacity" min="10" max="100"
+                   value="{$LRC_CFG.overlay_play_opacity|default:100}" style="width:60px"> %
+            <span class="lrc-note" style="margin-left:6px">transparency of the overlay (10–100%)</span>
+          </td>
+        </tr>
+      </table>
+      <p class="lrc-note">Place your custom PNG file (with transparency) in the <code>lightroom_companion/assets/</code> folder for the video icon overlay.</p>
+
+      <div class="lrc-action">
+        <input type="submit" class="submit" value="Save Settings">
+      </div>
+    </form>
+
+  {/if}{* end tab settings *}
 
 </div>
