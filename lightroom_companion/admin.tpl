@@ -94,50 +94,50 @@
       <div class="lrc-status-banner">
         <div class="lrc-status-icon">&#10003;</div>
         <div class="lrc-status-text">
-          <strong class="lrc-ok">Video support is fully active</strong>
-          <small>Upload enabled &amp; VideoJS plugin active — videos can be published from Lightroom.</small>
+          <strong class="lrc-ok">{'lrc_video_fully_active'|translate}</strong>
+          <small>{'lrc_video_fully_active_sub'|translate}</small>
         </div>
       </div>
     {else}
       <div class="lrc-status-banner lrc-banner-err">
         <div class="lrc-status-icon">&#33;</div>
         <div class="lrc-status-text">
-          <strong class="lrc-err">Video support is not fully configured</strong>
-          <small>Check the items below and fix each one.</small>
+          <strong class="lrc-err">{'lrc_video_not_configured'|translate}</strong>
+          <small>{'lrc_video_not_configured_sub'|translate}</small>
         </div>
       </div>
     {/if}
 
     {* --- Upload Piwigo --- *}
-    <div class="lrc-section">Video Upload (Piwigo)</div>
+    <div class="lrc-section">{'lrc_section_video_upload'|translate}</div>
     <table class="lrc-table">
       <tr>
-        <td class="lrc-label">Upload status</td>
+        <td class="lrc-label">{'lrc_upload_status'|translate}</td>
         <td>
           {if $LRC_VIDEO_READY}
-            <span class="lrc-ok">Ready</span>
+            <span class="lrc-ok">{'lrc_ready'|translate}</span>
           {else}
-            <span class="lrc-err">Not configured</span>
+            <span class="lrc-err">{'lrc_not_configured'|translate}</span>
           {/if}
         </td>
       </tr>
       <tr>
-        <td class="lrc-label">All file types</td>
+        <td class="lrc-label">{'lrc_all_file_types'|translate}</td>
         <td>
           {if $LRC_UPLOAD_ALL}
-            <span class="lrc-ok">Enabled</span>
+            <span class="lrc-ok">{'lrc_enabled'|translate}</span>
           {else}
-            <span class="lrc-err">Disabled</span>
+            <span class="lrc-err">{'lrc_disabled'|translate}</span>
           {/if}
         </td>
       </tr>
       <tr>
-        <td class="lrc-label">Video extensions</td>
+        <td class="lrc-label">{'lrc_video_extensions'|translate}</td>
         <td>
           {if $LRC_VIDEO_EXTS}
             {$LRC_VIDEO_EXTS}
           {else}
-            <span class="lrc-err">None configured</span>
+            <span class="lrc-err">{'lrc_none_configured'|translate}</span>
           {/if}
         </td>
       </tr>
@@ -149,53 +149,53 @@
           <form method="post" action="{$LRC_ADMIN_URL}&tab=video">
             <input type="hidden" name="action" value="enable_video_support">
             <input type="hidden" name="pwg_token" value="{$PWG_TOKEN}">
-            <input type="submit" class="submit" value="Enable Video Support">
+            <input type="submit" class="submit" value="{'lrc_enable_video'|translate}">
           </form>
-          <p class="lrc-note">Adds <code>upload_form_all_types = true</code> and video extensions (mp4, m4v, ogg, ogv, webm) to <code>local/config/config.inc.php</code>.</p>
+          <p class="lrc-note">{'lrc_enable_video_note'|translate}</p>
         {elseif $LRC_COMPANION_BLOCK}
           <form method="post" action="{$LRC_ADMIN_URL}&tab=video">
             <input type="hidden" name="action" value="disable_video_support">
             <input type="hidden" name="pwg_token" value="{$PWG_TOKEN}">
-            <input type="submit" class="submit" value="Disable Video Support" style="background:#c0392b">
+            <input type="submit" class="submit" value="{'lrc_disable_video'|translate}" style="background:#c0392b">
           </form>
-          <p class="lrc-note">Removes the Companion block from <code>local/config/config.inc.php</code>. Video uploads will no longer be allowed.</p>
+          <p class="lrc-note">{'lrc_disable_video_note'|translate}</p>
         {/if}
       </div>
     {elseif not $LRC_VIDEO_READY}
-      <p class="lrc-err" style="margin-top:10px">Config file is not writable. Add manually to <code>local/config/config.inc.php</code>:</p>
+      <p class="lrc-err" style="margin-top:10px">{'lrc_config_not_writable'|translate}</p>
       <div class="lrc-pre">$conf['upload_form_all_types'] = true;
 $conf['file_ext'] = array_merge($conf['picture_ext'], array('mp4', 'm4v', 'ogg', 'ogv', 'webm'));</div>
     {/if}
 
     {* --- VideoJS plugin --- *}
-    <div class="lrc-section">VideoJS Plugin</div>
+    <div class="lrc-section">{'lrc_section_videojs'|translate}</div>
     <table class="lrc-table">
       {if $LRC_VJS_INSTALLED}
         <tr>
-          <td class="lrc-label">Plugin</td>
+          <td class="lrc-label">{'lrc_plugin'|translate}</td>
           <td>{$LRC_VJS_NAME}</td>
         </tr>
         <tr>
-          <td class="lrc-label">Status</td>
+          <td class="lrc-label">{'lrc_status'|translate}</td>
           <td>
             {if $LRC_VJS_ACTIVE}
-              <span class="lrc-ok">Active</span>
+              <span class="lrc-ok">{'lrc_active'|translate}</span>
             {else}
-              <span class="lrc-warn">Installed but INACTIVE</span>
+              <span class="lrc-warn">{'lrc_installed_inactive'|translate}</span>
             {/if}
           </td>
         </tr>
       {else}
         <tr>
           <td class="lrc-label">VideoJS</td>
-          <td><span class="lrc-err">Not installed</span></td>
+          <td><span class="lrc-err">{'lrc_not_installed'|translate}</span></td>
         </tr>
       {/if}
     </table>
     {if not $LRC_VJS_INSTALLED}
-      <p class="lrc-note">Install and activate the VideoJS plugin from Piwigo administration for in-gallery video playback.</p>
+      <p class="lrc-note">{'lrc_videojs_install_note'|translate}</p>
     {elseif not $LRC_VJS_ACTIVE}
-      <p class="lrc-note">Activate VideoJS in Piwigo administration (Plugins menu) for video playback to work.</p>
+      <p class="lrc-note">{'lrc_videojs_activate_note'|translate}</p>
     {/if}
 
   {/if}{* end tab video *}
@@ -206,7 +206,7 @@ $conf['file_ext'] = array_merge($conf['picture_ext'], array('mp4', 'm4v', 'ogg',
   {if $LRC_TAB eq 'server'}
 
     {* --- CLI Tools --- *}
-    <div class="lrc-section">Video &amp; Media Tools</div>
+    <div class="lrc-section">{'lrc_section_media_tools'|translate}</div>
     <table class="lrc-table">
       <tr>
         <td class="lrc-label">FFmpeg</td>
@@ -226,26 +226,26 @@ $conf['file_ext'] = array_merge($conf['picture_ext'], array('mp4', 'm4v', 'ogg',
       </tr>
     </table>
     {if $LRC_FFMPEG_NO_TPL}
-      <p class="lrc-note">Without FFmpeg, videos will upload but Piwigo will not generate a custom thumbnail for them.</p>
+      <p class="lrc-note">{'lrc_ffmpeg_no_note'|translate}</p>
     {/if}
 
     {* --- Server & PHP --- *}
-    <div class="lrc-section">Server &amp; PHP</div>
+    <div class="lrc-section">{'lrc_section_server_php'|translate}</div>
     <table class="lrc-table">
-      <tr><td class="lrc-label">OS</td><td>{$LRC_OS}</td></tr>
-      <tr><td class="lrc-label">Web Server</td><td>{$LRC_WEBSERVER}</td></tr>
-      <tr><td class="lrc-label">PHP Version</td><td>{$LRC_PHP_VERSION}</td></tr>
+      <tr><td class="lrc-label">{'lrc_os'|translate}</td><td>{$LRC_OS}</td></tr>
+      <tr><td class="lrc-label">{'lrc_web_server'|translate}</td><td>{$LRC_WEBSERVER}</td></tr>
+      <tr><td class="lrc-label">{'lrc_php_version'|translate}</td><td>{$LRC_PHP_VERSION}</td></tr>
       <tr><td class="lrc-label">upload_max_filesize</td><td>{$LRC_PHP_UPLOAD}</td></tr>
       <tr><td class="lrc-label">post_max_size</td><td>{$LRC_PHP_POST}</td></tr>
       <tr><td class="lrc-label">memory_limit</td><td>{$LRC_PHP_MEM}</td></tr>
       <tr><td class="lrc-label">max_execution_time</td><td>{$LRC_PHP_MAXTIME}s</td></tr>
       <tr>
-        <td class="lrc-label">exec() available</td>
+        <td class="lrc-label">{'lrc_exec_available'|translate}</td>
         <td>
           {if $LRC_PHP_EXEC}
-            <span class="lrc-ok">Yes</span>
+            <span class="lrc-ok">{'lrc_yes'|translate}</span>
           {else}
-            <span class="lrc-err">No</span>
+            <span class="lrc-err">{'lrc_no'|translate}</span>
           {/if}
         </td>
       </tr>
@@ -255,7 +255,7 @@ $conf['file_ext'] = array_merge($conf['picture_ext'], array('mp4', 'm4v', 'ogg',
     {/if}
 
     {* --- Graphics --- *}
-    <div class="lrc-section">Graphics Libraries</div>
+    <div class="lrc-section">{'lrc_section_graphics'|translate}</div>
     <table class="lrc-table">
       <tr>
         <td class="lrc-label">GD</td>
@@ -263,7 +263,7 @@ $conf['file_ext'] = array_merge($conf['picture_ext'], array('mp4', 'm4v', 'ogg',
           {if $LRC_GD}
             <span class="lrc-ok">{$LRC_GD}</span>
           {else}
-            <span class="lrc-err">Not available</span>
+            <span class="lrc-err">{'lrc_not_available'|translate}</span>
           {/if}
         </td>
       </tr>
@@ -273,32 +273,32 @@ $conf['file_ext'] = array_merge($conf['picture_ext'], array('mp4', 'm4v', 'ogg',
           {if $LRC_IMAGICK}
             <span class="lrc-ok">{$LRC_IMAGICK}</span>
           {else}
-            Not available
+            {'lrc_not_available'|translate}
           {/if}
         </td>
       </tr>
     </table>
 
     {* --- Piwigo --- *}
-    <div class="lrc-section">Piwigo Gallery</div>
+    <div class="lrc-section">{'lrc_section_piwigo'|translate}</div>
     <table class="lrc-table">
-      <tr><td class="lrc-label">Version</td><td>{$LRC_PIWIGO_VER}</td></tr>
+      <tr><td class="lrc-label">{'lrc_version'|translate}</td><td>{$LRC_PIWIGO_VER}</td></tr>
       <tr>
-        <td class="lrc-label">Guest theme</td>
+        <td class="lrc-label">{'lrc_guest_theme'|translate}</td>
         <td>
           <code>{$LRC_PUBLIC_THEME}</code>
           {if $LRC_PARENT_THEME neq $LRC_PUBLIC_THEME}
-            <span class="lrc-note" style="margin-left:8px">&#8627; parent: <code>{$LRC_PARENT_THEME}</code></span>
+            <span class="lrc-note" style="margin-left:8px">&#8627; {'lrc_parent'|translate}: <code>{$LRC_PARENT_THEME}</code></span>
           {/if}
         </td>
       </tr>
       <tr>
-        <td class="lrc-label">Config file writable</td>
+        <td class="lrc-label">{'lrc_config_writable'|translate}</td>
         <td>
           {if $LRC_CFG_WRITABLE}
-            <span class="lrc-ok">Yes</span>
+            <span class="lrc-ok">{'lrc_yes'|translate}</span>
           {else}
-            <span class="lrc-err">No</span>
+            <span class="lrc-err">{'lrc_no'|translate}</span>
           {/if}
         </td>
       </tr>
@@ -315,8 +315,8 @@ $conf['file_ext'] = array_merge($conf['picture_ext'], array('mp4', 'm4v', 'ogg',
       <div class="lrc-status-banner lrc-banner-err">
         <div class="lrc-status-icon">&#33;</div>
         <div class="lrc-status-text">
-          <strong class="lrc-err">GD library not available</strong>
-          <small>Thumbnail processing requires the PHP GD extension. Posters will be stored as-is.</small>
+          <strong class="lrc-err">{'lrc_gd_not_available'|translate}</strong>
+          <small>{'lrc_gd_not_available_sub'|translate}</small>
         </div>
       </div>
     {/if}
@@ -326,111 +326,111 @@ $conf['file_ext'] = array_merge($conf['picture_ext'], array('mp4', 'm4v', 'ogg',
       <input type="hidden" name="pwg_token" value="{$PWG_TOKEN}">
 
       {* --- Thumbnail size --- *}
-      <div class="lrc-section">Video Thumbnail</div>
+      <div class="lrc-section">{'lrc_section_thumbnail'|translate}</div>
       <table class="lrc-table">
         <tr>
-          <td class="lrc-label">Max size (px)</td>
+          <td class="lrc-label">{'lrc_max_size'|translate}</td>
           <td>
             <input type="number" name="thumb_max_size" value="{$LRC_CFG.thumb_max_size}"
                    min="50" max="1280" style="width:80px"> px
-            <span style="color:var(--lrc-color-note); font-size:0.87em; margin-left:8px">(longest side)</span>
+            <span style="color:var(--lrc-color-note); font-size:0.87em; margin-left:8px">({'lrc_longest_side'|translate})</span>
           </td>
         </tr>
         <tr>
-          <td class="lrc-label">No upscale</td>
+          <td class="lrc-label">{'lrc_no_upscale'|translate}</td>
           <td>
             <label>
               <input type="checkbox" name="thumb_no_upscale" value="1"
                      {if $LRC_CFG.thumb_no_upscale}checked{/if}>
-              Don't enlarge small images
+              {'lrc_no_enlarge'|translate}
             </label>
           </td>
         </tr>
       </table>
 
       {* --- Film strip --- *}
-      <div class="lrc-section">Film Strip Effect</div>
+      <div class="lrc-section">{'lrc_section_filmstrip'|translate}</div>
       <table class="lrc-table">
         <tr>
-          <td class="lrc-label">35mm film border</td>
+          <td class="lrc-label">{'lrc_filmstrip_label'|translate}</td>
           <td>
             <label>
               <input type="checkbox" name="film_strip" value="1"
                      {if $LRC_CFG.film_strip}checked{/if}>
-              Add perforated film borders (square output)
+              {'lrc_filmstrip_option'|translate}
             </label>
           </td>
         </tr>
       </table>
-      <p class="lrc-note">The thumbnail becomes square with black letterbox and 35mm-style sprocket holes on the sides.</p>
+      <p class="lrc-note">{'lrc_filmstrip_note'|translate}</p>
 
       {* --- Overlays --- *}
-      <div class="lrc-section">Overlays</div>
+      <div class="lrc-section">{'lrc_section_overlays'|translate}</div>
       <table class="lrc-table">
         <tr>
-          <td class="lrc-label">Video icon (corner)</td>
+          <td class="lrc-label">{'lrc_video_icon'|translate}</td>
           <td>
             <label>
               <input type="checkbox" name="overlay_video_icon" value="1"
                      {if $LRC_CFG.overlay_video_icon}checked{/if}
                      {if not $LRC_HAS_VIDEO_ICON}disabled{/if}>
-              Show video file icon
+              {'lrc_video_icon_option'|translate}
             </label>
             {if not $LRC_HAS_VIDEO_ICON}
               <span class="lrc-warn" style="font-size:0.87em; margin-left:8px">
-                (missing: <code>assets/video-icon.png</code>)
+                ({'lrc_missing_asset'|translate}: <code>assets/video-icon.png</code>)
               </span>
             {/if}
           </td>
         </tr>
         <tr>
-          <td class="lrc-label">Icon position</td>
+          <td class="lrc-label">{'lrc_icon_position'|translate}</td>
           <td>
             <label>
               <input type="radio" name="overlay_video_pos" value="bottom-right"
                      {if $LRC_CFG.overlay_video_pos eq 'bottom-right'}checked{/if}>
-              Bottom-right
+              {'lrc_bottom_right'|translate}
             </label>
             &nbsp;&nbsp;
             <label>
               <input type="radio" name="overlay_video_pos" value="bottom-left"
                      {if $LRC_CFG.overlay_video_pos eq 'bottom-left'}checked{/if}>
-              Bottom-left
+              {'lrc_bottom_left'|translate}
             </label>
           </td>
         </tr>
         <tr>
-          <td class="lrc-label">Play button (center)</td>
+          <td class="lrc-label">{'lrc_play_button'|translate}</td>
           <td>
             <label>
               <input type="checkbox" name="overlay_play" value="1"
                      {if $LRC_CFG.overlay_play}checked{/if}>
-              Show play button overlay
+              {'lrc_play_button_option'|translate}
             </label>
-            <span class="lrc-note" style="margin-left:8px; font-size:0.87em">drawn natively, no PNG needed</span>
+            <span class="lrc-note" style="margin-left:8px; font-size:0.87em">{'lrc_play_native_note'|translate}</span>
           </td>
         </tr>
         <tr>
-          <td class="lrc-label">Play button size</td>
+          <td class="lrc-label">{'lrc_play_size'|translate}</td>
           <td>
             <input type="number" name="overlay_play_size" min="5" max="50"
                    value="{$LRC_CFG.overlay_play_size|default:20}" style="width:60px"> %
-            <span class="lrc-note" style="margin-left:6px">of the shortest side (5–50%)</span>
+            <span class="lrc-note" style="margin-left:6px">{'lrc_play_size_note'|translate}</span>
           </td>
         </tr>
         <tr>
-          <td class="lrc-label">Play button opacity</td>
+          <td class="lrc-label">{'lrc_play_opacity'|translate}</td>
           <td>
             <input type="number" name="overlay_play_opacity" min="10" max="100"
                    value="{$LRC_CFG.overlay_play_opacity|default:100}" style="width:60px"> %
-            <span class="lrc-note" style="margin-left:6px">transparency of the overlay (10–100%)</span>
+            <span class="lrc-note" style="margin-left:6px">{'lrc_play_opacity_note'|translate}</span>
           </td>
         </tr>
       </table>
-      <p class="lrc-note">Place your custom PNG file (with transparency) in the <code>lightroom_companion/assets/</code> folder for the video icon overlay.</p>
+      <p class="lrc-note">{'lrc_overlay_asset_note'|translate}</p>
 
       <div class="lrc-action">
-        <input type="submit" class="submit" value="Save Settings">
+        <input type="submit" class="submit" value="{'lrc_save_settings'|translate}">
       </div>
     </form>
 

@@ -1,7 +1,7 @@
 <?php
 /*
 Plugin Name: Lightroom Companion
-Version: 1.5.1
+Version: 1.6.0
 Description: Companion plugin for the PiwigoPublish Lightroom plugin. Exposes server diagnostics, provides automatic video upload configuration, extended video metadata storage, and includes an administration page.
 Plugin URI: https://piwigo.org/ext/extension_view.php?eid=1058
 Author: Gotcha
@@ -14,6 +14,8 @@ defined('PHPWG_ROOT_PATH') or die('Hacking attempt!');
 /**
  * Register admin menu entry and API methods
  */
+load_language('plugin.lang', dirname(__FILE__) . '/');
+
 add_event_handler('get_admin_plugin_menu_links', 'companion_admin_menu');
 add_event_handler('ws_add_methods', 'companion_add_methods');
 add_event_handler('init', 'companion_install');
@@ -714,19 +716,13 @@ function companion_picture_video_meta()
     ));
 
     // Injection strategy based on parent theme
+    // BDR uses {include} sub-templates → set_prefilter on sub-handles doesn't work
+    // because Smarty resolves them by filename, not by handle. Use JS injection for BDR.
     $parent = companion_get_parent_theme();
     switch ($parent)
     {
         case 'bootstrap_darkroom':
-            $layout = companion_get_bdr_layout();
-            if ($layout === 'sidebar')
-            {
-                $template->set_prefilter('picture', 'companion_inject_sidebar');
-            }
-            else
-            {
-                $template->set_prefilter('picture', 'companion_inject_cards');
-            }
+            companion_inject_bdr_js($template, $orig, $conv);
             break;
         case 'default':
         case 'elegant':
@@ -734,7 +730,6 @@ function companion_picture_video_meta()
             $template->set_prefilter('picture', 'companion_inject_default');
             break;
         default:
-            // Try BDR cards first, fall back to default if anchor not found
             $template->set_prefilter('picture', 'companion_inject_auto');
             break;
     }
@@ -789,35 +784,125 @@ function companion_get_bdr_layout()
     return 'cards';
 }
 
+/**
+ * BDR: inject video metadata via JavaScript.
+ * set_prefilter doesn't work on BDR sub-templates ({include file='...'})
+ * because Smarty resolves them by filename, not by Piwigo handle.
+ */
+function companion_inject_bdr_js($template, $orig, $conv)
+{
+    if (empty($orig) && empty($conv)) return;
+
+    $label_orig = l10n('lrc_video_original');
+    $label_conv = l10n('lrc_video_converted');
+
+    // Build HTML for cards layout (dl/dt/dd with Bootstrap grid)
+    $html_cards = '<dl class="row mb-0"><dt class="col-sm-6">' . $label_orig . '</dt>'
+        . '<dd class="col-sm-6">' . $orig . '</dd></dl>';
+    if (!empty($conv))
+    {
+        $html_cards .= '<dl class="row mb-0"><dt class="col-sm-6">' . $label_conv . '</dt>'
+            . '<dd class="col-sm-6">' . $conv . '</dd></dl>';
+    }
+
+    // Build HTML for sidebar layout (dt/dd)
+    $html_sidebar = '<dt>' . $label_orig . '</dt><dd>' . $orig . '</dd>';
+    if (!empty($conv))
+    {
+        $html_sidebar .= '<dt>' . $label_conv . '</dt><dd>' . $conv . '</dd>';
+    }
+
+    // Build HTML for tabs layout (tr/th/td)
+    $html_tabs = '<tr><th scope="row">' . $label_orig . '</th>'
+        . '<td>' . $orig . '</td></tr>';
+    if (!empty($conv))
+    {
+        $html_tabs .= '<tr><th scope="row">' . $label_conv . '</th>'
+            . '<td>' . $conv . '</td></tr>';
+    }
+
+    // json_encode produces a safe JS string literal (handles quotes, newlines, etc.)
+    $js_cards   = json_encode($html_cards);
+    $js_sidebar = json_encode($html_sidebar);
+    $js_tabs    = json_encode($html_tabs);
+
+    $js = <<<JS
+(function() {
+  var el;
+  // Cards layout
+  el = document.getElementById('full_exif_data');
+  if (el) { el.insertAdjacentHTML('afterbegin', $js_cards); return; }
+  // Sidebar layout
+  el = document.getElementById('metadata');
+  if (el) {
+    var d = document.createElement('div');
+    d.innerHTML = $js_sidebar;
+    el.insertBefore(d, el.firstChild);
+    return;
+  }
+  // Tabs layout
+  el = document.getElementById('tab_metadata');
+  if (el) {
+    var tb = el.querySelector('tbody');
+    if (tb) { tb.insertAdjacentHTML('afterbegin', $js_tabs); }
+  }
+})();
+JS;
+
+    $template->scriptLoader->add_inline($js, array('jquery'));
+}
+
 function companion_inject_cards($content, $smarty)
 {
     $search = '{if isset($VTK_VIDEO_ORIG)}';
-    // Already injected? Don't double-inject.
     if (strpos($content, $search) !== false) return $content;
 
+    $video_dl = '
+{if isset($VTK_VIDEO_ORIG)}
+          <dl class="row mb-0">
+            <dt class="col-sm-5">{\'lrc_video_original\'|translate}</dt>
+            <dd class="col-sm-7">{$VTK_VIDEO_ORIG}</dd>
+          </dl>
+          {if $VTK_VIDEO_CONV}
+          <dl class="row mb-0">
+            <dt class="col-sm-5">{\'lrc_video_converted\'|translate}</dt>
+            <dd class="col-sm-7">{$VTK_VIDEO_CONV}</dd>
+          </dl>
+          {/if}
+{/if}';
+
+    // BDR cards: inject at the beginning of full_exif_data (EXIF panel, right side)
+    $anchor = '<div id="full_exif_data"';
+    $pos = strpos($content, $anchor);
+    if ($pos !== false)
+    {
+        $end = strpos($content, '>', $pos);
+        if ($end !== false)
+        {
+            return substr($content, 0, $end + 1) . $video_dl . substr($content, $end + 1);
+        }
+    }
+
+    // Fallback: inject at beginning of infopanel-right (if full_exif_data not found)
+    $anchor = '<div id="infopanel-right"';
+    $pos = strpos($content, $anchor);
+    if ($pos !== false)
+    {
+        $end = strpos($content, '>', $pos);
+        if ($end !== false)
+        {
+            return substr($content, 0, $end + 1) . $video_dl . substr($content, $end + 1);
+        }
+    }
+
+    // Last fallback: inject at beginning of info-content
     $anchor = '<div id="info-content"';
     $pos = strpos($content, $anchor);
     if ($pos === false) return $content;
-
-    // Find end of this opening tag
     $end = strpos($content, '>', $pos);
     if ($end === false) return $content;
 
-    $inject = '
-{if isset($VTK_VIDEO_ORIG)}
-        <div id="VtkVideoInfo" class="imageInfo">
-          <dl class="row mb-0">
-            <dt class="col-sm-5">{\'Video (original)\'|translate}</dt>
-            <dd class="col-sm-7">{$VTK_VIDEO_ORIG}</dd>
-          </dl>
-          <dl class="row mb-0">
-            <dt class="col-sm-5">{\'Video (converted)\'|translate}</dt>
-            <dd class="col-sm-7">{$VTK_VIDEO_CONV}</dd>
-          </dl>
-        </div>
-{/if}';
-
-    return substr($content, 0, $end + 1) . $inject . substr($content, $end + 1);
+    return substr($content, 0, $end + 1) . $video_dl . substr($content, $end + 1);
 }
 
 function companion_inject_sidebar($content, $smarty)
@@ -825,24 +910,49 @@ function companion_inject_sidebar($content, $smarty)
     $search = '{if isset($VTK_VIDEO_ORIG)}';
     if (strpos($content, $search) !== false) return $content;
 
+    $video_dt = '
+{if isset($VTK_VIDEO_ORIG)}
+                <dt>{\'lrc_video_original\'|translate}</dt>
+                <dd>{$VTK_VIDEO_ORIG}</dd>
+                {if $VTK_VIDEO_CONV}
+                <dt>{\'lrc_video_converted\'|translate}</dt>
+                <dd>{$VTK_VIDEO_CONV}</dd>
+                {/if}
+{/if}';
+
+    // BDR sidebar: inject at beginning of metadata section
+    $anchor = '<div id="metadata"';
+    $pos = strpos($content, $anchor);
+    if ($pos !== false)
+    {
+        $end = strpos($content, '>', $pos);
+        if ($end !== false)
+        {
+            return substr($content, 0, $end + 1) . $video_dt . substr($content, $end + 1);
+        }
+    }
+
+    // Fallback: inject after {$INFO_FILE}
+    $anchor = '{$INFO_FILE}';
+    $pos = strpos($content, $anchor);
+    if ($pos !== false)
+    {
+        $dd_end = strpos($content, '</dd>', $pos);
+        if ($dd_end !== false)
+        {
+            $inject_pos = $dd_end + strlen('</dd>');
+            return substr($content, 0, $inject_pos) . $video_dt . substr($content, $inject_pos);
+        }
+    }
+
+    // Last fallback: inject at beginning of info-content
     $anchor = '<div id="info-content"';
     $pos = strpos($content, $anchor);
     if ($pos === false) return $content;
-
     $end = strpos($content, '>', $pos);
     if ($end === false) return $content;
 
-    $inject = '
-{if isset($VTK_VIDEO_ORIG)}
-            <div id="VtkVideoInfo" class="imageInfo">
-                <dt>{\'Video (original)\'|translate}</dt>
-                <dd>{$VTK_VIDEO_ORIG}</dd>
-                <dt>{\'Video (converted)\'|translate}</dt>
-                <dd>{$VTK_VIDEO_CONV}</dd>
-            </div>
-{/if}';
-
-    return substr($content, 0, $end + 1) . $inject . substr($content, $end + 1);
+    return substr($content, 0, $end + 1) . $video_dt . substr($content, $end + 1);
 }
 
 function companion_inject_default($content, $smarty)
@@ -850,34 +960,88 @@ function companion_inject_default($content, $smarty)
     $search = '{if isset($VTK_VIDEO_ORIG)}';
     if (strpos($content, $search) !== false) return $content;
 
+    $inject = '
+{if isset($VTK_VIDEO_ORIG)}
+  <div id="VtkVideoOrig" class="imageInfo">
+    <dt>{\'lrc_video_original\'|translate}</dt>
+    <dd>{$VTK_VIDEO_ORIG}</dd>
+  </div>
+  {if $VTK_VIDEO_CONV}
+  <div id="VtkVideoConv" class="imageInfo">
+    <dt>{\'lrc_video_converted\'|translate}</dt>
+    <dd>{$VTK_VIDEO_CONV}</dd>
+  </div>
+  {/if}
+{/if}';
+
     // Piwigo default/elegant/smartpocket: inject inside <dl id="standard" class="imageInfoTable">
     $anchor = '<dl id="standard" class="imageInfoTable">';
     $pos = strpos($content, $anchor);
     if ($pos === false) return $content;
 
     $inject_pos = $pos + strlen($anchor);
+    return substr($content, 0, $inject_pos) . $inject . substr($content, $inject_pos);
+}
+
+function companion_inject_tabs($content, $smarty)
+{
+    $search = '{if isset($VTK_VIDEO_ORIG)}';
+    if (strpos($content, $search) !== false) return $content;
 
     $inject = '
 {if isset($VTK_VIDEO_ORIG)}
-  <div id="VtkVideoOrig" class="imageInfo">
-    <dt>{\'Video (original)\'|translate}</dt>
-    <dd>{$VTK_VIDEO_ORIG}</dd>
-  </div>
-  <div id="VtkVideoConv" class="imageInfo">
-    <dt>{\'Video (converted)\'|translate}</dt>
-    <dd>{$VTK_VIDEO_CONV}</dd>
-  </div>
+          <tr>
+            <th scope="row">{\'lrc_video_original\'|translate}</th>
+            <td>{$VTK_VIDEO_ORIG}</td>
+          </tr>
+          {if $VTK_VIDEO_CONV}
+          <tr>
+            <th scope="row">{\'lrc_video_converted\'|translate}</th>
+            <td>{$VTK_VIDEO_CONV}</td>
+          </tr>
+          {/if}
 {/if}';
 
-    return substr($content, 0, $inject_pos) . $inject . substr($content, $inject_pos);
+    // BDR tabs: inject inside <div id="metadata"> table, at beginning of <tbody>
+    $anchor = '<div id="metadata"';
+    $pos = strpos($content, $anchor);
+    if ($pos !== false)
+    {
+        $tbody = strpos($content, '<tbody>', $pos);
+        if ($tbody !== false)
+        {
+            $inject_pos = $tbody + strlen('<tbody>');
+            return substr($content, 0, $inject_pos) . $inject . substr($content, $inject_pos);
+        }
+    }
+
+    // Fallback: inject inside tab_metadata panel
+    $anchor = '<div id="tab_metadata"';
+    $pos = strpos($content, $anchor);
+    if ($pos !== false)
+    {
+        $end = strpos($content, '>', $pos);
+        if ($end !== false)
+        {
+            return substr($content, 0, $end + 1) . $inject . substr($content, $end + 1);
+        }
+    }
+
+    return $content;
 }
 
 function companion_inject_auto($content, $smarty)
 {
-    // Try BDR cards anchor first
-    if (strpos($content, '<div id="info-content"') !== false)
+    // Try BDR cards (full_exif_data is specific to cards layout)
+    if (strpos($content, '<div id="full_exif_data"') !== false
+        || strpos($content, '<div id="infopanel-right"') !== false)
     {
         return companion_inject_cards($content, $smarty);
+    }
+    // Try BDR sidebar
+    if (strpos($content, '<div id="info-content"') !== false)
+    {
+        return companion_inject_sidebar($content, $smarty);
     }
     // Fallback to default theme anchor
     if (strpos($content, '<dl id="standard"') !== false)
@@ -890,39 +1054,52 @@ function companion_inject_auto($content, $smarty)
 
 function companion_format_video_line($row, $prefix)
 {
-    $parts = array();
+    $sep = ' | ';
+
+    // Line 1: resolution | fps
+    $line1 = array();
 
     $w = (int)($row[$prefix . '_width']  ?? 0);
     $h = (int)($row[$prefix . '_height'] ?? 0);
-    if ($w > 0 && $h > 0) $parts[] = $w . "\xc3\x97" . $h;
+    if ($w > 0 && $h > 0) $line1[] = $w . "\xc3\x97" . $h;
 
     $fps = (float)($row[$prefix . '_fps'] ?? 0);
-    if ($fps > 0) $parts[] = rtrim(rtrim(number_format($fps, 3, '.', ''), '0'), '.') . ' fps';
+    if ($fps > 0) $line1[] = rtrim(rtrim(number_format($fps, 3, '.', ''), '0'), '.') . '&nbsp;fps';
+
+    // Line 2: bitrate | codec | format | filesize
+    $line2 = array();
 
     $kbps = (int)($row[$prefix . '_bitrate'] ?? 0);
     if ($kbps > 0)
     {
-        $parts[] = $kbps >= 1000
-            ? '@' . number_format($kbps / 1000, 1) . ' Mbps'
-            : '@' . $kbps . ' kbps';
+        $line2[] = $kbps >= 1000
+            ? number_format($kbps / 1000, 1) . '&nbsp;Mbps'
+            : $kbps . '&nbsp;kbps';
     }
 
     $codec = trim($row[$prefix . '_codec'] ?? '');
-    if ($codec !== '') $parts[] = strtoupper($codec);
+    if ($codec !== '') $line2[] = strtoupper($codec);
 
     $fmt = trim($row[$prefix . '_format'] ?? '');
-    if ($fmt !== '') $parts[] = strtolower($fmt);
+    if ($fmt !== '') $line2[] = strtolower($fmt);
 
     $bytes = (int)($row[$prefix . '_filesize'] ?? 0);
     if ($bytes > 0)
     {
         $mb = $bytes / (1024 * 1024);
-        $parts[] = '(' . ($mb >= 1
-            ? number_format($mb, 0, ',', ' ') . ' Mo'
-            : number_format($bytes / 1024, 0, ',', ' ') . ' Ko') . ')';
+        $line2[] = $mb >= 1
+            ? number_format($mb, 0, ',', ' ') . '&nbsp;Mo'
+            : number_format($bytes / 1024, 0, ',', ' ') . '&nbsp;Ko';
     }
 
-    return implode('&ensp;&ensp;', $parts);
+    $result = implode($sep, $line1);
+    if (!empty($line2))
+    {
+        if (!empty($line1)) $result .= '<br>';
+        $result .= implode($sep, $line2);
+    }
+
+    return $result;
 }
 
 // =========================================================================

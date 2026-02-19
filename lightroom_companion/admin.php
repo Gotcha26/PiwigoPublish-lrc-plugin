@@ -6,14 +6,19 @@ include_once(PHPWG_ROOT_PATH . 'admin/include/tabsheet.class.php');
 global $template, $conf, $page;
 
 // =========================================================================
+//  Language
+// =========================================================================
+load_language('plugin.lang', dirname(__FILE__) . '/');
+
+// =========================================================================
 //  Tabs
 // =========================================================================
 $page['tab'] = isset($_GET['tab']) ? $_GET['tab'] : 'video';
 
 $tabsheet = new tabsheet();
-$tabsheet->add('video',    'Video',    get_admin_plugin_menu_link(dirname(__FILE__).'/admin.php') . '&tab=video');
-$tabsheet->add('server',   'Server',   get_admin_plugin_menu_link(dirname(__FILE__).'/admin.php') . '&tab=server');
-$tabsheet->add('settings', 'Settings', get_admin_plugin_menu_link(dirname(__FILE__).'/admin.php') . '&tab=settings');
+$tabsheet->add('video',    l10n('lrc_tab_video'),    get_admin_plugin_menu_link(dirname(__FILE__).'/admin.php') . '&tab=video');
+$tabsheet->add('server',   l10n('lrc_tab_server'),   get_admin_plugin_menu_link(dirname(__FILE__).'/admin.php') . '&tab=server');
+$tabsheet->add('settings', l10n('lrc_tab_settings'), get_admin_plugin_menu_link(dirname(__FILE__).'/admin.php') . '&tab=settings');
 $tabsheet->select($page['tab']);
 $tabsheet->assign();
 
@@ -63,7 +68,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_settings')
     $conf['companion_config'] = json_encode($new_config);
 
     $action_status  = 'ok';
-    $action_message = 'Settings saved.';
+    $action_message = l10n('lrc_settings_saved');
 }
 
 // =========================================================================
@@ -217,7 +222,7 @@ $template->assign(array(
     'LRC_PHP_POST'       => $php['post_max_size'],
     'LRC_PHP_MAXTIME'    => $php['max_execution_time'],
     'LRC_PHP_EXEC'       => $exec_available,
-    'LRC_PHP_EXEC_NOTE'  => $exec_available ? '' : 'exec() is disabled — contact your hosting provider',
+    'LRC_PHP_EXEC_NOTE'  => $exec_available ? '' : l10n('lrc_exec_disabled_note'),
 
     // Graphics
     'LRC_GD'             => $gfx_gd,
