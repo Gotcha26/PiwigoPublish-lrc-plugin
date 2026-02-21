@@ -1,7 +1,8 @@
 # Changelog
-## [20260218.33] - 2026-02-18
+## [20260221.33] - 2026-02-21
 ### Fixed
 Fix #52 New "private" album aren't private
+Fix #57 Problem transferring album descriptions to Piwigo in LrC 15.2
 ### Added
 GPS coordinates can now be sent to Piwigo without republishing image - via Send Metadata to Piwigo for Selected Photos option
 
