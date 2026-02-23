@@ -1431,16 +1431,37 @@ function PiwigoAPI.getInfos(propertyTable)
     end
     local getResponse = httpGet(propertyTable.pwurl, Params, headers)
     if getResponse.errorMessage or (not getResponse.response) then
-        LrDialogs.message("Cannot get user status from Piwigo - " .. (getResponse.errorMessage or "Unknown error"))
+        log:info("PiwigoAPI.getInfos - Params\n" .. utils.serialiseVar(Params))
+        log:info("PiwigoAPI.getInfos - headers\n" .. utils.serialiseVar(headers))
+        log:info("PiwigoAPI.getInfos - getResponse\n" .. utils.serialiseVar(getResponse))
+        LrDialogs.message("PiwigoAPI.getInfos - Cannot get host information from Piwigo - " ..
+        (getResponse.errorMessage or "Unknown error"))
         return false
     end
-    if getResponse.stat == "ok" then
+
+    if getResponse.status == "ok" then
         rtnStatus.status = true
-        rtnStatus.result = getResponse.result.infos
+        local apiResult = getResponse.response.result
+        -- pwg.getInfos returns a PwgNamedArray: {infos: [{name, value}, ...]}
+        -- Try both structures
+        if type(apiResult) == "table" then
+            if apiResult.infos then
+                rtnStatus.result = apiResult.infos
+            elseif #apiResult > 0 then
+                rtnStatus.result = apiResult
+            else
+                rtnStatus.result = apiResult
+            end
+        end
     else
-        rtnStatus.message = "Cannot get host information from  Piwigo - " ..
-            ((getResponse.stat .. " - Error" .. getResponse.err .. "- " .. getResponse.errorMessage) or "Unknown error")
+        log:info("PiwigoAPI.getInfos - Params\n" .. utils.serialiseVar(Params))
+        log:info("PiwigoAPI.getInfos - headers\n" .. utils.serialiseVar(headers))
+        log:info("PiwigoAPI.getInfos - getResponse\n" .. utils.serialiseVar(getResponse))
+        rtnStatus.message = "Cannot get host information from Piwigo - " ..
+            ((getResponse.status .. " - " .. (getResponse.errorMessage or "Unknown error")) or "Unknown error")
     end
+
+
     return rtnStatus
 end
 
@@ -3065,6 +3086,118 @@ function PiwigoAPI.createHeadersForMultipartPut(propertyTable, boundary, length)
         field = 'Content-Length',
         value = length
     } }
+end
+
+-- *************************************************
+function PiwigoAPI.getServerVideoSupport(propertyTable)
+    -- Check server capabilities for video support
+    -- Returns { status, piwigoVersion, videoJsInstalled, videoJsActive, serverInfos }
+    log:info("PiwigoAPI.getServerVideoSupport")
+    local result = {
+        status = false,
+        piwigoVersion = propertyTable.pwVersion or "unknown",
+        videoJsInstalled = false,
+        videoJsActive = false,
+        serverInfos = {},
+    }
+
+    -- 1. Get server infos (photo/album counts etc.)
+    local infosResult = PiwigoAPI.getInfos(propertyTable)
+    if infosResult.status and infosResult.result then
+        -- pwg.getInfos returns a named array of {name, value} items
+        for _, item in ipairs(infosResult.result) do
+            if item.name and item.value then
+                result.serverInfos[item.name] = item.value
+            end
+        end
+    end
+
+    -- 2. Check for VideoJS plugin via pwg.plugins.getList
+    local pluginParams = { {
+        name = "method",
+        value = "pwg.plugins.getList"
+    } }
+    local headers = {}
+    if propertyTable.cookieHeader ~= nil then
+        headers = {
+            ["Cookie"] = propertyTable.cookieHeader
+        }
+    end
+    local getResponse = httpGet(propertyTable.pwurl, pluginParams, headers)
+    if getResponse.status == "ok" and getResponse.response and getResponse.response.result then
+        -- pwg.plugins.getList may return plugins under .plugins key or directly as result
+        local responseResult = getResponse.response.result
+        log:info("PiwigoAPI.getServerVideoSupport - plugin list response keys: " ..
+            utils.serialiseVar(responseResult))
+
+        -- Try to find the plugins array in various possible structures
+        local plugins = nil
+        if type(responseResult) == "table" then
+            if responseResult.plugins and type(responseResult.plugins) == "table" then
+                plugins = responseResult.plugins
+            elseif #responseResult > 0 then
+                -- result is directly an array of plugins
+                plugins = responseResult
+            end
+        end
+
+        if plugins then
+            for _, plugin in ipairs(plugins) do
+                if type(plugin) == "table" then
+                    local pluginId = tostring(plugin.id or "")
+                    local pluginName = tostring(plugin.name or "")
+                    -- Match on id or name, covering "piwigo-videojs", "videojs", "VideoJS", etc.
+                    local idLower = pluginId:lower()
+                    local nameLower = pluginName:lower()
+                    if idLower:find("videojs") or idLower:find("video_js")
+                        or nameLower:find("videojs") or nameLower:find("video_js") then
+                        result.videoJsInstalled = true
+                        local state = plugin.state and tostring(plugin.state) or "unknown"
+                        result.videoJsActive = (state == "active")
+                        result.videoJsName = plugin.name or pluginId
+                        log:info("PiwigoAPI.getServerVideoSupport - VideoJS plugin found: id=" ..
+                            pluginId .. " name=" .. pluginName .. " state=" .. state)
+                        break
+                    end
+                end
+            end
+            if not result.videoJsInstalled then
+                log:info("PiwigoAPI.getServerVideoSupport - scanned " .. #plugins ..
+                    " plugins, VideoJS not found")
+            end
+        else
+            log:info("PiwigoAPI.getServerVideoSupport - unexpected plugin list structure")
+        end
+    else
+        log:info("PiwigoAPI.getServerVideoSupport - cannot retrieve plugin list: " ..
+            (getResponse.errorMessage or "unknown error"))
+    end
+
+    -- 3. Get detailed server config via pwg.companion.getConfig (PiwigoPublish Companion plugin)
+    result.serverConfig = nil
+    result.companionAvailable = false
+    local configParams = { {
+        name = "method",
+        value = "pwg.companion.getConfig"
+    } }
+    local cfgHeaders = {}
+    if propertyTable.cookieHeader ~= nil then
+        cfgHeaders = {
+            ["Cookie"] = propertyTable.cookieHeader
+        }
+    end
+    local cfgResponse = httpGet(propertyTable.pwurl, configParams, cfgHeaders)
+    if cfgResponse.status == "ok" and cfgResponse.response and cfgResponse.response.result then
+        result.serverConfig = cfgResponse.response.result
+        result.companionAvailable = true
+        log:info("PiwigoAPI.getServerVideoSupport - companion plugin detected, config retrieved")
+    else
+        log:info("PiwigoAPI.getServerVideoSupport - serverinfo plugin not available: " ..
+            (cfgResponse.errorMessage or "unknown error"))
+    end
+
+    result.status = true
+    return result
 end
 
 -- *************************************************
