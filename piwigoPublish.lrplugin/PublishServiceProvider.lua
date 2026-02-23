@@ -37,7 +37,11 @@ return {
 
 
 	-- Behaviour Settings
-	allowFileFormats = { "JPEG", "PNG" },
+	
+	-- Piwigo supports .jpg, .jpeg, .png, .gif, .webp, .heic
+	-- of these, LrC can only export JPEG and PNG, so we limit to those formats in the publish dialog.
+	allowFileFormats = { "JPEG", "PNG"},
+	
 	allowColorSpaces = nil,
 	canExportVideo = false,
 	supportsCustomSortOrder = false,
