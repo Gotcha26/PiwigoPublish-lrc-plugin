@@ -466,7 +466,7 @@ local function prefsDialog(f, propertyTable)
 					end,
 				},
 				f:static_text {
-					title = "Show a summary of all albums with photo counts\n(published, modified, new to publish)",
+					title = "Show a summary of all albums with photo counts (published, modified, new to publish)",
 					font = "<system>",
 					alignment = 'left',
 					tooltip = "Display a summary dialog listing all albums and their photo status counts"
