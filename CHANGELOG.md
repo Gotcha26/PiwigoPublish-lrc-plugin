@@ -1,4 +1,9 @@
 # Changelog
+## [20269999.99]
+### Added
+Updated Plugin-Manager screen
+
+
 ## [20260221.33] - 2026-02-21
 ### Fixed
 Fix #52 New "private" album aren't private
