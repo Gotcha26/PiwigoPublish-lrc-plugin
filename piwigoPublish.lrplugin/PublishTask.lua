@@ -285,6 +285,13 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
                         LrDialogs.message("Unable to set metadata for uploaded photo - " .. callStatus.statusMsg)
                     end
                 else
+                    log:info("Upload failed for photo " .. lrPhoto:getFormattedMetadata("fileName"))
+                    log:info("Upload failed - renditionSettings\n" .. utils.serialiseVar(renditionParams))
+                    log:info("Upload failed - metaData\n" .. utils.serialiseVar(metaData))
+                    log:info("Upload failed - propertyTable\n" .. utils.serialiseVar(propertyTable))
+                    log:info("Upload failed - callStatus\n" .. utils.serialiseVar(callStatus))
+                    log:info("Upload failed - pathOrMessage\n" .. tostring(pathOrMessage))
+
                     rendition:uploadFailed(callStatus.message or "Upload failed")
                 end
 
