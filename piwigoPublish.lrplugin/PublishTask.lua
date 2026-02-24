@@ -296,6 +296,8 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
                     log:info("Upload failed - callStatus\n" .. utils.serialiseVar(callStatus))
                     log:info("Upload failed - pathOrMessage\n" .. tostring(pathOrMessage))
 
+                    --[[
+                    debug code for issue 17 - preserve file that failed to upload and create debug log with details of upload to allow investigation of issue
                     local debugDir = LrPathUtils.child(LrPathUtils.getStandardFilePath('desktop'),
                         "PiwigoPublishDebugIssue17")
                     LrFileUtils.createAllDirectories(debugDir)
@@ -312,9 +314,8 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
                     debugFile:write("CallStatus:\n" .. utils.serialiseVar(callStatus) .. "\n")
                     debugFile:write("PathOrMessage:\n" .. tostring(pathOrMessage) .. "\n")
                     debugFile:close()
-
                     log:warn("DEBUG: preserved failed upload file to " .. debugPath)
-
+]]
                     rendition:uploadFailed(callStatus.message or "Upload failed")
                 end
 
