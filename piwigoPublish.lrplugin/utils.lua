@@ -22,6 +22,39 @@
 
 
 local utils = {}
+-- *************************************************
+function utils.anonymisePropertyTable(propertyTable)
+    -- return copy of property table with sensitive data removed (for logging etc)
+    local ptCopy = propertyTable
+    ptCopy.userPW = "****"
+    ptCopy.userName = "****"
+    ptCopy.host = "****"
+    ptCopy.pwurl = "****"
+    ptCopy.cookieHeader = "****"
+    ptCopy.SessionCookie = "**** "
+    ptCopy.token = "****"
+    ptCopy.cookies = "****"
+    ptCopy.tagTable = nil
+    ptCopy._tagIndex = nil
+    return ptCopy
+end
+
+-- *************************************************
+function utils.anonymiseRenditionParams(renditionParams)
+    -- return copy of renditionParams with sensitive data removed (for logging etc)
+    local rpCopy = renditionParams
+    rpCopy.exportContext.propertyTable.userPW = "****"
+    rpCopy.exportContext.propertyTable.userName = "****"
+    rpCopy.exportContext.propertyTable.host = "****"
+    rpCopy.exportContext.propertyTable.pwurl = "****"
+    rpCopy.exportContext.propertyTable.cookieHeader = "****"
+    rpCopy.exportContext.propertyTable.SessionCookie = "**** "
+    rpCopy.exportContext.propertyTable.token = "****"
+    rpCopy.exportContext.propertyTable.cookies = "****"
+    rpCopy.exportContext.propertyTable.tagTable = nil
+    rpCopy.exportContext.propertyTable._tagIndex = nil
+    return rpCopy
+end
 
 -- *************************************************
 function utils.stripHtml(s)

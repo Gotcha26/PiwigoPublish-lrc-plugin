@@ -89,13 +89,13 @@ local function SetAlbumCover()
     local thisPubPhoto = utils.findPhotoInCollectionSet(useSource, selPhoto)
     if not thisPubPhoto then
         LrDialogs.message(
-        "PiwigoAPI.setAlbumCover - Can't find this photo in collection set or collections - has it been published?", "",
+        "PWSetAlbumCover - Can't find this photo in collection set or collections - has it been published?", "",
             "warning")
         return false
     end
     local remoteId = thisPubPhoto:getRemoteId()
     if not remoteId or remoteId == "" then
-        LrDialogs.message("PiwigoAPI.setAlbumCover - Can't find Piwigo photo ID for this photo - has it been published?", "", "warning")
+        LrDialogs.message("PWSetAlbumCover - Can't find Piwigo photo ID for this photo - has it been published?", "", "warning")
         return false
     end
 

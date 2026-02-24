@@ -38,7 +38,8 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
     local publishService = publishedCollection:getService()
     local rv
     if not publishService then
-        log:info('PublishTask.processRenderedPhotos - publishSettings:\n' .. utils.serialiseVar(propertyTable))
+        log:info('PublishTask.processRenderedPhotos - propertyTable:\n' ..
+        utils.serialiseVar(utils.anonymisePropertyTable(propertyTable)))
         LrErrors.throwUserError('Publish photos to Piwigo - cannot connect find publishService')
         return nil
     end
@@ -77,7 +78,8 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
     if not (propertyTable.Connected) then
         rv = PiwigoAPI.login(propertyTable)
         if not rv then
-            log:info('PublishTask.processRenderedPhotos - publishSettings:\n' .. utils.serialiseVar(propertyTable))
+            log:info('PublishTask.processRenderedPhotos - propertyTable:\n' ..
+            utils.serialiseVar(utils.anonymisePropertyTable(propertyTable)))
             PWStatusManager.setPiwigoBusy(publishService, false)
             LrErrors.throwUserError('Publish photos to Piwigo - cannot connect to piwigo at ' .. propertyTable.host)
             return nil
@@ -264,8 +266,6 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
                     end
 
                     -- store / update custom metadata
-
-
                     PiwigoAPI.storeMetaData(catalog, lrPhoto, pluginData)
 
                     -- photo was uploaded with keywords included, but existing keywords aren't replaced by this process,
@@ -285,12 +285,35 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
                         LrDialogs.message("Unable to set metadata for uploaded photo - " .. callStatus.statusMsg)
                     end
                 else
-                    log:info("Upload failed for photo " .. lrPhoto:getFormattedMetadata("fileName"))
-                    log:info("Upload failed - renditionSettings\n" .. utils.serialiseVar(renditionParams))
-                    log:info("Upload failed - metaData\n" .. utils.serialiseVar(metaData))
-                    log:info("Upload failed - propertyTable\n" .. utils.serialiseVar(propertyTable))
+                    local sourcePhotoName = lrPhoto:getFormattedMetadata("fileName")
+                    local anonymiseRenditionParams = utils.anonymiseRenditionParams(renditionParams)
+                    local expRenditionParams = utils.serialiseVar(anonymiseRenditionParams)
+                    local expMetaData = utils.serialiseVar(metaData)
+                    log:info("Upload failed for photo: " .. sourcePhotoName)
+                    log:info("Upload failed - renditionParams\n" .. expRenditionParams)
+                    log:info("Upload failed - metaData\n" .. expMetaData)
+                    log:info("Upload failed - propertyTable\n" .. utils.serialiseVar(utils.anonymisePropertyTable(propertyTable)))
                     log:info("Upload failed - callStatus\n" .. utils.serialiseVar(callStatus))
                     log:info("Upload failed - pathOrMessage\n" .. tostring(pathOrMessage))
+
+                    local debugDir = LrPathUtils.child(LrPathUtils.getStandardFilePath('desktop'),
+                        "PiwigoPublishDebugIssue17")
+                    LrFileUtils.createAllDirectories(debugDir)
+                    local leafName = LrPathUtils.leafName(pathOrMessage)
+                    local debugPath = LrPathUtils.child(debugDir, leafName)
+                    LrFileUtils.copy(pathOrMessage, debugPath)
+
+                    local debugFileName = debugPath .. "_debug.txt"
+                    local debugFile = io.open(debugFileName, "w")
+                    debugFile:write("Upload failed for photo: " .. sourcePhotoName .. "\n")
+                    debugFile:write("Rendition params:\n" .. expRenditionParams .. "\n")
+                    debugFile:write("Metadata:\n" .. expMetaData .. "\n")
+                    debugFile:write("PropertyTable:\n" .. utils.serialiseVar(utils.anonymisePropertyTable(propertyTable)) .. "\n")
+                    debugFile:write("CallStatus:\n" .. utils.serialiseVar(callStatus) .. "\n")
+                    debugFile:write("PathOrMessage:\n" .. tostring(pathOrMessage) .. "\n")
+                    debugFile:close()
+
+                    log:warn("DEBUG: preserved failed upload file to " .. debugPath)
 
                     rendition:uploadFailed(callStatus.message or "Upload failed")
                 end
@@ -377,7 +400,7 @@ function PublishTask.deletePhotosFromPublishedCollection(publishSettings, arrayO
     local publishedPhotos = publishedCollection:getPublishedPhotos()
     local publishService = publishedCollection:getService()
     if not publishService then
-        log:info('deletePhotosFromPublishedCollection - publishSettings:\n' .. utils.serialiseVar(publishSettings))
+        log:info('deletePhotosFromPublishedCollection - publishSettings:\n' .. utils.serialiseVar(utils.anonymisePropertyTable(publishSettings)))
         LrErrors.throwUserError('Publish photos to Piwigo - cannot connect find publishService')
         return nil
     end
@@ -494,7 +517,7 @@ function PublishTask.getCommentsFromPublishedCollection(publishSettings, arrayOf
     local rv, publishService = PiwigoAPI.getPublishService(publishSettings)
     if not (publishService) or not (rv) then
         log:info('PublishTask.getCommentsFromPublishedCollection - publishSettings:\n' ..
-            utils.serialiseVar(publishSettings))
+            utils.serialiseVar(utils.anonymisePropertyTable(publishSettings)))
         LrErrors.throwUserError('PublishTask.getCommentsFromPublishedCollection - cannot find publishService')
         return nil
     end
@@ -956,7 +979,7 @@ function PublishTask.updateCollectionSettings(publishSettings, info)
 
 
     if not publishService then
-        log:info('updateCollectionSettings - publishSettings:\n' .. utils.serialiseVar(publishSettings))
+        log:info('updateCollectionSettings - publishSettings:\n' .. utils.serialiseVar(utils.anonymisePropertyTable(publishSettings)))
         LrErrors.throwUserError('updateCollectionSettings - cannot connect find publishService')
         return nil
     end
@@ -1167,7 +1190,7 @@ function PublishTask.updateCollectionSetSettings(publishSettings, info)
     local publishService = info.publishService
 
     if not publishService then
-        log:info('updateCollectionSettings - publishSettings:\n' .. utils.serialiseVar(publishSettings))
+        log:info('updateCollectionSettings - publishSettings:\n' .. utils.serialiseVar(utils.anonymisePropertyTable(publishSettings)))
         LrErrors.throwUserError('updateCollectionSettings - cannot connect find publishService')
         return nil
     end
@@ -1264,7 +1287,7 @@ function PublishTask.reparentPublishedCollection(publishSettings, info)
 
     local publishService = info.publishService
     if not publishService then
-        log:info('reparentPublishedCollection - publishSettings:\n' .. utils.serialiseVar(publishSettings))
+        log:info('reparentPublishedCollection - publishSettings:\n' .. utils.serialiseVar(utils.anonymisePropertyTable(publishSettings)))
         LrErrors.throwUserError('reparentPublishedCollection - cannot connect find publishService')
         return nil
     end
@@ -1316,7 +1339,7 @@ function PublishTask.renamePublishedCollection(publishSettings, info)
     -- called for both collections and collectionsets
     local publishService = info.publishService
     if not publishService then
-        log:info('renamePublishedCollection - publishSettings:\n' .. utils.serialiseVar(publishSettings))
+        log:info('renamePublishedCollection - publishSettings:\n' .. utils.serialiseVar(utils.anonymisePropertyTable(publishSettings)))
         LrErrors.throwUserError('renamePublishedCollection - cannot connect find publishService')
         return nil
     end
@@ -1398,7 +1421,7 @@ function PublishTask.deletePublishedCollection(publishSettings, info)
     local publishService = info.publishService
     local publishCollection = info.publishedCollection
     if not publishService then
-        log:info('deletePublishedCollection - publishSettings:\n' .. utils.serialiseVar(publishSettings))
+        log:info('deletePublishedCollection - publishSettings:\n' .. utils.serialiseVar(utils.anonymisePropertyTable(publishSettings)))
         LrErrors.throwUserError('deletePublishedCollection - cannot connect find publishService')
         return nil
     end

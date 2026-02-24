@@ -2523,7 +2523,7 @@ function PiwigoAPI.deletePhoto(propertyTable, pwCatID, pwImageID, callStatus)
             callStatus.status = true
             callStatus.statusMsg = ""
         else
-            log:info("PiwigoAPI.deletePhoto - propertyTable \n " .. utils.serialiseVar(propertyTable))
+            log:info("PiwigoAPI.deletePhoto - propertyTable \n " .. utils.serialiseVar(utils.anonymisePropertyTable(propertyTable)))
             log:info("PiwigoAPI.deletePhoto - params \n" .. utils.serialiseVar(params))
             log:info("PiwigoAPI.deletePhoto - httpResponse \n" .. utils.serialiseVar(httpResponse))
             log:info("PiwigoAPI.deletePhoto - httpHeaders \n" .. utils.serialiseVar(httpHeaders))
@@ -2531,7 +2531,7 @@ function PiwigoAPI.deletePhoto(propertyTable, pwCatID, pwImageID, callStatus)
             callStatus.statusMsg = body.message or ""
         end
     else
-        log:info("PiwigoAPI.deletePhoto - propertyTable \n " .. utils.serialiseVar(propertyTable))
+        log:info("PiwigoAPI.deletePhoto - propertyTable \n " .. utils.serialiseVar(utils.anonymisePropertyTable(propertyTable)))
         log:info("PiwigoAPI.deletePhoto - params \n" .. utils.serialiseVar(params))
         log:info("PiwigoAPI.deletePhoto - httpResponse \n" .. utils.serialiseVar(httpResponse))
         log:info("PiwigoAPI.deletePhoto - httpHeaders \n" .. utils.serialiseVar(httpHeaders))
@@ -2635,7 +2635,7 @@ function PiwigoAPI.addComment(publishSettings, metaData)
     -- get antispam token from image details (unique for each image)
     local rtnStatus = PiwigoAPI.checkPhoto(publishSettings, metaData.remoteId)
     if not rtnStatus.status then
-        log:info("PiwigoAPI.addComment - unanble to retrieve token\n" .. utils.serialiseVar(publishSettings))
+        log:info("PiwigoAPI.addComment - unanble to retrieve token\n" ..  utils.serialiseVar(utils.anonymisePropertyTable(publishSettings)))
         return false
     end
     local imageDets = rtnStatus.imageDets
@@ -2658,11 +2658,11 @@ function PiwigoAPI.addComment(publishSettings, metaData)
         return false
     end
     if utils.nilOrEmpty(author) then
-        log:info("PiwigoAPI.addComment - missing author\n" .. utils.serialiseVar(publishSettings))
+        log:info("PiwigoAPI.addComment - missing author\n" ..  utils.serialiseVar(utils.anonymisePropertyTable(publishSettings)))
         return false
     end
     if utils.nilOrEmpty(key) then
-        log:info("PiwigoAPI.addComment - missing key\n" .. utils.serialiseVar(publishSettings))
+        log:info("PiwigoAPI.addComment - missing key\n" ..  utils.serialiseVar(utils.anonymisePropertyTable(publishSettings)))
         return false
     end
     -- Piwigo antispam forces a delay between the key being created and used
@@ -2759,7 +2759,7 @@ function PiwigoAPI.setAlbumCover(publishService)
     log:info("publishservice" .. publishService:getName())
     local catalog = LrApplication.activeCatalog()
     local publishSettings = publishService:getPublishSettings()
-    log:info("publishSettings\n" .. utils.serialiseVar(publishSettings))
+    log:info("publishSettings\n" ..  utils.serialiseVar(utils.anonymisePropertyTable(publishSettings)))
 
     if not publishSettings then
         LrDialogs.message("PiwigoAPI.setAlbumCover - Can't find PublishSettings for this publish collection", "",
