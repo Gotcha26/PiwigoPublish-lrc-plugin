@@ -107,6 +107,8 @@ local function SendMetadata()
         metaData = utils.getPhotoMetadata(publishSettings, lrPhoto)
         metaData.Remoteid = remoteId
 
+        -- get keyword filters from publishSettings and build include / exclude patterns
+
         callStatus = PiwigoAPI.updateMetadata(publishSettings, lrPhoto, metaData)
         if not callStatus.status then
             LrDialogs.message("Unable to set metadata for uploaded photo - " .. callStatus.statusMsg)

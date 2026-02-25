@@ -39,7 +39,7 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
     local rv
     if not publishService then
         log:info('PublishTask.processRenderedPhotos - propertyTable:\n' ..
-        utils.serialiseVar(utils.anonymisePropertyTable(propertyTable)))
+            utils.serialiseVar(utils.anonymisePropertyTable(propertyTable)))
         LrErrors.throwUserError('Publish photos to Piwigo - cannot connect find publishService')
         return nil
     end
@@ -79,7 +79,7 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
         rv = PiwigoAPI.login(propertyTable)
         if not rv then
             log:info('PublishTask.processRenderedPhotos - propertyTable:\n' ..
-            utils.serialiseVar(utils.anonymisePropertyTable(propertyTable)))
+                utils.serialiseVar(utils.anonymisePropertyTable(propertyTable)))
             PWStatusManager.setPiwigoBusy(publishService, false)
             LrErrors.throwUserError('Publish photos to Piwigo - cannot connect to piwigo at ' .. propertyTable.host)
             return nil
@@ -114,6 +114,7 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
             return nil
         end
     end
+
     if utils.nilOrEmpty(checkCats) or not (albumId) then
         -- create missing album on piwigo (may happen if album is deleted directly on Piwigo rather than via this plugin, or if smartcollectionimport is run)
         local metaData = {}
@@ -134,6 +135,26 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
             return nil
         end
     end
+
+    -- Keyword filter setup
+    local kwFilterInclude = propertyTable.KwFilterInclude or ""
+    local kwFilterExclude = propertyTable.KwFilterExclude or ""
+    -- collection-level override if non-empty
+    if not utils.nilOrEmpty(collectionSettings.KwFilterInclude) then
+        kwFilterInclude = collectionSettings.KwFilterInclude
+    end
+    if not utils.nilOrEmpty(collectionSettings.KwFilterExclude) then
+        kwFilterExclude = collectionSettings.KwFilterExclude
+    end
+    local includePatterns = utils.parseFilterPatterns(kwFilterInclude)
+    local excludePatterns = utils.parseFilterPatterns(kwFilterExclude)
+    local kwFilterActive = #includePatterns > 0 or #excludePatterns > 0
+    local kwFilterData = {
+        includePatterns = includePatterns,
+        excludePatterns = excludePatterns,
+        active = kwFilterActive,
+    }
+
 
     local resetConnectioncount = 0
     local renditionParams = {
@@ -166,6 +187,8 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
 
         -- Detect photo already published in this service (multi-album support)
         local existingPwImageId = nil
+        local forceUpload = false
+        local currMd5Sum = ""
         if remoteId == "" then
             -- Method 1: Via custom metadata (photos published with plugin >= 20251224.16)
             local storedImageUrl = lrPhoto:getPropertyForPlugin(_PLUGIN, "pwImageURL")
@@ -191,13 +214,21 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
             end
 
             -- Verify the image still exists on Piwigo
+
             if existingPwImageId then
                 local checkStatus = PiwigoAPI.checkPhoto(propertyTable, existingPwImageId)
                 if not checkStatus.status then
                     log:info("DEBUG multi-album: image " .. existingPwImageId .. " n'existe plus sur Piwigo")
                     existingPwImageId = nil
+                else
+                    currMd5Sum = checkStatus.md5sum or ""
                 end
             end
+            -- so we now know whether the photo has already been published to Piwigo or not, if it has then we will try to associate it to the new album
+            -- we can use the md5 sum to see if the image has changed since it was published, 
+            -- if it hasn't then we can be confident that the existing image on Piwigo is the same as the one being published now and
+            -- we can associate it to the new album without needing to re-upload,
+            -- if it has changed then we should upload as a new image even if it has been published before,
         end
 
         -- Wait for next photo to render.
@@ -210,6 +241,21 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
             break
         end
 
+        -- get md5 sum of rendered file if we have an existing image on Piwigo to compare to, and if render was successful and file exists
+        if currMd5Sum ~= "" and success and LrFileUtils.exists(pathOrMessage) then
+            local fileMd5Sum, errorMsg = utils.getFileMd5(pathOrMessage)
+            if not fileMd5Sum then
+                log:warn("Error getting MD5 sum for file: " .. (errorMsg or "Unknown error"))
+                forceUpload = true
+            elseif fileMd5Sum == currMd5Sum then
+                log:info("File MD5 matches existing image, skipping upload")
+                forceUpload = false
+            else
+                log:info("File MD5 does not match existing image, forcing upload")
+                forceUpload = true
+            end
+        end
+
         if success then
             -- upload to Piwigo
             callStatus = {}
@@ -219,20 +265,26 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
             if existingPwImageId then
                 log:info("Photo exists on Piwigo (ID " .. existingPwImageId .. "), associating to album " .. albumId)
                 callStatus = PiwigoAPI.associateImageToCategory(propertyTable, existingPwImageId, albumId)
-
                 if callStatus.status then
-                    rendition:recordPublishedPhotoId(callStatus.remoteid)
-                    rendition:recordPublishedPhotoUrl(callStatus.remoteurl)
-                    rendition:renditionIsDone(true)
-                    LrFileUtils.delete(pathOrMessage)
+                    if not forceUpload then
+                        log:info("Association successful, skipping upload")
+                        -- record existing remote id and url for this photo and mark as done without uploading
+                        rendition:recordPublishedPhotoId(callStatus.remoteid)
+                        rendition:recordPublishedPhotoUrl(callStatus.remoteurl)
+                        rendition:renditionIsDone(true)
+                        LrFileUtils.delete(pathOrMessage)
+                    else
+                        -- association successful but we need to upload new version of photo, so we will upload and then update metadata for existing image on Piwigo with new md5 sum and other metadata, this way we keep the same remote id and url for the photo even when it is updated, which is important for multi-album support as it allows us to associate the same image to multiple albums without creating duplicates on Piwigo, and also means that if the photo is already published in another album then we won't end up with multiple versions of the same photo on Piwigo if we update it in Lightroom and republish.
+                        log:info("Association successful but upload forced due to MD5 mismatch, proceeding with upload and metadata update")
+                        remoteId = existingPwImageId
+                    end
                 else
                     log:warn("Association failed: " .. (callStatus.statusMsg or "") .. ", falling back to upload")
                     existingPwImageId = nil
                 end
             end
 
-            if not existingPwImageId then
-                -- Begin existing upload block (indent all upload code until end of if success)
+            if not existingPwImageId or forceUpload then
                 local metaData = {}
                 -- build metadata structure
                 metaData = utils.getPhotoMetadata(propertyTable, lrPhoto)
@@ -269,7 +321,8 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
                     PiwigoAPI.storeMetaData(catalog, lrPhoto, pluginData)
 
                     -- photo was uploaded with keywords included, but existing keywords aren't replaced by this process,
-                    -- so force a metadata update using pwg.images.setInfo with single_value_mode set to "replace" to force old metadata/keywords to be replaced
+                    -- also keyword filtering isn't applied to keywords embedded in the file at upload, so we need to apply filters separatelly
+                    -- force a metadata update using pwg.images.setInfo with single_value_mode set to "replace" to force old metadata/keywords to be replaced
                     metaData.Remoteid = callStatus.remoteid
                     if missingTags then
                         -- refresh cached tag list as new tags have been created during updateGallery
@@ -280,6 +333,8 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
                             utils.buildTagIndex(propertyTable)
                         end
                     end
+                    -- add kwfilterData to metaData so that it can be used in updateMetadata to apply keyword filters when updating keywords for existing photos
+                    metaData.kwFilterData = kwFilterData
                     callStatus = PiwigoAPI.updateMetadata(propertyTable, lrPhoto, metaData)
                     if not callStatus.status then
                         LrDialogs.message("Unable to set metadata for uploaded photo - " .. callStatus.statusMsg)
@@ -292,30 +347,11 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
                     log:info("Upload failed for photo: " .. sourcePhotoName)
                     log:info("Upload failed - renditionParams\n" .. expRenditionParams)
                     log:info("Upload failed - metaData\n" .. expMetaData)
-                    log:info("Upload failed - propertyTable\n" .. utils.serialiseVar(utils.anonymisePropertyTable(propertyTable)))
+                    log:info("Upload failed - propertyTable\n" ..
+                        utils.serialiseVar(utils.anonymisePropertyTable(propertyTable)))
                     log:info("Upload failed - callStatus\n" .. utils.serialiseVar(callStatus))
                     log:info("Upload failed - pathOrMessage\n" .. tostring(pathOrMessage))
 
-                    --[[
-                    debug code for issue 17 - preserve file that failed to upload and create debug log with details of upload to allow investigation of issue
-                    local debugDir = LrPathUtils.child(LrPathUtils.getStandardFilePath('desktop'),
-                        "PiwigoPublishDebugIssue17")
-                    LrFileUtils.createAllDirectories(debugDir)
-                    local leafName = LrPathUtils.leafName(pathOrMessage)
-                    local debugPath = LrPathUtils.child(debugDir, leafName)
-                    LrFileUtils.copy(pathOrMessage, debugPath)
-
-                    local debugFileName = debugPath .. "_debug.txt"
-                    local debugFile = io.open(debugFileName, "w")
-                    debugFile:write("Upload failed for photo: " .. sourcePhotoName .. "\n")
-                    debugFile:write("Rendition params:\n" .. expRenditionParams .. "\n")
-                    debugFile:write("Metadata:\n" .. expMetaData .. "\n")
-                    debugFile:write("PropertyTable:\n" .. utils.serialiseVar(utils.anonymisePropertyTable(propertyTable)) .. "\n")
-                    debugFile:write("CallStatus:\n" .. utils.serialiseVar(callStatus) .. "\n")
-                    debugFile:write("PathOrMessage:\n" .. tostring(pathOrMessage) .. "\n")
-                    debugFile:close()
-                    log:warn("DEBUG: preserved failed upload file to " .. debugPath)
-]]
                     rendition:uploadFailed(callStatus.message or "Upload failed")
                 end
 
@@ -401,7 +437,8 @@ function PublishTask.deletePhotosFromPublishedCollection(publishSettings, arrayO
     local publishedPhotos = publishedCollection:getPublishedPhotos()
     local publishService = publishedCollection:getService()
     if not publishService then
-        log:info('deletePhotosFromPublishedCollection - publishSettings:\n' .. utils.serialiseVar(utils.anonymisePropertyTable(publishSettings)))
+        log:info('deletePhotosFromPublishedCollection - publishSettings:\n' ..
+            utils.serialiseVar(utils.anonymisePropertyTable(publishSettings)))
         LrErrors.throwUserError('Publish photos to Piwigo - cannot connect find publishService')
         return nil
     end
@@ -758,6 +795,71 @@ local function valueEqual(a, b)
 end
 
 -- ************************************************
+-- ************************************************
+-- Shared helpers for viewForCollectionSettings / viewForCollectionSetSettings
+-- ************************************************
+local function initCollectionSettingsDefaults(collectionSettings)
+    local defaults = {
+        albumDescription      = "",
+        albumPrivate          = false,
+        enableCustom          = false,
+        reSize                = false,
+        reSizeParam           = "Long Edge",
+        reSizeNoEnlarge       = true,
+        reSizeLongEdge        = 1024,
+        reSizeShortEdge       = 1024,
+        reSizeW               = 1024,
+        reSizeH               = 1024,
+        reSizeMP              = 5,
+        reSizePC              = 50,
+        metaData              = "All",
+        metaDataNoPerson      = true,
+        metaDataNoLocation    = false,
+        KwFullHierarchy       = true,
+        KwSynonyms            = true,
+        KwFilterInclude       = "",
+        KwFilterExclude       = "",
+        syncSortOrderOverride = "default",
+    }
+    for key, defaultVal in pairs(defaults) do
+        if collectionSettings[key] == nil then
+            collectionSettings[key] = defaultVal
+        end
+    end
+end
+
+-- ************************************************
+local function buildCommonCollectionUI(f, bind, share, collectionSettings, publishSettings)
+    local pwAlbumUI = UIHelpers.createPiwigoAlbumSettingsUI(f, share, bind, collectionSettings, publishSettings)
+    local kwFilterUI = UIHelpers.createKeywordFilteringUI(f, bind, collectionSettings)
+
+    local sortOrderUI = f:group_box {
+        title = "Sort Order",
+        font = "<system/bold>",
+        size = 'regular',
+        fill_horizontal = 1,
+        bind_to_object = assert(collectionSettings),
+        f:row {
+            fill_horizontal = 1,
+            f:static_text {
+                title = "Sync sort order to Piwigo:",
+                font = "<system>",
+                alignment = 'right',
+            },
+            f:popup_menu {
+                value = bind 'syncSortOrderOverride',
+                items = {
+                    { title = "Use global setting", value = "default" },
+                    { title = "Always sync",        value = "always" },
+                    { title = "Never sync",         value = "never" },
+                },
+            },
+        },
+    }
+
+    return pwAlbumUI, sortOrderUI, kwFilterUI
+end
+-- ************************************************
 function PublishTask.viewForCollectionSettings(f, publishSettings, info)
     log:info("PublishTask.viewForCollectionSettings")
 
@@ -774,194 +876,17 @@ function PublishTask.viewForCollectionSettings(f, publishSettings, info)
     local bind = LrView.bind
     local share = LrView.share
     local collectionSettings = assert(info.collectionSettings)
-    -- piwigo album settings
-    if collectionSettings.albumDescription == nil then
-        collectionSettings.albumDescription = ""
-    end
-    if collectionSettings.albumPrivate == nil then
-        collectionSettings.albumPrivate = false
-    end
 
-    -- customisation of image export settings
-    if collectionSettings.enableCustom == nil then
-        collectionSettings.enableCustom = false
-    end
-    if collectionSettings.reSize == nil then
-        collectionSettings.reSize = false
-    end
-    if collectionSettings.reSizeParam == nil then
-        collectionSettings.reSizeParam = "Long Edge"
-    end
-    if collectionSettings.reSizeNoEnlarge == nil then
-        collectionSettings.reSizeNoEnlarge = true
-    end
-    if collectionSettings.reSizeLongEdge == nil then
-        collectionSettings.reSizeLongEdge = 1024
-    end
-    if collectionSettings.reSizeShortEdge == nil then
-        collectionSettings.reSizeShortEdge = 1024
-    end
-    if collectionSettings.reSizeW == nil then
-        collectionSettings.reSizeW = 1024
-    end
-    if collectionSettings.reSizeH == nil then
-        collectionSettings.reSizeH = 1024
-    end
-    if collectionSettings.reSizeMP == nil then
-        collectionSettings.reSizeMP = 5
-    end
-    if collectionSettings.reSizePC == nil then
-        collectionSettings.reSizePC = 50
-    end
-    if collectionSettings.metaData == nil then
-        collectionSettings.metaData = "All"
-    end
-    if collectionSettings.metaDataNoPerson == nil then
-        collectionSettings.metaDataNoPerson = true
-    end
-    if collectionSettings.metaDataNoLocation == nil then
-        collectionSettings.metaDataNoLocation = false
-    end
-    if collectionSettings.KwFullHierarchy == nil then
-        collectionSettings.KwFullHierarchy = true
-    end
-    if collectionSettings.KwSynonyms == nil then
-        collectionSettings.KwSynonyms = true
-    end
-    -- build UI
-    local reSizeOptions = {
-        { title = "Long Edge",  value = "Long Edge" },
-        { title = "Short Edge", value = "Short Edge" },
-        { title = "Dimensions", value = "Dimensions" },
-        { title = "Megapixels", value = "MegaPixels" },
-        { title = "Percent",    value = "Percent" },
-    }
-    local metaDataOpts = {
-        { title = "All Metadata",                        value = "All Metadata" },
-        { title = "Copyright only",                      value = "Copyright Only" },
-        { title = "Copyright & Contact Info Only",       value = "Copyright & Contact Info Only" },
-        { title = "All Except Camera Raw Info",          value = "All Except Camera Raw Info" },
-        { title = "All Except Camera & Camera Raw Info", value = "All Except Camera & Camera Raw Info" },
-    }
-
-    local pwAlbumUI = f:group_box {
-        title = "Piwigo Album Settings",
-        font = "<system/bold>",
-        size = 'regular',
-        fill_horizontal = 1,
-        bind_to_object = assert(collectionSettings),
-        f:column {
-            spacing = f:control_spacing(),
-
-            f:separator { fill_horizontal = 1 },
-
-            f:row {
-                f:static_text { title = "Album Description:", font = "<system>", alignment = 'right', width = share 'label_width', },
-                f:edit_field {
-                    enabled = LrView.bind {
-                        key = 'syncAlbumDescriptions',
-                        object = publishSettings,
-                    },
-
-                    value = bind 'albumDescription',
-                    width_in_chars = 40,
-                    font = "<system>",
-                    alignment = 'left',
-                    height_in_lines = 4,
-                },
-            },
-
-            f:row {
-                f:checkbox {
-                    title = "Album is Private",
-                    tooltip = "If checked, this album will be private on Piwigo",
-                    value = bind 'albumPrivate',
-                }
-            }
-
-        }
-    }
-
-    local pubSettingsUI = f:group_box {
-        title = "Custom Publish Settings (Overrides defaults set in Publish Settings)",
-        font = "<system/bold>",
-        size = 'regular',
-        fill_horizontal = 1,
-        bind_to_object = assert(collectionSettings),
-        f:column {
-            spacing = f:control_spacing(),
-            fill_horizontal = 1,
-            f:separator { fill_horizontal = 1 },
-            f:row {
-                f:checkbox {
-                    title = "Use custom settings for this album",
-                    tooltip = "If checked, these settings will replace the defaults set in Publish Settings",
-                    value = bind 'enableCustom',
-                }
-            },
-            f:row {
-                f:group_box { -- group for export parameters
-                    title = "Export Settings",
-                    visible = bind 'enableCustom',
-                    font = "<system>",
-                    fill_horizontal = 1,
-                    f:row {
-                        fill_horizontal = 1,
-                        spacing = f:label_spacing(),
-
-                        f:checkbox {
-                            title = "Resize Image",
-                            tooltip = "If checked, published image will be resized per these settings",
-                            value = bind 'reSize',
-                        },
-                        f:static_text {
-                            title = "Use :",
-                            alignment = 'right',
-                            fill_horizontal = 1,
-                        },
-
-                        f:popup_menu {
-                            value = bind 'reSizeParam',
-                            items = sizeOpts,
-                            value_equal = valueEqual,
-                        },
-                        f:checkbox {
-                            title = "Allow Enlarge Image",
-                            tooltip = "If checked, published image will be enlarged if necessary",
-                            value = bind 'reSizeEnlarge',
-                        },
-
-                    },
-
-
-                },
-            },
-            f:row {
-                f:group_box { -- group for Metadata parameters
-                    title = "Metadata Settings",
-                    visible = bind 'enableCustom',
-                    font = "<system>",
-                    fill_horizontal = 1,
-                    f:spacer { height = 2 },
-
-                    f:checkbox { title = "Include Full Keyword Hierarchy",
-                        tooltip = "If checked, all keywords in a keyword hierarchy will be sent to Piwigo",
-                        value = bind 'KwFullHierarchy',
-                    },
-                    f:checkbox { title = "Include Keywords Synonyms",
-                        tooltip = "If checked, keywords synonyms will be sent to Piwigo",
-                        value = bind 'KwSynonyms',
-                    }
-
-                },
-            },
-        },
-    }
-
+    initCollectionSettingsDefaults(collectionSettings)
+    local pwAlbumUI, sortOrderUI, kwFilterUI = buildCommonCollectionUI(f, bind, share, collectionSettings,
+        publishSettings)
+    local pubSettingsUI = UIHelpers.createExportSettingsGroupBox(f, bind, collectionSettings)
     local UI = f:column {
         spacing = f:control_spacing(),
         pwAlbumUI,
-        --pubSettingsUI,
+        --    sortOrderUI, --todo
+        kwFilterUI,
+        --pubSettingsUI, --todo
     }
     return UI
 end
@@ -980,7 +905,8 @@ function PublishTask.updateCollectionSettings(publishSettings, info)
 
 
     if not publishService then
-        log:info('updateCollectionSettings - publishSettings:\n' .. utils.serialiseVar(utils.anonymisePropertyTable(publishSettings)))
+        log:info('updateCollectionSettings - publishSettings:\n' ..
+            utils.serialiseVar(utils.anonymisePropertyTable(publishSettings)))
         LrErrors.throwUserError('updateCollectionSettings - cannot connect find publishService')
         return nil
     end
@@ -1066,117 +992,22 @@ function PublishTask.viewForCollectionSetSettings(f, publishSettings, info)
     local bind = LrView.bind
     local share = LrView.share
     local collectionSettings = assert(info.collectionSettings)
-    -- piwigo album settings
-    if collectionSettings.albumDescription == nil then
-        collectionSettings.albumDescription = ""
-    end
-    if collectionSettings.albumPrivate == nil then
-        collectionSettings.albumPrivate = false
-    end
 
-    -- customisation of image export settings
-    if collectionSettings.enableCustom == nil then
-        collectionSettings.enableCustom = false
-    end
-    if collectionSettings.reSize == nil then
-        collectionSettings.reSize = false
-    end
-    if collectionSettings.reSizeParam == nil then
-        collectionSettings.reSizeParam = "Long Edge"
-    end
-    if collectionSettings.reSizeNoEnlarge == nil then
-        collectionSettings.reSizeNoEnlarge = true
-    end
-    if collectionSettings.reSizeLongEdge == nil then
-        collectionSettings.reSizeLongEdge = 1024
-    end
-    if collectionSettings.reSizeShortEdge == nil then
-        collectionSettings.reSizeShortEdge = 1024
-    end
-    if collectionSettings.reSizeW == nil then
-        collectionSettings.reSizeW = 1024
-    end
-    if collectionSettings.reSizeH == nil then
-        collectionSettings.reSizeH = 1024
-    end
-    if collectionSettings.reSizeMP == nil then
-        collectionSettings.reSizeMP = 5
-    end
-    if collectionSettings.reSizePC == nil then
-        collectionSettings.reSizePC = 50
-    end
-    if collectionSettings.metaData == nil then
-        collectionSettings.metaData = "All"
-    end
-    if collectionSettings.metaDataNoPerson == nil then
-        collectionSettings.metaDataNoPerson = true
-    end
-    if collectionSettings.metaDataNoLocation == nil then
-        collectionSettings.metaDataNoLocation = false
-    end
-    if collectionSettings.KwFullHierarchy == nil then
-        collectionSettings.KwFullHierarchy = true
-    end
-    if collectionSettings.KwSynonyms == nil then
-        collectionSettings.KwSynonyms = true
-    end
-    -- build UI
-    local reSizeOptions = {
-        { title = "Long Edge",  value = "Long Edge" },
-        { title = "Short Edge", value = "Short Edge" },
-        { title = "Dimensions", value = "Dimensions" },
-        { title = "Megapixels", value = "MegaPixels" },
-        { title = "Percent",    value = "Percent" },
-    }
-    local metaDataOpts = {
-        { title = "All Metadata",                        value = "All Metadata" },
-        { title = "Copyright only",                      value = "Copyright Only" },
-        { title = "Copyright & Contact Info Only",       value = "Copyright & Contact Info Only" },
-        { title = "All Except Camera Raw Info",          value = "All Except Camera Raw Info" },
-        { title = "All Except Camera & Camera Raw Info", value = "All Except Camera & Camera Raw Info" },
-    }
 
-    local pwAlbumUI = f:group_box {
-        title = "Piwigo Album Settings",
-        font = "<system/bold>",
-        size = 'regular',
-        fill_horizontal = 1,
-        bind_to_object = assert(collectionSettings),
-        f:column {
-            spacing = f:control_spacing(),
+    initCollectionSettingsDefaults(collectionSettings)
 
-            f:separator { fill_horizontal = 1 },
+    local pwAlbumUI, sortOrderUI, kwFilterUI = buildCommonCollectionUI(f, bind, share, collectionSettings,
+        publishSettings)
 
-            f:row {
-                f:static_text { title = "Album Description:", font = "<system>", alignment = 'right', width = share 'label_width', },
-                f:edit_field {
-                    enabled = LrView.bind {
-                        key = 'syncAlbumDescriptions',
-                        object = publishSettings,
-                    },
-                    value = bind 'albumDescription',
-                    width_in_chars = 40,
-                    font = "<system>",
-                    alignment = 'left',
-                    height_in_lines = 4,
-                },
-            },
-
-            f:row {
-                f:checkbox {
-                    title = "Album is Private",
-                    tooltip = "If checked, this album will be private on Piwigo",
-                    value = bind 'albumPrivate',
-                }
-            }
-        }
-    }
-
+    local pubSettingsUI = UIHelpers.createExportSettingsGroupBox(f, bind, collectionSettings)
     local UI = f:column {
         spacing = f:control_spacing(),
         pwAlbumUI,
-        --pubSettingsUI,
+        --    sortOrderUI, --todo
+        kwFilterUI,
+        --pubSettingsUI, --todo
     }
+
     return UI
 end
 
@@ -1191,7 +1022,8 @@ function PublishTask.updateCollectionSetSettings(publishSettings, info)
     local publishService = info.publishService
 
     if not publishService then
-        log:info('updateCollectionSettings - publishSettings:\n' .. utils.serialiseVar(utils.anonymisePropertyTable(publishSettings)))
+        log:info('updateCollectionSettings - publishSettings:\n' ..
+            utils.serialiseVar(utils.anonymisePropertyTable(publishSettings)))
         LrErrors.throwUserError('updateCollectionSettings - cannot connect find publishService')
         return nil
     end
@@ -1288,7 +1120,8 @@ function PublishTask.reparentPublishedCollection(publishSettings, info)
 
     local publishService = info.publishService
     if not publishService then
-        log:info('reparentPublishedCollection - publishSettings:\n' .. utils.serialiseVar(utils.anonymisePropertyTable(publishSettings)))
+        log:info('reparentPublishedCollection - publishSettings:\n' ..
+            utils.serialiseVar(utils.anonymisePropertyTable(publishSettings)))
         LrErrors.throwUserError('reparentPublishedCollection - cannot connect find publishService')
         return nil
     end
@@ -1340,7 +1173,8 @@ function PublishTask.renamePublishedCollection(publishSettings, info)
     -- called for both collections and collectionsets
     local publishService = info.publishService
     if not publishService then
-        log:info('renamePublishedCollection - publishSettings:\n' .. utils.serialiseVar(utils.anonymisePropertyTable(publishSettings)))
+        log:info('renamePublishedCollection - publishSettings:\n' ..
+            utils.serialiseVar(utils.anonymisePropertyTable(publishSettings)))
         LrErrors.throwUserError('renamePublishedCollection - cannot connect find publishService')
         return nil
     end
@@ -1422,7 +1256,8 @@ function PublishTask.deletePublishedCollection(publishSettings, info)
     local publishService = info.publishService
     local publishCollection = info.publishedCollection
     if not publishService then
-        log:info('deletePublishedCollection - publishSettings:\n' .. utils.serialiseVar(utils.anonymisePropertyTable(publishSettings)))
+        log:info('deletePublishedCollection - publishSettings:\n' ..
+            utils.serialiseVar(utils.anonymisePropertyTable(publishSettings)))
         LrErrors.throwUserError('deletePublishedCollection - cannot connect find publishService')
         return nil
     end

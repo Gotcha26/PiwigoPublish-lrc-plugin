@@ -22,6 +22,24 @@
 
 
 local utils = {}
+
+
+-- *************************************************
+function utils.getFileMd5(fName)
+    -- return md5 sum of file fName
+    local f = io.open(fName, "rb")
+    if not f then
+        return nil, "Unable to open file: " .. fName
+    end
+    local content = f:read("*all")
+    f:close()
+    if not content then
+        return nil, "Unable to read file: " .. fName
+    end
+    return md5.sumhexa(content)
+end
+
+
 -- *************************************************
 function utils.anonymisePropertyTable(propertyTable)
     -- return copy of property table with sensitive data removed (for logging etc)
@@ -545,6 +563,112 @@ function utils.BuildTagString(propertyTable, lrPhoto)
     return tagString
 end
 
+-- *************************************************
+function utils.wildcardMatch(pattern, text)
+    -- match text against a wildcard pattern (* = any chars, ? = single char)
+    -- case-insensitive
+    local p = pattern:lower()
+    local t = text:lower()
+    -- escape Lua magic characters except * and ?
+    p = p:gsub("([%.%+%-%^%$%(%)%%])", "%%%1")
+    p = p:gsub("%[", "%%[")
+    p = p:gsub("%]", "%%]")
+    -- convert wildcards to Lua patterns
+    p = p:gsub("%*", ".*")
+    p = p:gsub("%?", ".")
+    -- anchor the pattern
+    p = "^" .. p .. "$"
+    return t:match(p) ~= nil
+end
+
+-- *************************************************
+function utils.parseFilterPatterns(filterString)
+    -- parse filter patterns string into a table (one rule per line, also accepts commas)
+    local patterns = {}
+    if not filterString or filterString == "" then
+        return patterns
+    end
+    for token in filterString:gmatch("[^\r\n,]+") do
+        local trimmed = utils.clean_spaces(token)
+        if trimmed ~= "" then
+            table.insert(patterns, trimmed)
+        end
+    end
+    return patterns
+end
+
+-- *************************************************
+function utils.buildFilteredKeywordList(keywords, includePatterns, excludePatterns)
+    -- build list of keywords to send to Piwigo based on include/exclude patterns
+    local includeKeywords = {}
+    for _, kw in ipairs(keywords) do
+        local isAllowed = true
+        local kwName = kw:getName()
+        if excludePatterns and #excludePatterns > 0 then
+            for _, pat in ipairs(excludePatterns) do
+                if utils.wildcardMatch(pat, kwName) then
+                    isAllowed = false
+                    break
+                end
+            end
+        end
+        if isAllowed and includePatterns and #includePatterns > 0 then
+            local found = false
+            for _, pat in ipairs(includePatterns) do
+                if utils.wildcardMatch(pat, kwName) then
+                    found = true
+                    break
+                end
+            end
+            if not found then
+                isAllowed = false
+            end
+        end
+
+        if isAllowed then
+            table.insert(includeKeywords, kw)
+        end
+    end
+
+    return includeKeywords
+end
+
+-- *************************************************
+function utils.checkKeywordFilter(keywords, includePatterns, excludePatterns)
+    -- check if a list of keywords satisfies include/exclude filter rules
+    -- returns: isAllowed (bool), failReason (string or nil)
+
+    -- check exclude rules first
+    if excludePatterns and #excludePatterns > 0 then
+        for _, kw in ipairs(keywords) do
+            for _, pat in ipairs(excludePatterns) do
+                if utils.wildcardMatch(pat, kw) then
+                    return false, "keyword '" .. kw .. "' matches exclude rule '" .. pat .. "'"
+                end
+            end
+        end
+    end
+
+    -- check include rules
+    if includePatterns and #includePatterns > 0 then
+        local found = false
+        for _, kw in ipairs(keywords) do
+            for _, pat in ipairs(includePatterns) do
+                if utils.wildcardMatch(pat, kw) then
+                    found = true
+                    break
+                end
+            end
+            if found then break end
+        end
+        if not found then
+            local patList = table.concat(includePatterns, ", ")
+            return false, "no keyword matches include rule(s) '" .. patList .. "'"
+        end
+    end
+
+    return true, nil
+end
 -- *************************************************
 function utils.getPhotoMetadata(publishSettings, lrPhoto)
     -- build set of metadata to be send to Piwigo

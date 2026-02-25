@@ -1,8 +1,9 @@
 # Changelog
 ## [20269999.99]
+### Fixed
+Associating an existing image with a new album would not upload image if it had been changed in LrC since first upload to Piwigo
 ### Added
-Updated Plugin-Manager screen
-
+Fix #12 Feature request: Keyword removal by filtering when publising images to Piwigo
 
 ## [20260221.33] - 2026-02-21
 ### Fixed

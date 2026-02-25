@@ -809,7 +809,6 @@ local function prefsDialog(f, propertyTable)
 					height_in_lines = 3,
 				},
 			},
-
 			f:row {
 				f:static_text {
 					title = "Description: ",
@@ -828,54 +827,14 @@ local function prefsDialog(f, propertyTable)
 		},
 
 		f:spacer { height = 2 },
+		UIHelpers.createKeywordSettingsGroupBox(f, bind),
 
-		f:group_box {
-			title = "Keyword Settings",
-			font = "<system/bold>",
-			fill_horizontal = 1,
-			f:spacer { height = 2 },
-			f:row {
-				fill_horizontal = 1,
-				f:static_text {
-					title = "",
-					alignment = 'right',
-					width_in_chars = 7,
-				},
-				f:checkbox {
-					font = "<system>",
-					title = "Include Full Keyword Hierarchy",
-					tooltip = "If checked, all keywords in a keyword hierarchy will be sent to Piwigo",
-					value = bind 'KwFullHierarchy',
-				}
-			},
-
-			f:spacer { height = 2 },
-
-			f:row {
-				fill_horizontal = 1,
-				f:static_text {
-					title = "",
-					alignment = 'right',
-					width_in_chars = 7,
-				},
-				f:checkbox {
-					font = "<system>",
-					title = "Include Keyword Synonyms",
-					tooltip = "If checked, keyword synonyms will be sent to Piwigo",
-					value = bind 'KwSynonyms',
-				}
-			},
-		},
 		f:spacer { height = 2 },
 		f:group_box {
 			title = "Other Settings",
 			font = "<system/bold>",
 			fill_horizontal = 1,
 			f:spacer { height = 1 },
-
-
-
-
 			f:row {
 				fill_horizontal = 1,
 				f:static_text {
@@ -890,8 +849,8 @@ local function prefsDialog(f, propertyTable)
 					value = bind 'syncAlbumDescriptions',
 				},
 			},
-			f:spacer { height = 1 },
 
+			f:spacer { height = 1 },
 			f:row {
 				fill_horizontal = 1,
 				f:static_text {
