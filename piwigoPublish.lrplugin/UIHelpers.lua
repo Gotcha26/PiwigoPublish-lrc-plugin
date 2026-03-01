@@ -117,8 +117,30 @@ function UIHelpers.createPiwigoAlbumSettingsUI(f, share, bind, collectionSetting
 					title = "Album is Private",
 					font = "<system>",
 				}
-			}
-		}
+			},
+
+			f:separator { fill_horizontal = 1 },
+			f:row {
+				fill_horizontal = 1,
+				--[[
+				f:static_text {
+					title = "",
+					alignment = 'right',
+					width = share 'label_width',
+				},]]
+				f:checkbox {
+					title = "Enable Custom Export Settings for this Album",
+					font = "<system>",
+					tooltip = "If checked, settings entered below will override the defaults set in Publish Settings for this album",
+					value = bind 'enableCustom',
+					enabled = bind {
+						key = 'PWP_customAlbumSettings',
+						bind_to_object = publishSettings,
+					},
+
+				},
+			},
+		},
 	}
 end
 
@@ -149,6 +171,7 @@ function UIHelpers.createKeywordFilteringFields(f, bind, options)
 			width_in_chars = widthInChars,
 			height_in_lines = heightInLines,
 			fill_horizontal = fillColumns and 1 or nil,
+			multiline = true,
 			--tooltip = "Photos with any keyword matching these rules will not be published. One rule per line.",
 			tooltip = "Keywords matching these rules will not sent to Piwigo. One rule per line. Overrides inclusion rules - if a keyword matches both exclusion and inclusion rules, it will be excluded.",
 		},
@@ -167,12 +190,12 @@ function UIHelpers.createKeywordFilteringFields(f, bind, options)
 			width_in_chars = widthInChars,
 			height_in_lines = heightInLines,
 			fill_horizontal = fillColumns and 1 or nil,
+			multiline = true,
 			--tooltip = "Photos must have at least one keyword matching these rules to be published. Leave empty to allow all. One rule per line.",
 			tooltip = "Only keywords matching these rules will be sent to Piwigo. One rule per line. Exclusion rules take precedence over inclusion rules - if a keyword matches both exclusion and inclusion rules, it will be excluded.",
 		},
 	}
 	if fillColumns then inclusionColDef.fill_horizontal = 1 end
-
 	local elements = {}
 	if not options.showOverrideHint then
 		-- options.showOverrideHint is set to false for the PublishDialogSections
@@ -188,27 +211,38 @@ function UIHelpers.createKeywordFilteringFields(f, bind, options)
 	}
 
 	elements[#elements + 1] = f:static_text {
-		title = "One rule per line. Wildcards: * matches any number of characters, ? matches exactly one character.",
+		title = "One rule per line. Use Option+Enter (Mac) or Alt+Enter (Windows) to add a new line.",
 		font = "<system>",
 	}
+
+	elements[#elements + 1] = f:static_text {
+		title = "Wildcards: * matches any number of characters, ? matches exactly one character.",
+		font = "<system>",
+	}
+
 	elements[#elements + 1] = f:static_text {
 		title = "Examples: nature* (nature, natureza, etc.), *photo* (photograph, photoshop, etc.), ?at (bat, cat, hat, etc.)",
 		font = "<system>",
 	}
-	if not options.showOverrideHint then
-		elements[#elements + 1] = f:static_text {
-			title = "Rules can also be set for individual albums, overriding these global settings.",
-			font = "<system>",
-		}
-	end
 
-	if options.showOverrideHint then
-		elements[#elements + 1] = f:static_text {
-			title = "Leave empty to use global settings from Publish Settings.",
-			font = "<system>",
-		}
+	elements[#elements + 1] = f:static_text {
+		title = "All levels of hierarchy are considered. If a keyword matches both exclusion and inclusion rules, it will be excluded.",
+		font = "<system>",
+	}
+	if options.allowCustomAlbumSettings then
+		if not options.showOverrideHint then
+			elements[#elements + 1] = f:static_text {
+				title = "Rules can also be set for individual albums, overriding these global settings.",
+				font = "<system>",
+			}
+		end
+		if options.showOverrideHint then
+			elements[#elements + 1] = f:static_text {
+				title = "Leave empty to use global settings from Publish Settings.",
+				font = "<system>",
+			}
+		end
 	end
-
 	elements[#elements + 1] = f:spacer { height = 2 }
 	elements[#elements + 1] = f:row {
 		fill_horizontal = 1,
@@ -225,7 +259,7 @@ end
 -- Returns a group_box with exclusion and inclusion rules
 -- Used in PublishTask for collection settings dialogs
 -- *************************************************
-function UIHelpers.createKeywordFilteringUI(f, bind, collectionSettings)
+function UIHelpers.createKeywordFilteringUI(f, bind, collectionSettings, propertyTable)
 	local fields = UIHelpers.createKeywordFilteringFields(f, bind, {
 		showOverrideHint = true,
 		widthInChars = 35,
@@ -244,12 +278,225 @@ function UIHelpers.createKeywordFilteringUI(f, bind, collectionSettings)
 
 	return f:group_box {
 		title = "Keyword Filtering (Overrides defaults set in Publish Settings)",
+		visible = bind {
+			key = 'enableCustom',
+			bind_to_object = collectionSettings,
+		},
 		font = "<system/bold>",
 		size = 'regular',
 		fill_horizontal = 1,
 		bind_to_object = assert(collectionSettings),
 		f:column(columnContents),
 	}
+end
+
+-- *************************************************
+-- Create "Metadata Settings" group_box for PublishDialogSections
+-- Contains fields for metadata templates for title and description
+-- *************************************************
+function UIHelpers.createMetaDataGroupBox(f, bind)
+	local metadataGroupDef = {
+		title = "Metadata Settings",
+		font = "<system/bold>",
+		fill_horizontal = 1,
+
+		f:spacer { height = 2 },
+
+		f:row {
+			f:static_text {
+				title = "Title: ",
+				font = "<system>",
+				alignment = 'right',
+				width_in_chars = 8,
+			},
+			f:edit_field {
+				value = bind 'mdTitle',
+				font = "<system>",
+				alignment = 'left',
+				width_in_chars = 60,
+				height_in_lines = 3,
+			},
+		},
+		f:row {
+			f:static_text {
+				title = "Description: ",
+				font = "<system>",
+				alignment = 'right',
+				width_in_chars = 8,
+			},
+			f:edit_field {
+				value = bind 'mdDescription',
+				font = "<system>",
+				alignment = 'left',
+				width_in_chars = 60,
+				height_in_lines = 3,
+			},
+		},
+	}
+
+	return f:group_box(metadataGroupDef)
+end
+
+-- *************************************************
+-- Create "Album Customisation Settings" group_box for PublishDialogSections
+-- Contains checkbox for album association and custom album settings
+-- *************************************************
+function UIHelpers.createAlbumSettingsGroupBox(f, bind, propertyTable)
+	local albumSettingsDef = {
+		title = "Album Association and Per Album Export Settings",
+		font = "<system/bold>",
+		fill_horizontal = 1,
+
+		f:spacer { height = 1 },
+		f:row {
+			fill_horizontal = 1,
+			f:static_text {
+				title = "",
+				alignment = 'right',
+				width_in_chars = 7,
+			},
+			f:checkbox {
+				title = "Use Album Association to share a single image between multiple Piwigo Albums",
+				enabled = bind {
+					key = 'PWP_customAlbumSettings',
+					bind_to_object = propertyTable,
+					transform = function(value, fromModel)
+						if fromModel then
+							return not value -- invert for display
+						end
+						return value
+					end,
+				},
+				font = "<system>",
+				tooltip = "When checked, if the same image is uploaded to multiple albums, it will be uploaded once and associated with the other albums in Piwigo, rather than being uploaded multiple times.",
+				value = bind 'PWP_albumAssociation',
+			},
+		},
+
+		f:row {
+			fill_horizontal = 1,
+			f:static_text {
+				title = "",
+				alignment = 'right',
+				width_in_chars = 7,
+			},
+			f:static_text {
+				title = "When enabled, if the same image is uploaded to multiple albums, a single copy will be uploaded and associated with the other albums in Piwigo." ..
+					"\nWhen disabled (album association not used), if the same image is uploaded to multiple albums, a separate copy will be uploaded in each album." ..
+					"\nAlbum association is not compatible with per-album custom settings - if album association is enabled, per-album custom settings will be disabled.",
+
+				font = "<system>",
+				wrap = true,
+
+			},
+		},
+
+		f:spacer { height = 1 },
+		f:row {
+			fill_horizontal = 1,
+			f:static_text {
+				title = "",
+				alignment = 'right',
+				width_in_chars = 7,
+			},
+			f:checkbox {
+				title = "Per-album custom export settings",
+				enabled = bind {
+					key = 'PWP_albumAssociation',
+					bind_to_object = propertyTable,
+					transform = function(value, fromModel)
+						if fromModel then
+							return not value -- invert for display
+						end
+						return value
+					end,
+				},
+				font = "<system>",
+				tooltip = "When checked, per-album custom export settings will be enabled, allowing different metadata, keyword filtering rules and export rules to be set for each album. Disables album association - if the same image is uploaded to multiple albums, a separate copy will be uploaded in each album.",
+				value = bind 'PWP_customAlbumSettings',
+			},
+		},
+		f:row {
+			fill_horizontal = 1,
+			f:static_text {
+				title = "",
+				alignment = 'right',
+				width_in_chars = 7,
+			},
+			f:static_text {
+				title = "When enabled, custom settings for each album can be set. If disabled, the global settings will be used for all albums." ..
+					"\nThese settings include metadata templates for title and description, keyword filtering rules and export settings (resizing, metadata stripping etc.)." ..
+					"\nPer-album custom settings are not compatible with album association - if per-album custom settings are enabled, album association will be disabled.",
+				font = "<system>",
+				wrap = true,
+
+			},
+		},
+
+	}
+	return f:group_box(albumSettingsDef)
+end
+
+-- *************************************************
+-- Create "Other Settings" group_box for PublishDialogSections
+--
+-- *************************************************
+
+function UIHelpers.createOtherSettingsGroupBox(f, bind)
+	local otherSettingsDef = {
+		title = "Other Settings",
+		font = "<system/bold>",
+		fill_horizontal = 1,
+		f:spacer { height = 1 },
+		f:row {
+			fill_horizontal = 1,
+			f:static_text {
+				title = "",
+				alignment = 'right',
+				width_in_chars = 7,
+			},
+			f:checkbox {
+				title = "Synchronise Album Descriptions",
+				font = "<system>",
+				tooltip = "If checked, Album descriptions will be maintainable in Lightroom and sent to Piwigo",
+				value = bind 'syncAlbumDescriptions',
+			},
+		},
+
+
+		f:spacer { height = 1 },
+		f:row {
+			fill_horizontal = 1,
+			f:static_text {
+				title = "",
+				alignment = 'right',
+				width_in_chars = 7,
+			},
+			f:checkbox {
+				title = "Synchronise comments as part of a Publish Process",
+				font = "<system>",
+				tooltip = "When checked, comments will be synchronised for all photos in a collection during a publish operation",
+				value = bind 'syncCommentsPublish',
+			},
+		},
+		f:row {
+			fill_horizontal = 1,
+			f:static_text {
+				title = "",
+				alignment = 'right',
+				width_in_chars = 7,
+			},
+			f:checkbox {
+				title = "Only include Published Photos",
+				enabled = bind('syncCommentsPublish', propertyTable),
+				font = "<system>",
+				tooltip = "When checked, only photos being published will have comments synchronised",
+				value = bind 'syncCommentsPubOnly',
+			},
+		},
+	}
+
+	return f:group_box(otherSettingsDef)
 end
 
 -- *************************************************
@@ -318,7 +565,7 @@ end
 -- Combines checkboxes (Hierarchy/Synonyms) + filtering fields
 -- Built dynamically to allow merging fixed elements with shared filtering fields
 -- *************************************************
-function UIHelpers.createExportSettingsGroupBox(f, bind, collectionSettings)
+function UIHelpers.createExportSettingsGroupBox(f, bind, collectionSettings, propertyTable)
 	local reSizeOptions = {
 		{ title = "Long Edge",  value = "Long Edge" },
 		{ title = "Short Edge", value = "Short Edge" },
@@ -326,6 +573,18 @@ function UIHelpers.createExportSettingsGroupBox(f, bind, collectionSettings)
 		{ title = "Megapixels", value = "MegaPixels" },
 		{ title = "Percent",    value = "Percent" },
 	}
+
+	local function visibleWhenResizeMode(mode)
+		return bind {
+			key = 'reSizeParam',
+			transform = function(value, fromModel)
+				if fromModel then
+					return value == mode
+				end
+				return value
+			end,
+		}
+	end
 	local metaDataOpts = {
 		{ title = "All Metadata",                        value = "All Metadata" },
 		{ title = "Copyright only",                      value = "Copyright Only" },
@@ -338,23 +597,21 @@ function UIHelpers.createExportSettingsGroupBox(f, bind, collectionSettings)
 		title = "Custom Publish Settings (Overrides defaults set in Publish Settings)",
 		font = "<system/bold>",
 		size = 'regular',
+		visible = bind {
+			key = 'enableCustom',
+			bind_to_object = collectionSettings,
+		},
 		fill_horizontal = 1,
 		bind_to_object = assert(collectionSettings),
 		f:column {
 			spacing = f:control_spacing(),
 			fill_horizontal = 1,
 			f:separator { fill_horizontal = 1 },
-			f:row {
-				f:checkbox {
-					title = "Use custom settings for this album",
-					tooltip = "If checked, these settings will replace the defaults set in Publish Settings",
-					value = bind 'enableCustom',
-				}
-			},
+
 			f:row {
 				f:group_box { -- group for export parameters
 					title = "Export Settings",
-					visible = bind 'enableCustom',
+
 					font = "<system>",
 					fill_horizontal = 1,
 					f:row {
@@ -366,12 +623,17 @@ function UIHelpers.createExportSettingsGroupBox(f, bind, collectionSettings)
 							tooltip = "If checked, published image will be resized per these settings",
 							value = bind 'reSize',
 						},
-						f:static_text {
-							title = "Use :",
-							alignment = 'right',
-							fill_horizontal = 1,
-						},
+					},
 
+					f:row {
+						fill_horizontal = 1,
+						spacing = f:label_spacing(),
+						enabled = bind 'reSize',
+						f:static_text {
+							title = "Resize Method:",
+							alignment = 'right',
+							width_in_chars = 14,
+						},
 						f:popup_menu {
 							value = bind 'reSizeParam',
 							items = reSizeOptions,
@@ -380,7 +642,111 @@ function UIHelpers.createExportSettingsGroupBox(f, bind, collectionSettings)
 						f:checkbox {
 							title = "Allow Enlarge Image",
 							tooltip = "If checked, published image will be enlarged if necessary",
-							value = bind 'reSizeEnlarge',
+							value = bind {
+								key = 'reSizeNoEnlarge',
+								transform = function(value)
+									return not value
+								end,
+							},
+						},
+					},
+
+					f:row {
+						fill_horizontal = 1,
+						spacing = f:label_spacing(),
+						enabled = bind 'reSize',
+						visible = visibleWhenResizeMode("Long Edge"),
+						f:static_text {
+							title = "Long Edge (px):",
+							alignment = 'right',
+							width_in_chars = 14,
+						},
+						f:edit_field {
+							value = bind 'reSizeLongEdge',
+							width_in_chars = 8,
+							tooltip = "Maximum length of the longest edge in pixels",
+						},
+					},
+
+					f:row {
+						fill_horizontal = 1,
+						spacing = f:label_spacing(),
+						enabled = bind 'reSize',
+						visible = visibleWhenResizeMode("Short Edge"),
+						f:static_text {
+							title = "Short Edge (px):",
+							alignment = 'right',
+							width_in_chars = 14,
+						},
+						f:edit_field {
+							value = bind 'reSizeShortEdge',
+							width_in_chars = 8,
+							tooltip = "Maximum length of the shortest edge in pixels",
+						},
+					},
+
+					f:row {
+						fill_horizontal = 1,
+						spacing = f:label_spacing(),
+						enabled = bind 'reSize',
+						visible = visibleWhenResizeMode("Dimensions"),
+						f:static_text {
+							title = "Dimensions (px):",
+							alignment = 'right',
+							width_in_chars = 14,
+						},
+						f:edit_field {
+							value = bind 'reSizeW',
+							width_in_chars = 8,
+							tooltip = "Maximum width in pixels",
+						},
+						f:static_text {
+							title = "x",
+							alignment = 'center',
+							width_in_chars = 2,
+						},
+						f:edit_field {
+							value = bind 'reSizeH',
+							width_in_chars = 8,
+							tooltip = "Maximum height in pixels",
+						},
+					},
+
+					f:row {
+						fill_horizontal = 1,
+						spacing = f:label_spacing(),
+						enabled = bind 'reSize',
+						visible = visibleWhenResizeMode("MegaPixels"),
+						f:static_text {
+							title = "Megapixels:",
+							alignment = 'right',
+							width_in_chars = 14,
+						},
+						f:edit_field {
+							value = bind 'reSizeMP',
+							width_in_chars = 8,
+							tooltip = "Target image size in megapixels",
+						},
+					},
+
+					f:row {
+						fill_horizontal = 1,
+						spacing = f:label_spacing(),
+						enabled = bind 'reSize',
+						visible = visibleWhenResizeMode("Percent"),
+						f:static_text {
+							title = "Scale Percent:",
+							alignment = 'right',
+							width_in_chars = 14,
+						},
+						f:edit_field {
+							value = bind 'reSizePC',
+							width_in_chars = 8,
+							tooltip = "Scale image by percentage",
+						},
+						f:static_text {
+							title = "%",
+							alignment = 'left',
 						},
 
 					},
@@ -388,6 +754,8 @@ function UIHelpers.createExportSettingsGroupBox(f, bind, collectionSettings)
 			},
 		},
 	}
+
+	return pubSettingsUI
 end
 
 -- *************************************************

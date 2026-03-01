@@ -47,7 +47,6 @@ _G.LrExportSettings = import "LrExportSettings"
 
 -- Global requires
 _G.JSON = require "JSON"
-_G.md5 = require "md5"
 _G.utils = require "utils"
 _G.PiwigoAPI = require "PiwigoAPI"
 _G.PWImportService = require "PWImportService"

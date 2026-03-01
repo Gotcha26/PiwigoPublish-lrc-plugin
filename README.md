@@ -30,8 +30,6 @@ This plugin was developed to allow me to continue publishing to Piwigo from LrC,
 
 [Jeffrey Friedl for JSON.lua](http://regex.info/blog/lua/json)
 
-[Enrique García Cota + Adam Baldwin + hanzao + Equi 4 Software for md5.lua](https://github.com/kikito/md5.lua)
-
 [Bastian Machek with his Immich Plugin](https://github.com/bmachek/lrc-immich-plugin)
 
 [Min Idzelis with his Immich Plugin](https://github.com/midzelis/mi.Immich.Publisher)

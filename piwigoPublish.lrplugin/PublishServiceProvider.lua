@@ -24,6 +24,8 @@
 
 require "PublishDialogSections"
 require "PublishTask"
+require "PublishTaskImageProcessing"
+
 
 return {
 
@@ -51,16 +53,22 @@ return {
 
 	-- these fields are stored in the publish service settings by Lightroom
 	exportPresetFields = {
-		{ key = 'host',                  default = '' },
-		{ key = "userName",              default = '' },
-		{ key = "userPW",                default = '' },
-		{ key = "KwFullHierarchy",       default = true },
-		{ key = "KwSynonyms",            default = true },
-		{ key = "mdTitle",               default = "{{title}}" },
-		{ key = "mdDescription",         default = "{{caption}}" },
-		{ key = "syncAlbumDescriptions", default = false },
-		{ key = "syncCommentsPublish",   default = true },
-		{ key = "syncCommentsPubOnly",   default = false },
+		{ key = 'host',                  	default = '' },
+		{ key = "userName",              	default = '' },
+		{ key = "userPW",                	default = '' },
+		{ key = "KwFullHierarchy",       	default = true },
+		{ key = "KwSynonyms",            	default = true },
+		{ key = "mdTitle",              	default = "{{title}}" },
+		{ key = "mdDescription",         	default = "{{caption}}" },
+		{ key = "syncAlbumDescriptions", 	default = false },
+		{ key = "syncCommentsPublish",   	default = true },
+		{ key = "syncCommentsPubOnly",   	default = false },
+		{ key = "PWP_albumAssociation", 	default = true },
+		{ key = "PWP_customAlbumSettings", 	default = false },
+		{ key = "KwFilterExclude",       	default = '' },
+		{ key = "KwFilterInclude",       	default = '' },
+		
+		
 	},
 
 	metadataThatTriggersRepublish = function(publishSettings, photoId, fieldName)
@@ -91,18 +99,19 @@ return {
 	-- titleForPublishedSmartCollection_standalone = ""
 
 	-- Images Processing function
-	processRenderedPhotos                            = PublishTask.processRenderedPhotos,
-	canAddCommentsToService                          = PublishTask.canAddCommentsToService,
-	addCommentToPublishedPhoto                       = PublishTask.addCommentToPublishedPhoto,
-	getCommentsFromPublishedCollection               = PublishTask.getCommentsFromPublishedCollection,
-	deletePhotosFromPublishedCollection              = PublishTask.deletePhotosFromPublishedCollection,
-	shouldDeletePhotosFromServiceOnDeleteFromCatalog = PublishTask.shouldDeletePhotosFromServiceOnDeleteFromCatalog,
+	processRenderedPhotos                            = PublishTaskImageProcessing.processRenderedPhotos,
+	addCommentToPublishedPhoto                       = PublishTaskImageProcessing.addCommentToPublishedPhoto,
+	getCommentsFromPublishedCollection               = PublishTaskImageProcessing.getCommentsFromPublishedCollection,
+	deletePhotosFromPublishedCollection              = PublishTaskImageProcessing.deletePhotosFromPublishedCollection,
+
 
 	-- PublishService processing functions
 	didCreateNewPublishService                       = PublishTask.didCreateNewPublishService,
 	didUpdatePublishService                          = PublishTask.didUpdatePublishService,
 	shouldDeletePublishService                       = PublishTask.shouldDeletePublishService,
 	willDeletePublishService                         = PublishTask.willDeletePublishService,
+	canAddCommentsToService                          = PublishTask.canAddCommentsToService,
+	shouldDeletePhotosFromServiceOnDeleteFromCatalog = PublishTask.shouldDeletePhotosFromServiceOnDeleteFromCatalog,
 
 	-- Published Collections / CollectionSets Processing functions
 	getCollectionBehaviorInfo                        = PublishTask.getCollectionBehaviorInfo,
