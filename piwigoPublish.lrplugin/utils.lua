@@ -73,6 +73,16 @@ function utils.extractNumber(inStr)
 end
 
 -- *************************************************
+-- Convert input value to a positive number; return nil if missing/invalid/non-positive.
+function utils.toPositiveNumber(value)
+    local n = tonumber(value)
+    if n and n > 0 then
+        return n
+    end
+    return nil
+end
+
+-- *************************************************
 function utils.dmsToDecimal(deg, min, sec, hemi)
     -- convert DMS (degrees, minutes, seconds + direction) to decimal degrees
     local decimal = tonumber(deg) + tonumber(min) / 60
