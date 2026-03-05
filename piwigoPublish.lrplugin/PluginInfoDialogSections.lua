@@ -61,8 +61,8 @@ function PluginInfoDialogSections.startDialog(propertyTable)
     if prefs.debugEnabled == nil then
         prefs.debugEnabled = false
     end
-    if prefs.clearLogOnReload == nil then
-        prefs.clearLogOnReload = false
+    if prefs.debugToFile == nil then
+        prefs.debugToFile = false
     end
 
     -- Initialize update check preference
@@ -72,13 +72,17 @@ function PluginInfoDialogSections.startDialog(propertyTable)
 
     -- Apply debug settings
     if prefs.debugEnabled then
-        log:enable("logfile")
+        if prefs.debugToFile then
+            log:enable("logfile")
+        else
+            log:enable("print")
+        end
     else
         log:disable()
     end
 
     propertyTable.debugEnabled = prefs.debugEnabled
-    propertyTable.clearLogOnReload = prefs.clearLogOnReload
+    propertyTable.debugToFile = prefs.debugToFile
     propertyTable.checkUpdatesOnStartup = prefs.checkUpdatesOnStartup
 end
 
@@ -151,21 +155,19 @@ function PluginInfoDialogSections.sectionsForTopOfDialog(f, propertyTable)
                     },
 
                     f:row {
-                        f:spacer { fill_horizontal = 1 },
                         f:push_button {
                             title = "Visit Plugin Page…",
                             action = function()
                                 LrHttp.openUrlInBrowser(GITHUB_URL)
                             end,
                         },
-                        f:spacer { fill_horizontal = 1 },
                     },
 
                     f:row {
                         f:static_text {
                             title = "Made in England with cider and cheddar cheese in Somerset,\n" ..
                                     "the Land of the Summer People.",
-                            font = "<system/small/italic>",
+                            font = "<system/small>",
                             text_color = LrColor(0.5, 0.5, 0.5),
                             alignment = 'center',
                             fill_horizontal = 1,
@@ -286,8 +288,8 @@ function PluginInfoDialogSections.sectionsForTopOfDialog(f, propertyTable)
                 f:row {
                     fill_horizontal = 1,
                     f:static_text {
-                        title = "If you experience a problem, enable logging, reproduce the issue,\n" ..
-                                "then share the log files with support.",
+                        title = "If you experience a problem, enable logging below and reproduce the issue.\n" ..
+                                "You can then share the log with support.",
                         fill_horizontal = 1,
                         height_in_lines = 2,
                         alignment = 'left',
@@ -296,59 +298,41 @@ function PluginInfoDialogSections.sectionsForTopOfDialog(f, propertyTable)
                 },
 
                 f:row {
-                    f:checkbox {
+                    f:radio_button {
                         value = bind 'debugEnabled',
-                        title = "Enable logging",
+                        checked_value = false,
+                        title = "Logging off",
                     },
                     f:spacer { fill_horizontal = 1 },
                 },
 
                 f:row {
+                    f:radio_button {
+                        value = bind 'debugEnabled',
+                        checked_value = true,
+                        title = "Live view in Lightroom (Help → Debug Console)",
+                    },
+                    f:spacer { fill_horizontal = 1 },
                     f:push_button {
-                        title = "Open log files",
+                        title = "Open log file",
                         enabled = bind 'debugEnabled',
                         action = function()
-                            LrShell.revealInShell(LrPathUtils.parent(utils.getLogfilePath()))
+                            LrShell.revealInShell(utils.getLogfilePath())
                         end,
                     },
-                    f:push_button {
-                        title = "Clear log files",
-                        action = function()
-                            local ok = utils.clearLogFiles()
-                            LrDialogs.message(
-                                "Log file cleared",
-                                ok and "Done." or "Could not clear log file.",
-                                "info"
-                            )
-                        end,
-                    },
-                    f:spacer { fill_horizontal = 1 },
                 },
 
                 f:row {
-                    spacing = f:dialog_spacing(),
-                    f:picture {
-                        value = _PLUGIN:resourceId('icons/email_32.png'),
+                    f:checkbox {
+                        value = bind 'debugToFile',
+                        enabled = bind 'debugEnabled',
                     },
-                    f:push_button {
-                        title = "Report by email",
-                        action = function()
-                            LrShell.revealInShell(LrPathUtils.parent(utils.getLogfilePath()))
-                            LrHttp.openUrlInBrowser("mailto:contact@fbphotography.uk?subject=PiwigoPublish%20issue&body=Please%20attach%20the%20log%20file.")
-                        end,
+                    f:static_text {
+                        title = "Also save to log file on disk (recommended for sharing with support)",
+                        alignment = 'left',
+                        fill_horizontal = 1,
+                        width_in_chars = 40,
                     },
-                    f:spacer { width = 16 },
-                    f:picture {
-                        value = _PLUGIN:resourceId('icons/github_32.png'),
-                    },
-                    f:push_button {
-                        title = "Report via GitHub",
-                        action = function()
-                            LrShell.revealInShell(LrPathUtils.parent(utils.getLogfilePath()))
-                            LrHttp.openUrlInBrowser("https://github.com/Piwigo/PiwigoPublish-lrc-plugin/issues/new")
-                        end,
-                    },
-                    f:spacer { fill_horizontal = 1 },
                 },
             },
 
@@ -387,14 +371,6 @@ function PluginInfoDialogSections.sectionsForTopOfDialog(f, propertyTable)
                         end,
                     },
                 },
-
-                f:row {
-                    f:checkbox {
-                        value = bind 'clearLogOnReload',
-                        title = "Clear log file on plugin reload",
-                    },
-                    f:spacer { fill_horizontal = 1 },
-                },
             },
         },
 
@@ -404,12 +380,16 @@ end
 -- *************************************************
 function PluginInfoDialogSections.endDialog(propertyTable)
     prefs.debugEnabled = propertyTable.debugEnabled
-    prefs.clearLogOnReload = propertyTable.clearLogOnReload
+    prefs.debugToFile = propertyTable.debugToFile
     prefs.checkUpdatesOnStartup = propertyTable.checkUpdatesOnStartup
 
     -- Apply debug settings
     if prefs.debugEnabled then
-        log:enable("logfile")
+        if prefs.debugToFile then
+            log:enable("logfile")
+        else
+            log:enable("print")
+        end
     else
         log:disable()
     end
