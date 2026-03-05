@@ -1,0 +1,6 @@
+Companion plugin for the PiwigoPublish Lightroom plugin. Exposes server diagnostics, provides automatic video upload configuration, extended video metadata storage, and includes an administration page.
+
+It is a management interface that links Piwigo and Lightroom in order to use videos. It acts as a gateway between the systems.
+It works in tandem. It's useless if you don't publish videos through Lightroom.
+
+Compatible with default themes as well as Bootstrap Darkroom.

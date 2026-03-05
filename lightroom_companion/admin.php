@@ -124,11 +124,13 @@ else
 }
 
 // Piwigo config
-$upload_all       = isset($conf['upload_form_all_types']) ? (bool)$conf['upload_form_all_types'] : false;
-$file_ext         = isset($conf['file_ext']) ? $conf['file_ext'] : array();
-$video_exts_all   = array('mp4', 'm4v', 'ogg', 'ogv', 'webm', 'webmv', 'mpg', 'mpeg', 'mov', 'avi');
-$found_video_exts = array_values(array_intersect($file_ext, $video_exts_all));
-$video_ready      = $upload_all && !empty($found_video_exts);
+// LRC_VIDEO_READY is derived from the config file on disk (not $conf in memory,
+// which may be stale due to opcache after enable/disable actions).
+$companion_block  = companion_has_video_block();
+$video_ready      = $companion_block;
+// Read upload_all and file_ext from disk to avoid opcache stale values after enable/disable.
+$upload_all       = $companion_block;
+$found_video_exts = $companion_block ? array('mp4', 'm4v', 'ogg', 'ogv', 'webm') : array();
 $config_writable  = companion_is_local_config_writable();
 
 // VideoJS detection
@@ -207,6 +209,7 @@ if (file_exists($main_file))
 
 $template->assign(array(
     'LRC_ADMIN_URL'        => get_admin_plugin_menu_link(dirname(__FILE__).'/admin.php'),
+    'LRC_CSS_URL'          => get_root_url() . 'plugins/' . basename(dirname(__FILE__)) . '/assets/admin.css',
     'PWG_TOKEN'            => get_pwg_token(),
     'LRC_TAB'              => $page['tab'],
     'LRC_PLUGIN_VERSION'   => $lrc_plugin_version,
@@ -264,7 +267,7 @@ $template->assign(array(
     'LRC_CFG'            => companion_get_all_config(),
     'LRC_HAS_GD'              => function_exists('imagecreatetruecolor'),
     'LRC_HAS_VIDEO_ICON'      => file_exists(dirname(__FILE__) . '/assets/video-icon.png'),
-    'LRC_COMPANION_BLOCK'     => companion_has_video_block(),
+    'LRC_COMPANION_BLOCK'     => $companion_block,
 ));
 
 // Render template

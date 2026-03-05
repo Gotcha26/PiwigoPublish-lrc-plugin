@@ -9,79 +9,49 @@
 })();
 </script>
 
-<style>
-/* === Lightroom Companion — variables thème === */
-:root,
-[data-lrc-theme="clear"] {
-  --lrc-color-section-border : #ccc;
-  --lrc-color-section-text   : #444;
-  --lrc-color-label          : #555;
-  --lrc-color-note           : #666;
-  --lrc-color-pre-bg         : #f5f5f5;
-  --lrc-color-pre-border     : #ddd;
-  --lrc-status-bg-ok         : #edfaed;
-  --lrc-status-bg-err        : #fdecea;
-  --lrc-status-border-ok     : #2a9d2a;
-  --lrc-status-border-err    : #c0392b;
-}
-[data-lrc-theme="dark"] {
-  --lrc-color-section-border : #555;
-  --lrc-color-section-text   : #ccc;
-  --lrc-color-label          : #aaa;
-  --lrc-color-note           : #888;
-  --lrc-color-pre-bg         : #1e1e1e;
-  --lrc-color-pre-border     : #444;
-  --lrc-status-bg-ok         : #1a2e1a;
-  --lrc-status-bg-err        : #2e1a1a;
-  --lrc-status-border-ok     : #2a9d2a;
-  --lrc-status-border-err    : #c0392b;
-}
+<link rel="stylesheet" href="{$LRC_CSS_URL}">
 
-.lrc-wrap        { max-width: 820px; }
-.lrc-section     { margin: 20px 0 6px; font-size: 1.05em; font-weight: bold;
-                   border-bottom: 2px solid var(--lrc-color-section-border);
-                   padding-bottom: 3px; color: var(--lrc-color-section-text); }
-.lrc-table       { border-collapse: collapse; width: 100%; margin-bottom: 4px; }
-.lrc-table td    { padding: 4px 6px; vertical-align: top; }
-.lrc-label       { width: 230px; font-weight: bold; color: var(--lrc-color-label); white-space: nowrap; }
-.lrc-ok          { color: #2a9d2a; font-weight: bold; }
-.lrc-err         { color: #c0392b; font-weight: bold; }
-.lrc-warn        { color: #e67e22; font-weight: bold; }
-.lrc-note        { font-size: 0.87em; color: var(--lrc-color-note); font-style: italic;
-                   padding: 2px 6px 6px 240px; }
-.lrc-action      { margin: 14px 0 4px; }
-.lrc-pre         { background: var(--lrc-color-pre-bg); border: 1px solid var(--lrc-color-pre-border);
-                   padding: 8px 12px; font-family: monospace; font-size: 0.88em; white-space: pre-wrap; }
-
-/* Status banner (onglet Video) */
-.lrc-status-banner {
-  display: flex; align-items: center; gap: 16px;
-  padding: 14px 18px; border-radius: 4px; margin: 16px 0;
-  border-left: 4px solid var(--lrc-status-border-ok);
-  background: var(--lrc-status-bg-ok);
-}
-.lrc-status-banner.lrc-banner-err {
-  border-color: var(--lrc-status-border-err);
-  background: var(--lrc-status-bg-err);
-}
-.lrc-status-icon { font-size: 2em; line-height: 1; }
-.lrc-status-text { flex: 1; }
-.lrc-status-text strong { display: block; font-size: 1.1em; margin-bottom: 2px; }
-.lrc-status-text small  { color: var(--lrc-color-note); }
-</style>
+{* ---- Animation pellicule (activation vidéo) ---- *}
+<div id="lrc-film-overlay" style="display:none" aria-hidden="true">
+  <div class="lrc-film-strip">
+    <div class="lrc-film-track">
+      <div class="lrc-film-frame"><span class="lrc-film-hole"></span><span class="lrc-film-hole"></span></div>
+      <div class="lrc-film-frame"><span class="lrc-film-hole"></span><span class="lrc-film-hole"></span></div>
+      <div class="lrc-film-frame"><span class="lrc-film-hole"></span><span class="lrc-film-hole"></span></div>
+      <div class="lrc-film-frame"><span class="lrc-film-hole"></span><span class="lrc-film-hole"></span></div>
+      <div class="lrc-film-frame"><span class="lrc-film-hole"></span><span class="lrc-film-hole"></span></div>
+      <div class="lrc-film-frame"><span class="lrc-film-hole"></span><span class="lrc-film-hole"></span></div>
+      <div class="lrc-film-frame"><span class="lrc-film-hole"></span><span class="lrc-film-hole"></span></div>
+      <div class="lrc-film-frame"><span class="lrc-film-hole"></span><span class="lrc-film-hole"></span></div>
+      <div class="lrc-film-frame"><span class="lrc-film-hole"></span><span class="lrc-film-hole"></span></div>
+      <div class="lrc-film-frame"><span class="lrc-film-hole"></span><span class="lrc-film-hole"></span></div>
+      <div class="lrc-film-frame"><span class="lrc-film-hole"></span><span class="lrc-film-hole"></span></div>
+      <div class="lrc-film-frame"><span class="lrc-film-hole"></span><span class="lrc-film-hole"></span></div>
+      <div class="lrc-film-frame"><span class="lrc-film-hole"></span><span class="lrc-film-hole"></span></div>
+      <div class="lrc-film-frame"><span class="lrc-film-hole"></span><span class="lrc-film-hole"></span></div>
+      <div class="lrc-film-frame"><span class="lrc-film-hole"></span><span class="lrc-film-hole"></span></div>
+      <div class="lrc-film-frame"><span class="lrc-film-hole"></span><span class="lrc-film-hole"></span></div>
+      <div class="lrc-film-frame"><span class="lrc-film-hole"></span><span class="lrc-film-hole"></span></div>
+      <div class="lrc-film-frame"><span class="lrc-film-hole"></span><span class="lrc-film-hole"></span></div>
+      <div class="lrc-film-frame"><span class="lrc-film-hole"></span><span class="lrc-film-hole"></span></div>
+      <div class="lrc-film-frame"><span class="lrc-film-hole"></span><span class="lrc-film-hole"></span></div>
+    </div>
+  </div>
+  <p class="lrc-film-label">{'lrc_video_activating'|translate}</p>
+</div>
 
 <div class="lrc-wrap">
 
-  <h2>Lightroom Companion <small style="font-size:0.55em; font-style:italic; font-weight:normal">v{$LRC_PLUGIN_VERSION}</small></h2>
+  <h2>Lightroom Companion <small class="lrc-version-small">v{$LRC_PLUGIN_VERSION}</small></h2>
 
   {* Tabsheet natif Piwigo *}
   {include file='tabsheet.tpl'}
 
   {* ---- Action result ---- *}
   {if $LRC_ACTION_STATUS eq 'ok' or $LRC_ACTION_STATUS eq 'already_configured'}
-    <p class="lrc-ok" style="margin:10px 0">{$LRC_ACTION_MESSAGE}</p>
+    <p class="lrc-ok lrc-action-message">{$LRC_ACTION_MESSAGE}</p>
   {elseif $LRC_ACTION_STATUS}
-    <p class="lrc-err" style="margin:10px 0">{$LRC_ACTION_MESSAGE}</p>
+    <p class="lrc-err lrc-action-message">{$LRC_ACTION_MESSAGE}</p>
   {/if}
 
   {* ================================================================= *}
@@ -156,13 +126,13 @@
           <form method="post" action="{$LRC_ADMIN_URL}&tab=video">
             <input type="hidden" name="action" value="disable_video_support">
             <input type="hidden" name="pwg_token" value="{$PWG_TOKEN}">
-            <input type="submit" class="submit" value="{'lrc_disable_video'|translate}" style="background:#c0392b">
+            <input type="submit" class="submit lrc-btn-danger" value="{'lrc_disable_video'|translate}">
           </form>
           <p class="lrc-note">{'lrc_disable_video_note'|translate}</p>
         {/if}
       </div>
     {elseif not $LRC_VIDEO_READY}
-      <p class="lrc-err" style="margin-top:10px">{'lrc_config_not_writable'|translate}</p>
+      <p class="lrc-err lrc-err-config">{'lrc_config_not_writable'|translate}</p>
       <div class="lrc-pre">$conf['upload_form_all_types'] = true;
 $conf['file_ext'] = array_merge($conf['picture_ext'], array('mp4', 'm4v', 'ogg', 'ogv', 'webm'));</div>
     {/if}
@@ -288,7 +258,7 @@ $conf['file_ext'] = array_merge($conf['picture_ext'], array('mp4', 'm4v', 'ogg',
         <td>
           <code>{$LRC_PUBLIC_THEME}</code>
           {if $LRC_PARENT_THEME neq $LRC_PUBLIC_THEME}
-            <span class="lrc-note" style="margin-left:8px">&#8627; {'lrc_parent'|translate}: <code>{$LRC_PARENT_THEME}</code></span>
+            <span class="lrc-note lrc-parent-theme">&#8627; {'lrc_parent'|translate}: <code>{$LRC_PARENT_THEME}</code></span>
           {/if}
         </td>
       </tr>
@@ -332,8 +302,8 @@ $conf['file_ext'] = array_merge($conf['picture_ext'], array('mp4', 'm4v', 'ogg',
           <td class="lrc-label">{'lrc_max_size'|translate}</td>
           <td>
             <input type="number" name="thumb_max_size" value="{$LRC_CFG.thumb_max_size}"
-                   min="50" max="1280" style="width:80px"> px
-            <span style="color:var(--lrc-color-note); font-size:0.87em; margin-left:8px">({'lrc_longest_side'|translate})</span>
+                   min="50" max="1280" class="lrc-input-sm"> px
+            <span class="lrc-input-hint">({'lrc_longest_side'|translate})</span>
           </td>
         </tr>
         <tr>
@@ -377,7 +347,7 @@ $conf['file_ext'] = array_merge($conf['picture_ext'], array('mp4', 'm4v', 'ogg',
               {'lrc_video_icon_option'|translate}
             </label>
             {if not $LRC_HAS_VIDEO_ICON}
-              <span class="lrc-warn" style="font-size:0.87em; margin-left:8px">
+              <span class="lrc-warn lrc-warn-asset">
                 ({'lrc_missing_asset'|translate}: <code>assets/video-icon.png</code>)
               </span>
             {/if}
@@ -407,23 +377,23 @@ $conf['file_ext'] = array_merge($conf['picture_ext'], array('mp4', 'm4v', 'ogg',
                      {if $LRC_CFG.overlay_play}checked{/if}>
               {'lrc_play_button_option'|translate}
             </label>
-            <span class="lrc-note" style="margin-left:8px; font-size:0.87em">{'lrc_play_native_note'|translate}</span>
+            <span class="lrc-note lrc-note-inline-lg">{'lrc_play_native_note'|translate}</span>
           </td>
         </tr>
         <tr>
           <td class="lrc-label">{'lrc_play_size'|translate}</td>
           <td>
             <input type="number" name="overlay_play_size" min="5" max="50"
-                   value="{$LRC_CFG.overlay_play_size|default:20}" style="width:60px"> %
-            <span class="lrc-note" style="margin-left:6px">{'lrc_play_size_note'|translate}</span>
+                   value="{$LRC_CFG.overlay_play_size|default:20}" class="lrc-input-xs"> %
+            <span class="lrc-note lrc-note-inline">{'lrc_play_size_note'|translate}</span>
           </td>
         </tr>
         <tr>
           <td class="lrc-label">{'lrc_play_opacity'|translate}</td>
           <td>
             <input type="number" name="overlay_play_opacity" min="10" max="100"
-                   value="{$LRC_CFG.overlay_play_opacity|default:100}" style="width:60px"> %
-            <span class="lrc-note" style="margin-left:6px">{'lrc_play_opacity_note'|translate}</span>
+                   value="{$LRC_CFG.overlay_play_opacity|default:100}" class="lrc-input-xs"> %
+            <span class="lrc-note lrc-note-inline">{'lrc_play_opacity_note'|translate}</span>
           </td>
         </tr>
       </table>
@@ -437,3 +407,18 @@ $conf['file_ext'] = array_merge($conf['picture_ext'], array('mp4', 'm4v', 'ogg',
   {/if}{* end tab settings *}
 
 </div>
+
+<script>
+(function(){
+  var hidden = document.querySelector('input[name="action"][value="enable_video_support"]');
+  if (!hidden) return;
+  var btn = hidden.closest('form').querySelector('input[type="submit"]');
+  if (!btn) return;
+  btn.addEventListener('click', function(e){
+    e.preventDefault();
+    document.getElementById('lrc-film-overlay').style.display = 'flex';
+    var form = hidden.closest('form');
+    setTimeout(function(){ form.submit(); }, 1500);
+  });
+})();
+</script>

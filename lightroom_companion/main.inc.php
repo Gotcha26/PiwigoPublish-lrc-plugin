@@ -1,9 +1,9 @@
 <?php
 /*
 Plugin Name: Lightroom Companion
-Version: 1.6.0
+Version: 1.6.2
 Description: Companion plugin for the PiwigoPublish Lightroom plugin. Exposes server diagnostics, provides automatic video upload configuration, extended video metadata storage, and includes an administration page.
-Plugin URI: https://piwigo.org/ext/extension_view.php?eid=1058
+Plugin URI: http://piwigo.org/ext/extension_view.php?eid=1066
 Author: Gotcha
 Author URI: https://github.com/Piwigo/PiwigoPublish-lrc-plugin
 Has Settings: webmaster
@@ -314,6 +314,9 @@ function companion_enable_video_support($params, &$service)
         );
     }
 
+    if (function_exists('opcache_invalidate'))
+        opcache_invalidate($config_path, true);
+
     return array(
         'status' => 'ok',
         'message' => 'Video support has been enabled. Video extensions (mp4, m4v, ogg, ogv, webm) are now allowed.',
@@ -340,41 +343,40 @@ function companion_disable_video_support($params, &$service)
 
     $content = file_get_contents($config_path);
 
-    $pos = strpos($content, $marker);
-    if ($pos === false)
+    if (strpos($content, $marker) === false)
     {
         return array('status' => 'already_configured', 'message' => 'Companion block not found — nothing to remove.');
     }
 
-    // Remove from the blank line just before the marker to the end of the block.
-    // The block ends at the last semicolon line after the marker.
-    // Strategy: find the newline before $pos (the blank separator line), remove everything from there to end of block.
-    // We remove: optional preceding \n, then marker line + all following lines until the next empty line or EOF.
-    $block_start = $pos;
-    // Walk back to include the preceding blank line (\n\n before marker)
-    if ($block_start >= 2 && substr($content, $block_start - 1, 1) === "\n")
-        $block_start--;
-
-    // Find end of block: scan forward until blank line or end of string
-    $block_end = $pos + strlen($marker);
-    $len = strlen($content);
-    while ($block_end < $len)
+    // Split into lines, remove every line that belongs to the Companion block
+    // (the marker line + all non-empty lines following it).
+    $lines   = explode("\n", $content);
+    $out     = array();
+    $skip    = false;
+    foreach ($lines as $line)
     {
-        $nl = strpos($content, "\n", $block_end);
-        if ($nl === false) { $block_end = $len; break; }
-        $line = substr($content, $block_end, $nl - $block_end + 1);
-        $block_end = $nl + 1;
-        if (trim($line) === '') break;  // blank line = end of block
+        if (strpos($line, $marker) !== false)
+        {
+            $skip = true;   // start skipping from the marker line
+            continue;
+        }
+        if ($skip)
+        {
+            if (trim($line) === '') { $skip = false; }  // blank line ends the block
+            continue;
+        }
+        $out[] = $line;
     }
-
-    $content = substr($content, 0, $block_start) . substr($content, $block_end);
-    $content = rtrim($content) . "\n";
+    $content = rtrim(implode("\n", $out)) . "\n";
 
     $written = @file_put_contents($config_path, $content);
     if ($written === false)
     {
         return array('status' => 'error', 'message' => 'Failed to write to ' . $config_path);
     }
+
+    if (function_exists('opcache_invalidate'))
+        opcache_invalidate($config_path, true);
 
     return array('status' => 'ok', 'message' => 'Video support has been disabled. The Companion block has been removed from local/config/config.inc.php.');
 }

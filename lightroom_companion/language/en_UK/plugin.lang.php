@@ -24,6 +24,7 @@ $lang['lrc_enabled']             = 'Enabled';
 $lang['lrc_disabled']            = 'Disabled';
 $lang['lrc_video_extensions']    = 'Video extensions';
 $lang['lrc_none_configured']     = 'None configured';
+$lang['lrc_video_activating']    = 'Activating video support…';
 $lang['lrc_enable_video']        = 'Enable Video Support';
 $lang['lrc_enable_video_note']   = 'Adds <code>upload_form_all_types = true</code> and video extensions (mp4, m4v, ogg, ogv, webm) to <code>local/config/config.inc.php</code>.';
 $lang['lrc_disable_video']       = 'Disable Video Support';

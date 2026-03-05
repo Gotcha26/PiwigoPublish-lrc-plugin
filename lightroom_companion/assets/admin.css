@@ -1,0 +1,125 @@
+/* === Lightroom Companion — variables thème === */
+
+/* ---- Animation pellicule ---- */
+@keyframes lrc-film-scroll {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+#lrc-film-overlay {
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 20px 0 14px;
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+.lrc-film-strip {
+  width: 100%;
+  overflow: hidden;
+  background: #1a1a1a;
+  border-radius: 4px;
+  padding: 6px 0;
+}
+.lrc-film-track {
+  display: flex;
+  width: max-content;
+  animation: lrc-film-scroll 1.4s linear infinite;
+}
+.lrc-film-frame {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  width: 52px;
+  height: 36px;
+  background: #2a2a2a;
+  border: 1px solid #444;
+  border-radius: 2px;
+  margin: 0 3px;
+  padding: 3px 0;
+  align-items: center;
+  flex-shrink: 0;
+}
+.lrc-film-hole {
+  display: block;
+  width: 10px;
+  height: 7px;
+  background: #1a1a1a;
+  border-radius: 2px;
+}
+.lrc-film-label {
+  margin: 0;
+  font-style: italic;
+  color: var(--lrc-color-note);
+  font-size: 0.9em;
+}
+
+:root,
+[data-lrc-theme="clear"] {
+  --lrc-color-section-border : #ccc;
+  --lrc-color-section-text   : #444;
+  --lrc-color-label          : #555;
+  --lrc-color-note           : #666;
+  --lrc-color-pre-bg         : #f5f5f5;
+  --lrc-color-pre-border     : #ddd;
+  --lrc-status-bg-ok         : #edfaed;
+  --lrc-status-bg-err        : #fdecea;
+  --lrc-status-border-ok     : #2a9d2a;
+  --lrc-status-border-err    : #c0392b;
+}
+[data-lrc-theme="dark"] {
+  --lrc-color-section-border : #555;
+  --lrc-color-section-text   : #ccc;
+  --lrc-color-label          : #aaa;
+  --lrc-color-note           : #888;
+  --lrc-color-pre-bg         : #1e1e1e;
+  --lrc-color-pre-border     : #444;
+  --lrc-status-bg-ok         : #1a2e1a;
+  --lrc-status-bg-err        : #2e1a1a;
+  --lrc-status-border-ok     : #2a9d2a;
+  --lrc-status-border-err    : #c0392b;
+}
+
+.lrc-wrap        { max-width: 820px; }
+.lrc-section     { margin: 20px 0 6px; font-size: 1.05em; font-weight: bold;
+                   border-bottom: 2px solid var(--lrc-color-section-border);
+                   padding-bottom: 3px; color: var(--lrc-color-section-text); }
+.lrc-table       { border-collapse: collapse; width: 100%; margin-bottom: 4px; }
+.lrc-table td    { padding: 4px 6px; vertical-align: top; }
+.lrc-label       { width: 230px; font-weight: bold; color: var(--lrc-color-label); white-space: nowrap; }
+.lrc-ok          { color: #2a9d2a; font-weight: bold; }
+.lrc-err         { color: #c0392b; font-weight: bold; }
+.lrc-warn        { color: #e67e22; font-weight: bold; }
+.lrc-note        { font-size: 0.87em; color: var(--lrc-color-note); font-style: italic;
+                   padding: 2px 6px 6px 240px; }
+.lrc-action      { margin: 14px 0 4px; }
+.lrc-pre         { background: var(--lrc-color-pre-bg); border: 1px solid var(--lrc-color-pre-border);
+                   padding: 8px 12px; font-family: monospace; font-size: 0.88em; white-space: pre-wrap; }
+
+/* Status banner (onglet Video) */
+.lrc-status-banner {
+  display: flex; align-items: center; gap: 16px;
+  padding: 14px 18px; border-radius: 4px; margin: 16px 0;
+  border-left: 4px solid var(--lrc-status-border-ok);
+  background: var(--lrc-status-bg-ok);
+}
+.lrc-status-banner.lrc-banner-err {
+  border-color: var(--lrc-status-border-err);
+  background: var(--lrc-status-bg-err);
+}
+.lrc-status-icon { font-size: 2em; line-height: 1; }
+.lrc-status-text { flex: 1; }
+.lrc-status-text strong { display: block; font-size: 1.1em; margin-bottom: 2px; }
+.lrc-status-text small  { color: var(--lrc-color-note); }
+
+/* Divers éléments extraits des styles inline */
+.lrc-version-small  { font-size: 0.55em; font-style: italic; font-weight: normal; }
+.lrc-action-message { margin: 10px 0; }
+.lrc-btn-danger     { background: #c0392b; }
+.lrc-err-config     { margin-top: 10px; }
+.lrc-parent-theme   { margin-left: 8px; }
+.lrc-input-hint     { color: var(--lrc-color-note); font-size: 0.87em; margin-left: 8px; }
+.lrc-input-sm       { width: 80px; }
+.lrc-input-xs       { width: 60px; }
+.lrc-warn-asset     { font-size: 0.87em; margin-left: 8px; }
+.lrc-note-inline    { margin-left: 6px; }
+.lrc-note-inline-lg { margin-left: 8px; font-size: 0.87em; }
