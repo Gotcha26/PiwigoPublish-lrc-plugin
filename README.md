@@ -8,7 +8,7 @@ Please see the [Wiki](https://github.com/Piwigo/PiwigoPublish-lrc-plugin/wiki) f
 
 ## Disclaimer
 
-With the exception of JSON.lua, Copyright 2010-2017 Jeffrey Friedl, which is released under a Creative Commons CC-BY "Attribution" License: http://creativecommons.org/licenses/by/3.0/deed.en_US, this software is released under the GNU General Public License version 3 as published by the Free Software Foundation.
+With the exception of JSON.lua, Copyright 2010-2017 Jeffrey Friedl, which is released under a Creative Commons CC-BY "Attribution" License: http://creativecommons.org/licenses/by/3.0/deed.en_US, and md5.lua, Copyright (c) 2013 Enrique García Cota + Adam Baldwin + hanzao + Equi 4 Software which is released under an MIT license, this software is released under the GNU General Public License version 3 as published by the Free Software Foundation.
          
 This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
 

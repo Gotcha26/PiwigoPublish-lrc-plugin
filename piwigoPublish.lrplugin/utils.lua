@@ -22,27 +22,87 @@
 
 
 local utils = {}
+
+
+-- *************************************************
+function utils.getFileMd5(fName)
+    -- return md5 sum of file fName
+    local f = io.open(fName, "rb")
+    if not f then
+        return nil, "Unable to open file: " .. fName
+    end
+    local content = f:read("*all")
+    f:close()
+    if not content then
+        return nil, "Unable to read file: " .. fName
+    end
+    log:info("DEBUG getFileMd5 - file: " .. fName .. ", size: " .. tostring(#content) .. " bytes")
+    local md5sum = LrMD5.digest(content)
+
+    return md5sum, "MD5 calculated successfully"
+end
+
 -- *************************************************
 function utils.anonymisePropertyTable(propertyTable)
     -- return copy of property table with sensitive data removed (for logging etc)
-    local ptCopy = propertyTable
-    ptCopy.userPW = "****"
-    ptCopy.userName = "****"
-    ptCopy.host = "****"
-    ptCopy.pwurl = "****"
-    ptCopy.cookieHeader = "****"
-    ptCopy.SessionCookie = "**** "
-    ptCopy.token = "****"
-    ptCopy.cookies = "****"
-    ptCopy.tagTable = nil
-    ptCopy._tagIndex = nil
-    return ptCopy
+    if type(propertyTable) ~= "table" then
+        return propertyTable
+    end
+
+    local redactedKeys = {
+        userpw = true,
+        username = true,
+        host = true,
+        pwurl = true,
+        cookieheader = true,
+        sessioncookie = true,
+        token = true,
+        cookies = true,
+    }
+
+    local droppedKeys = {
+        tagtable = true,
+        _tagindex = true,
+    }
+
+    local visited = {}
+
+    local function anonymiseValue(value)
+        if type(value) ~= "table" then
+            return value
+        end
+        if visited[value] then
+            return visited[value]
+        end
+
+        local copy = {}
+        visited[value] = copy
+
+        for k, v in pairs(value) do
+            local keyName = type(k) == "string" and string.lower(k) or nil
+            if keyName and droppedKeys[keyName] then
+                copy[k] = nil
+            elseif keyName and redactedKeys[keyName] then
+                copy[k] = "****"
+            else
+                copy[k] = anonymiseValue(v)
+            end
+        end
+
+        return copy
+    end
+
+    return anonymiseValue(propertyTable)
 end
 
 -- *************************************************
 function utils.anonymiseRenditionParams(renditionParams)
     -- return copy of renditionParams with sensitive data removed (for logging etc)
-    local rpCopy = renditionParams
+    local rpCopy = {}
+        for k, v in pairs(renditionParams) do
+        rpCopy[k] = v
+    end
+    
     rpCopy.exportContext.propertyTable.userPW = "****"
     rpCopy.exportContext.propertyTable.userName = "****"
     rpCopy.exportContext.propertyTable.host = "****"
@@ -121,6 +181,109 @@ function utils.extractNumber(inStr)
         return tonumber(num)
     end
     return nil -- no number found
+end
+
+-- *************************************************
+-- Convert input value to a positive number; return nil if missing/invalid/non-positive.
+function utils.toPositiveNumber(value)
+    local n = tonumber(value)
+    if n and n > 0 then
+        return n
+    end
+    return nil
+end
+
+-- *************************************************
+-- Compare effective Lightroom resize-related export settings and report first difference.
+function utils.resizeSettingsDiffer(originalSettings, newSettings)
+    local keyDefs = {
+        { name = 'LR_size_doConstrain', type = 'bool' },
+        { name = 'LR_size_userWantsConstrain', type = 'bool' },
+        { name = 'LR_size_doNotEnlarge', type = 'bool', aliases = { 'LR_size_dontEnlarge' } },
+        { name = 'LR_size_maxWidth', type = 'number', aliases = { 'LR_size_maxW' } },
+        { name = 'LR_size_maxHeight', type = 'number', aliases = { 'LR_size_maxH' } },
+        { name = 'LR_size_percentage', type = 'number' },
+        { name = 'LR_size_resizeType', type = 'string' },
+        { name = 'LR_size_units', type = 'string' },
+    }
+
+    local function getValue(settings, keyDef)
+        local value = settings[keyDef.name]
+        if value == nil and keyDef.aliases then
+            for _, alias in ipairs(keyDef.aliases) do
+                value = settings[alias]
+                if value ~= nil then
+                    break
+                end
+            end
+        end
+        return value
+    end
+
+    for _, keyDef in ipairs(keyDefs) do
+        local originalRaw = getValue(originalSettings, keyDef)
+        local newRaw = getValue(newSettings, keyDef)
+        local originalValue = originalRaw
+        local newValue = newRaw
+
+        if keyDef.type == 'bool' then
+            originalValue = originalRaw and true or false
+            newValue = newRaw and true or false
+        elseif keyDef.type == 'number' then
+            originalValue = tonumber(originalRaw)
+            newValue = tonumber(newRaw)
+        else
+            originalValue = originalRaw ~= nil and tostring(originalRaw) or nil
+            newValue = newRaw ~= nil and tostring(newRaw) or nil
+        end
+
+        if originalValue ~= newValue then
+            return true, keyDef.name, originalRaw, newRaw
+        end
+    end
+
+    return false
+end
+
+-- *************************************************
+function utils.dumpPropertyTableToDesktop(tableToDump, collectionSettings, context)
+    local desktopDir = LrPathUtils.getStandardFilePath('desktop')
+    local debugDir = LrPathUtils.child(desktopDir, "PiwigoPublishDebug")
+
+    if not debugDir or debugDir == "" then
+        log:warn("Unable to resolve Desktop path for propertyTable dump")
+        return
+    end
+
+    LrFileUtils.createAllDirectories(debugDir)
+
+    local timestamp = os.date("%Y%m%d-%H%M%S")
+    local dumpPath = LrPathUtils.child(debugDir, "PiwigoPublish-propertyTable-" .. timestamp .. ".lua")
+
+    local dumpText = "-- PiwigoPublish propertyTable debug dump\n" ..
+        "-- Generated: " .. os.date("%Y-%m-%d %H:%M:%S") .. "\n" ..
+        "-- Context: " .. (context or "runCustomRenderForCollection") .. "\n\n" ..
+        "collectionSettings = " .. utils.serialiseVar(collectionSettings) .. "\n\n" ..
+        "propertyTable = " .. utils.serialiseVar(tableToDump) .. "\n"
+
+    local file, err = io.open(dumpPath, "w")
+    if not file then
+        log:warn("Failed to write propertyTable dump file: " .. tostring(err))
+        return
+    end
+
+    file:write(dumpText)
+    file:close()
+    log:info("propertyTable dump written to: " .. dumpPath)
+end
+
+-- *************************************************
+function utils.reverseTable(t)
+    local reversed = {}
+    for i = #t, 1, -1 do
+        reversed[#reversed + 1] = t[i]
+    end
+    return reversed
 end
 
 -- *************************************************
@@ -344,6 +507,7 @@ end
 ---- *************************************************
 function utils.GetKWHierarchy(kwHierarchy, thisKeyword, pos)
     -- build hierarchical list of parent keywords
+    -- returns table of keywords with leaf node at pos 1 and each parent in subsequent positions
     kwHierarchy[pos] = thisKeyword
     if thisKeyword:getParent() == nil then
         return kwHierarchy
@@ -470,7 +634,7 @@ end
 
 -- *************************************************
 function utils.tagsToIds(propertyTable, tagString)
-    -- convert tagString to list of assoiciated tag ids 
+    -- convert tagString to list of assoiciated tag ids
     -- use _tagIndex which is a reverse lookup table created in utils.buildTagIndex(propertyTable) when tagTable is refreshed via PiwigoAPI.getTagList(propertyTable)
     -- tagString = comma delimted list of tags for which we want the associated Piwigo Tag ID
 
@@ -499,66 +663,254 @@ function utils.tagsToIds(propertyTable, tagString)
 end
 
 -- *************************************************
-function utils.BuildTagString(propertyTable, lrPhoto)
+function utils.BuildTagString(propertyTable, lrPhoto, collectionSettings)
     -- build text string of keywords on lrPhoto - to be sent to Piwigo
     -- respect LrC includeOnExport flag set in keyword tag editor
     -- respect KwFullHierarchy and KwSynonyms set in publish manager settings
-    local tagString = ""
+    -- respect keyword filters set at publish service or collections level
+
+    -- set up custom export filters if set
+    local KwFullHierarchy = propertyTable.KwFullHierarchy
+    local KwSynonyms      = propertyTable.KwSynonyms
+    local excludePatterns = utils.parseFilterPatterns(propertyTable.KwFilterExclude)
+    local includePatterns = utils.parseFilterPatterns(propertyTable.KwFilterInclude)
+    if propertyTable.PWP_customAlbumSettings and collectionSettings and collectionSettings.enableCustom then
+        if collectionSettings then
+            if collectionSettings.KwFullHierarchy ~= nil then
+                KwFullHierarchy = collectionSettings.KwFullHierarchy
+            end
+            if collectionSettings.KwSynonyms ~= nil then
+                KwSynonyms = collectionSettings.KwSynonyms
+            end
+            if collectionSettings.KwFilterExclude then
+                excludePatterns = utils.parseFilterPatterns(collectionSettings.KwFilterExclude)
+            end
+            if collectionSettings.KwFilterInclude then
+                includePatterns = utils.parseFilterPatterns(collectionSettings.KwFilterInclude)
+            end
+        end
+    end
+
+    local hasIncludeRules = includePatterns and #includePatterns > 0
+    local hasExcludeRules = excludePatterns and #excludePatterns > 0
+    -- build tagTable which will contain the list of unique keywords to be sent to Piwigo
     local tagTable = {}
-    for ii, thisKeyword in ipairs(lrPhoto:getRawMetadata("keywords")) do
-        local kwHierarchy = {}
-        kwHierarchy = utils.GetKWHierarchy(kwHierarchy, thisKeyword, 1)
-        for kk, kwLevel in ipairs(kwHierarchy) do
+    for _, thisKeyword in ipairs(lrPhoto:getRawMetadata("keywords")) do
+        local kwHierarchy = utils.GetKWHierarchy({}, thisKeyword, 1) -- leaf at [1], parents upwards
+        local thisKwHierarchy = {}                                   -- will contain list of keywords to be sent to Piwigo for this kwHierarchy
+        local kwLevels = #kwHierarchy
+
+        -- Hierarchy-level filter result:
+        -- include if ANY level matches include rule (when include rules exist)
+        -- exclude if ANY level matches exclude rule
+        local hierarchyIncludeMatch = not hasIncludeRules
+        local hierarchyExcludeMatch = false
+
+        for kk = kwLevels, 1, -1 do
+            -- traverse the hierarchy from root down to leaf - this way we can check each level against filter rules and stop processing if any level fails filter criteria
+            local kwLevel = kwHierarchy[kk]
             local kwAtts = kwLevel:getAttributes()
             if kwAtts.includeOnExport then
+                -- this keyword is marked for export - so get name and synonyms and add to tagTable if they satisfy filter rules
                 local kwLevelName = kwLevel:getName()
+                -- evaluate filters against every hierarchy element
+                if hasIncludeRules and not hierarchyIncludeMatch then
+                    hierarchyIncludeMatch = utils.checkIncludeKeywordFilter(kwLevelName, includePatterns)
+                end
+                if hasExcludeRules and not hierarchyExcludeMatch then
+                    hierarchyExcludeMatch = utils.checkExcludeKeywordFilter(kwLevelName, excludePatterns)
+                end
                 local kwLevelSyn = kwLevel:getSynonyms()
                 if kk > 1 then
-                    if propertyTable.KwFullHierarchy then
-                        if utils.checkTagUnique(kwLevelName, tagTable) then
-                            table.insert(tagTable, kwLevelName)
-                        end
-                        if propertyTable.KwSynonyms then
-                            for ss, syn in pairs(kwLevelSyn) do
-                                if utils.checkTagUnique(syn, tagTable) then
-                                    table.insert(tagTable, syn)
-                                end
+                    if KwFullHierarchy then
+                        -- only process beyond leaf node if full hierarchy option is set
+                        table.insert(thisKwHierarchy, kwLevelName)
+                        if KwSynonyms then
+                            -- include Synonyms if option is set
+                            for _, syn in pairs(kwLevelSyn) do
+                                table.insert(thisKwHierarchy, syn)
                             end
                         end
                     end
                 else
-                    if utils.checkTagUnique(kwLevelName, tagTable) then
-                        table.insert(tagTable, kwLevelName)
-                    end
+                    -- leaf node - always include if export flag is set and it satisfies filter criteria
+                    table.insert(thisKwHierarchy, kwLevelName)
                     if propertyTable.KwSynonyms then
-                        for ss, syn in pairs(kwLevelSyn) do
-                            if utils.checkTagUnique(syn, tagTable) then
-                                table.insert(tagTable, syn)
-                            end
+                        for _, syn in pairs(kwLevelSyn) do
+                            table.insert(thisKwHierarchy, syn)
                         end
                     end
                 end
             end
         end
+
+        local includeThisHierarchy = hierarchyIncludeMatch and (not hierarchyExcludeMatch)
+        -- add thisKwHierarchy to tagTable
+        if includeThisHierarchy then
+            for _, kw in ipairs(thisKwHierarchy) do
+                if utils.checkTagUnique(kw, tagTable) then
+                    table.insert(tagTable, kw)
+                end
+            end
+        end
     end
+
+
+    -- tagString is comma delimited list of keywords to be sent to Piwigo - convert tagTable to string
+    local tagString = ""
     tagString = utils.tabletoString(tagTable, ",")
     return tagString
 end
 
 -- *************************************************
-function utils.getPhotoMetadata(publishSettings, lrPhoto)
+function utils.wildcardMatch(pattern, text)
+    -- match text against a wildcard pattern (* = any chars, ? = single char)
+    -- case-insensitive
+    local p = pattern:lower()
+    local t = text:lower()
+    -- escape Lua magic characters except * and ?
+    p = p:gsub("([%.%+%-%^%$%(%)%%])", "%%%1")
+    p = p:gsub("%[", "%%[")
+    p = p:gsub("%]", "%%]")
+    -- convert wildcards to Lua patterns
+    p = p:gsub("%*", ".*")
+    p = p:gsub("%?", ".")
+    -- anchor the pattern
+    p = "^" .. p .. "$"
+    return t:match(p) ~= nil
+end
+
+-- *************************************************
+function utils.parseFilterPatterns(filterString)
+    -- parse filter patterns string into a table (one rule per line, also accepts commas)
+    local patterns = {}
+    if not filterString or filterString == "" then
+        return patterns
+    end
+    for token in filterString:gmatch("[^\r\n,]+") do
+        local trimmed = utils.clean_spaces(token)
+        if trimmed ~= "" then
+            table.insert(patterns, trimmed)
+        end
+    end
+    return patterns
+end
+
+-- *************************************************
+function utils.buildFilteredKeywordList(keywords, includePatterns, excludePatterns)
+    -- build list of keywords to send to Piwigo based on include/exclude patterns
+    -- keywords is a table of Class LrKeyword
+    local includeKeywords = {}
+
+    for _, kw in ipairs(keywords) do
+        local isAllowed = true
+        local kwName = kw:getName()
+        if excludePatterns and #excludePatterns > 0 then
+            for _, pat in ipairs(excludePatterns) do
+                if utils.wildcardMatch(pat, kwName) then
+                    isAllowed = false
+                    break
+                end
+            end
+        end
+        if isAllowed and includePatterns and #includePatterns > 0 then
+            local found = false
+            for _, pat in ipairs(includePatterns) do
+                if utils.wildcardMatch(pat, kwName) then
+                    found = true
+                    break
+                end
+            end
+            if not found then
+                isAllowed = false
+            end
+        end
+
+        if isAllowed then
+            table.insert(includeKeywords, kw)
+        end
+    end
+
+    return includeKeywords
+end
+
+-- *************************************************
+function utils.checkIncludeKeywordFilter(kwName, includePatterns)
+    -- check if a  keyword satisfies include/exclude filter rules
+    -- returns: doInclude (bool), doExclude (bool)
+
+    local doInclude = false
+
+    --log:info("utils.checkIncludeKeywordFilter - kwName: " .. kwName)
+    -- check include rules first
+    if includePatterns and #includePatterns > 0 then
+        for _, pat in ipairs(includePatterns) do
+            if utils.wildcardMatch(pat, kwName) then
+                doInclude = true
+                break
+            end
+        end
+    else
+        -- if no include patterns set, then we want to include all keywords which are not excluded by the exclude patterns
+        doInclude = true
+    end
+
+
+
+    return doInclude
+end
+
+-- *************************************************
+function utils.checkExcludeKeywordFilter(kwName, excludePatterns)
+    -- check if a  keyword satisfies include/exclude filter rules
+    -- returns: doInclude (bool), doExclude (bool)
+
+
+    local doExclude = false
+    --log:info("utils.checkExcludeKeywordFilter - kwName: " .. kwName)
+
+
+    -- check exclude rules
+    if excludePatterns and #excludePatterns > 0 then
+        for _, pat in ipairs(excludePatterns) do
+            if utils.wildcardMatch(pat, kwName) then
+                doExclude = true
+                break
+            end
+        end
+    end
+
+    return doExclude
+end
+
+-- *************************************************
+function utils.getPhotoMetadata(publishSettings, lrPhoto, collectionSettings)
     -- build set of metadata to be send to Piwigo
     local metaData = {}
-    if publishSettings.mdTitle and publishSettings.mdTitle ~= "" then
-        metaData.Title = utils.setCustomMetadata(lrPhoto, publishSettings.mdTitle)
+
+    local useTitleFormat = publishSettings.mdTitle
+    local useCaptionFormat = publishSettings.mdDescription
+    if publishSettings.PWP_customAlbumSettings and collectionSettings then
+        if collectionSettings.mdTitle and collectionSettings.mdTitle ~= "" then
+            useTitleFormat = collectionSettings.mdTitle
+        end
+        if collectionSettings.mdDescription and collectionSettings.mdDescription ~= "" then
+            useCaptionFormat = collectionSettings.mdDescription
+        end
+    end
+
+    if useTitleFormat and useTitleFormat ~= "" then
+        metaData.Title = utils.setCustomMetadata(lrPhoto, useTitleFormat)
     else
         metaData.Title = lrPhoto:getFormattedMetadata("title") or ""
     end
-    if publishSettings.mdDescription and publishSettings.mdDescription ~= "" then
-        metaData.Caption = utils.setCustomMetadata(lrPhoto, publishSettings.mdDescription)
+
+    if useCaptionFormat and useCaptionFormat ~= "" then
+        metaData.Caption = utils.setCustomMetadata(lrPhoto, useCaptionFormat)
     else
         metaData.Caption = lrPhoto:getFormattedMetadata("caption") or ""
     end
+
     metaData.Creator = lrPhoto:getFormattedMetadata("creator") or ""
     metaData.fileName = lrPhoto:getFormattedMetadata("fileName") or ""
 
@@ -583,7 +935,9 @@ function utils.getPhotoMetadata(publishSettings, lrPhoto)
     end
     local useDate = LrDate.timeToUserFormat(rawDate, "%Y-%m-%d %H:%M:%S")
     metaData.dateCreated = useDate or ""
-    metaData.tagString = utils.BuildTagString(publishSettings, lrPhoto)
+
+
+    metaData.tagString = utils.BuildTagString(publishSettings, lrPhoto, collectionSettings)
 
     -- GPS coordinates
     local gps = lrPhoto:getRawMetadata("gps")
@@ -1119,7 +1473,7 @@ function utils.findPublishNodeByName(service, name)
 end
 
 -- *************************************************
--- http utiils
+-- http utils
 -- *************************************************
 function utils.urlEncode(str)
     -- urlencode a string
@@ -1274,20 +1628,34 @@ function utils.extractPwImageIdFromUrl(url, expectedHost)
 end
 
 -- *************************************************
-function utils.findExistingPwImageId(publishService, lrPhoto)
+function utils.findExistingPwImageId(publishService, lrPhoto, excludeCollection)
     -- Searches if this LR photo is already published in another collection of the same service
     -- Returns the Piwigo remoteId if found, nil otherwise
 
-    local foundRemoteId = nil
+    -- excludeCollection is an optional parameter -
+    -- if provided, this collection will be skipped in the search to avoid finding the same photo in the current collection when checking for duplicates
+
+    local foundPubPhoto = nil
+    local foundPubCollection = nil
+    local pubPhotoExists = false
+    local excludeId = excludeCollection and excludeCollection.localIdentifier
+
 
     local function searchInCollection(collection)
-        if foundRemoteId then return end
+        if foundPubPhoto then return end
+        if excludeId and collection.localIdentifier == excludeId then
+            -- skip excludeCollection
+            return
+        end
+
         local pubPhotos = collection:getPublishedPhotos()
         for _, pubPhoto in ipairs(pubPhotos) do
             if pubPhoto:getPhoto().localIdentifier == lrPhoto.localIdentifier then
                 local rid = pubPhoto:getRemoteId()
                 if rid and rid ~= "" then
-                    foundRemoteId = rid
+                    foundPubPhoto = pubPhoto
+                    foundPubCollection = collection
+                    pubPhotoExists = true
                     return
                 end
             end
@@ -1295,13 +1663,13 @@ function utils.findExistingPwImageId(publishService, lrPhoto)
     end
 
     local function searchInSet(collectionSet)
-        if foundRemoteId then return end
+        if foundPubPhoto then return end
         -- Search in child collections
         local childColls = collectionSet:getChildCollections()
         if childColls then
             for _, coll in ipairs(childColls) do
                 searchInCollection(coll)
-                if foundRemoteId then return end
+                if foundPubPhoto then return end
             end
         end
         -- Search in child sets (recursive)
@@ -1309,7 +1677,7 @@ function utils.findExistingPwImageId(publishService, lrPhoto)
         if childSets then
             for _, childSet in ipairs(childSets) do
                 searchInSet(childSet)
-                if foundRemoteId then return end
+                if foundPubPhoto then return end
             end
         end
     end
@@ -1317,7 +1685,7 @@ function utils.findExistingPwImageId(publishService, lrPhoto)
     -- Start search from service root
     searchInSet(publishService)
 
-    return foundRemoteId
+    return pubPhotoExists, foundPubPhoto, foundPubCollection
 end
 
 -- *************************************************
@@ -1449,6 +1817,5 @@ function utils.buildAlbumSummary(publishService)
 
     return { nodes = nodes, totals = totals }
 end
-
 
 return utils

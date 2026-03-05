@@ -102,10 +102,13 @@ local function SendMetadata()
         end
         callStatus = {}
         local metaData = {}
-
+        local collectionSettings = {}
+        -- todo - get collections for collection this photo is in so  collection level overrides can be applied when building metadata structure
         -- build metadata structure
-        metaData = utils.getPhotoMetadata(publishSettings, lrPhoto)
+        metaData = utils.getPhotoMetadata(publishSettings, lrPhoto,  collectionSettings)
         metaData.Remoteid = remoteId
+
+        -- get keyword filters from publishSettings and build include / exclude patterns
 
         callStatus = PiwigoAPI.updateMetadata(publishSettings, lrPhoto, metaData)
         if not callStatus.status then

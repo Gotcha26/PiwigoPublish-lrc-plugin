@@ -787,143 +787,22 @@ local function prefsDialog(f, propertyTable)
 		},
 
 
-		f:group_box {
-			title = "Metadata Settings",
-			font = "<system/bold>",
-			fill_horizontal = 1,
-
-			f:spacer { height = 2 },
-
-			f:row {
-				f:static_text {
-					title = "Title: ",
-					font = "<system>",
-					alignment = 'right',
-					width_in_chars = 8,
-				},
-				f:edit_field {
-					value = bind 'mdTitle',
-					font = "<system>",
-					alignment = 'left',
-					width_in_chars = 60,
-					height_in_lines = 3,
-				},
-			},
-
-			f:row {
-				f:static_text {
-					title = "Description: ",
-					font = "<system>",
-					alignment = 'right',
-					width_in_chars = 8,
-				},
-				f:edit_field {
-					value = bind 'mdDescription',
-					font = "<system>",
-					alignment = 'left',
-					width_in_chars = 60,
-					height_in_lines = 3,
-				},
-			},
-		},
+		f:spacer { height = 2 },
+		-- custom metadata fields (Title and description)
+		UIHelpers.createMetaDataGroupBox(f, bind),
 
 		f:spacer { height = 2 },
+		-- keyword hierarchy and synonyms, and keyword filtering
+		UIHelpers.createKeywordSettingsGroupBox(f, bind),
 
-		f:group_box {
-			title = "Keyword Settings",
-			font = "<system/bold>",
-			fill_horizontal = 1,
-			f:spacer { height = 2 },
-			f:row {
-				fill_horizontal = 1,
-				f:static_text {
-					title = "",
-					alignment = 'right',
-					width_in_chars = 7,
-				},
-				f:checkbox {
-					font = "<system>",
-					title = "Include Full Keyword Hierarchy",
-					tooltip = "If checked, all keywords in a keyword hierarchy will be sent to Piwigo",
-					value = bind 'KwFullHierarchy',
-				}
-			},
-
-			f:spacer { height = 2 },
-
-			f:row {
-				fill_horizontal = 1,
-				f:static_text {
-					title = "",
-					alignment = 'right',
-					width_in_chars = 7,
-				},
-				f:checkbox {
-					font = "<system>",
-					title = "Include Keyword Synonyms",
-					tooltip = "If checked, keyword synonyms will be sent to Piwigo",
-					value = bind 'KwSynonyms',
-				}
-			},
-		},
 		f:spacer { height = 2 },
-		f:group_box {
-			title = "Other Settings",
-			font = "<system/bold>",
-			fill_horizontal = 1,
-			f:spacer { height = 1 },
+		-- album custom settings and album association (one image, multiple albums)
+		UIHelpers.createAlbumSettingsGroupBox(f, bind, propertyTable),
 
-
-
-
-			f:row {
-				fill_horizontal = 1,
-				f:static_text {
-					title = "",
-					alignment = 'right',
-					width_in_chars = 7,
-				},
-				f:checkbox {
-					title = "Synchronise Album Descriptions",
-					font = "<system>",
-					tooltip = "If checked, Album descriptions will be maintainable in Lightroom and sent to Piwigo",
-					value = bind 'syncAlbumDescriptions',
-				},
-			},
-			f:spacer { height = 1 },
-
-			f:row {
-				fill_horizontal = 1,
-				f:static_text {
-					title = "",
-					alignment = 'right',
-					width_in_chars = 7,
-				},
-				f:checkbox {
-					title = "Synchronise comments as part of a Publish Process",
-					font = "<system>",
-					tooltip = "When checked, comments will be synchronised for all photos in a collection during a publish operation",
-					value = bind 'syncCommentsPublish',
-				},
-			},
-			f:row {
-				fill_horizontal = 1,
-				f:static_text {
-					title = "",
-					alignment = 'right',
-					width_in_chars = 7,
-				},
-				f:checkbox {
-					title = "Only include Published Photos",
-					enabled = bind('syncCommentsPublish', propertyTable),
-					font = "<system>",
-					tooltip = "When checked, only photos being published will have comments synchronised",
-					value = bind 'syncCommentsPubOnly',
-				},
-			},
-
-
-		},
+		f:spacer { height = 2 },
+		-- other settings (album descriptions and comments handling)
+		UIHelpers.createOtherSettingsGroupBox(f, bind, propertyTable),
+		
 	}
 end
 --

@@ -1435,7 +1435,7 @@ function PiwigoAPI.getInfos(propertyTable)
         log:info("PiwigoAPI.getInfos - headers\n" .. utils.serialiseVar(headers))
         log:info("PiwigoAPI.getInfos - getResponse\n" .. utils.serialiseVar(getResponse))
         LrDialogs.message("PiwigoAPI.getInfos - Cannot get host information from Piwigo - " ..
-        (getResponse.errorMessage or "Unknown error"))
+            (getResponse.errorMessage or "Unknown error"))
         return false
     end
 
@@ -2142,36 +2142,43 @@ function PiwigoAPI.dissociateImageFromCategory(propertyTable, imageId, categoryI
     end
 
     log:info("PiwigoAPI.dissociateImageFromCategory - remaining categories: " .. #newCategoryIds)
-
+    callStatus.deletedImage = false
     -- If image would be orphaned (no remaining categories), delete it entirely
     if #newCategoryIds == 0 then
         log:info("PiwigoAPI.dissociateImageFromCategory - image would be orphaned, deleting entirely")
-        return PiwigoAPI.deletePhoto(propertyTable, categoryId, imageId, callStatus)
-    end
+        local delcallStatus = PiwigoAPI.deletePhoto(propertyTable, categoryId, imageId, callStatus)
+        if delcallStatus.status then
+            callStatus.status = true
+            callStatus.statusMsg = "Image removed from category and deleted (was orphaned)"
+        else
+            callStatus.statusMsg = delcallStatus.statusMsg or "Failed to delete orphaned image"
+        end
 
-    -- Update image with new categories list (replaces all associations)
-    local categoriesStr = table.concat(newCategoryIds, ";")
-
-    local params = {
-        { name = "method",              value = "pwg.images.setInfo" },
-        { name = "image_id",            value = tostring(imageId) },
-        { name = "categories",          value = categoriesStr },
-        { name = "multiple_value_mode", value = "replace" },
-        { name = "pwg_token",           value = propertyTable.token }
-    }
-
-    log:info("PiwigoAPI.dissociateImageFromCategory - new categories string: " .. categoriesStr)
-
-    local postResponse = PiwigoAPI.httpPostMultiPart(propertyTable, params)
-
-    if postResponse.status then
-        callStatus.status = true
-        log:info("PiwigoAPI.dissociateImageFromCategory - success")
+        callStatus.deletedImage = true
     else
-        callStatus.statusMsg = postResponse.statusMsg or "Dissociation failed"
-        log:info("PiwigoAPI.dissociateImageFromCategory - failed: " .. callStatus.statusMsg)
-    end
+        -- Update image with new categories list (replaces all associations)
+        local categoriesStr = table.concat(newCategoryIds, ";")
 
+        local params = {
+            { name = "method",              value = "pwg.images.setInfo" },
+            { name = "image_id",            value = tostring(imageId) },
+            { name = "categories",          value = categoriesStr },
+            { name = "multiple_value_mode", value = "replace" },
+            { name = "pwg_token",           value = propertyTable.token }
+        }
+
+        log:info("PiwigoAPI.dissociateImageFromCategory - new categories string: " .. categoriesStr)
+
+        local postResponse = PiwigoAPI.httpPostMultiPart(propertyTable, params)
+
+        if postResponse.status then
+            callStatus.status = true
+            log:info("PiwigoAPI.dissociateImageFromCategory - success")
+        else
+            callStatus.statusMsg = postResponse.statusMsg or "Dissociation failed"
+            log:info("PiwigoAPI.dissociateImageFromCategory - failed: " .. callStatus.statusMsg)
+        end
+    end
     return callStatus
 end
 
@@ -2326,10 +2333,10 @@ function PiwigoAPI.updateGallery(propertyTable, exportFilename, metaData)
     end
     if not (uploadSuccess) then
         if httpHeaders.error then
-            statusDes = httpHeaders.error.name
+            statusDes = httpHeaders.error.name or ""
             status = httpHeaders.error.errorCode
         else
-            statusDes = httpHeaders.statusDes
+            statusDes = httpHeaders.statusDes or ""
             status = httpHeaders.status
         end
         LrDialogs.message("Cannot upload - " .. metaData.fileName .. " to Piwigo - " .. status, statusDes)
@@ -2523,7 +2530,8 @@ function PiwigoAPI.deletePhoto(propertyTable, pwCatID, pwImageID, callStatus)
             callStatus.status = true
             callStatus.statusMsg = ""
         else
-            log:info("PiwigoAPI.deletePhoto - propertyTable \n " .. utils.serialiseVar(utils.anonymisePropertyTable(propertyTable)))
+            log:info("PiwigoAPI.deletePhoto - propertyTable \n " ..
+                utils.serialiseVar(utils.anonymisePropertyTable(propertyTable)))
             log:info("PiwigoAPI.deletePhoto - params \n" .. utils.serialiseVar(params))
             log:info("PiwigoAPI.deletePhoto - httpResponse \n" .. utils.serialiseVar(httpResponse))
             log:info("PiwigoAPI.deletePhoto - httpHeaders \n" .. utils.serialiseVar(httpHeaders))
@@ -2531,7 +2539,8 @@ function PiwigoAPI.deletePhoto(propertyTable, pwCatID, pwImageID, callStatus)
             callStatus.statusMsg = body.message or ""
         end
     else
-        log:info("PiwigoAPI.deletePhoto - propertyTable \n " .. utils.serialiseVar(utils.anonymisePropertyTable(propertyTable)))
+        log:info("PiwigoAPI.deletePhoto - propertyTable \n " ..
+            utils.serialiseVar(utils.anonymisePropertyTable(propertyTable)))
         log:info("PiwigoAPI.deletePhoto - params \n" .. utils.serialiseVar(params))
         log:info("PiwigoAPI.deletePhoto - httpResponse \n" .. utils.serialiseVar(httpResponse))
         log:info("PiwigoAPI.deletePhoto - httpHeaders \n" .. utils.serialiseVar(httpHeaders))
@@ -2635,7 +2644,8 @@ function PiwigoAPI.addComment(publishSettings, metaData)
     -- get antispam token from image details (unique for each image)
     local rtnStatus = PiwigoAPI.checkPhoto(publishSettings, metaData.remoteId)
     if not rtnStatus.status then
-        log:info("PiwigoAPI.addComment - unanble to retrieve token\n" ..  utils.serialiseVar(utils.anonymisePropertyTable(publishSettings)))
+        log:info("PiwigoAPI.addComment - unanble to retrieve token\n" ..
+            utils.serialiseVar(utils.anonymisePropertyTable(publishSettings)))
         return false
     end
     local imageDets = rtnStatus.imageDets
@@ -2658,11 +2668,13 @@ function PiwigoAPI.addComment(publishSettings, metaData)
         return false
     end
     if utils.nilOrEmpty(author) then
-        log:info("PiwigoAPI.addComment - missing author\n" ..  utils.serialiseVar(utils.anonymisePropertyTable(publishSettings)))
+        log:info("PiwigoAPI.addComment - missing author\n" ..
+            utils.serialiseVar(utils.anonymisePropertyTable(publishSettings)))
         return false
     end
     if utils.nilOrEmpty(key) then
-        log:info("PiwigoAPI.addComment - missing key\n" ..  utils.serialiseVar(utils.anonymisePropertyTable(publishSettings)))
+        log:info("PiwigoAPI.addComment - missing key\n" ..
+            utils.serialiseVar(utils.anonymisePropertyTable(publishSettings)))
         return false
     end
     -- Piwigo antispam forces a delay between the key being created and used
@@ -2759,7 +2771,7 @@ function PiwigoAPI.setAlbumCover(publishService)
     log:info("publishservice" .. publishService:getName())
     local catalog = LrApplication.activeCatalog()
     local publishSettings = publishService:getPublishSettings()
-    log:info("publishSettings\n" ..  utils.serialiseVar(utils.anonymisePropertyTable(publishSettings)))
+    log:info("publishSettings\n" .. utils.serialiseVar(utils.anonymisePropertyTable(publishSettings)))
 
     if not publishSettings then
         LrDialogs.message("PiwigoAPI.setAlbumCover - Can't find PublishSettings for this publish collection", "",
