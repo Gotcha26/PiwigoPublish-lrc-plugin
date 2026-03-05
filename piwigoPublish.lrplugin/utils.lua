@@ -98,21 +98,38 @@ end
 -- *************************************************
 function utils.anonymiseRenditionParams(renditionParams)
     -- return copy of renditionParams with sensitive data removed (for logging etc)
-    local rpCopy = {}
-        for k, v in pairs(renditionParams) do
-        rpCopy[k] = v
+    if type(renditionParams) ~= "table" then
+        return renditionParams
     end
-    
-    rpCopy.exportContext.propertyTable.userPW = "****"
-    rpCopy.exportContext.propertyTable.userName = "****"
-    rpCopy.exportContext.propertyTable.host = "****"
-    rpCopy.exportContext.propertyTable.pwurl = "****"
-    rpCopy.exportContext.propertyTable.cookieHeader = "****"
-    rpCopy.exportContext.propertyTable.SessionCookie = "**** "
-    rpCopy.exportContext.propertyTable.token = "****"
-    rpCopy.exportContext.propertyTable.cookies = "****"
-    rpCopy.exportContext.propertyTable.tagTable = nil
-    rpCopy.exportContext.propertyTable._tagIndex = nil
+
+    local visited = {}
+
+    local function deepCopy(value)
+        if type(value) ~= "table" then
+            return value
+        end
+        if visited[value] then
+            return visited[value]
+        end
+
+        local copy = {}
+        visited[value] = copy
+        for k, v in pairs(value) do
+            copy[k] = deepCopy(v)
+        end
+        return copy
+    end
+
+    local rpCopy = deepCopy(renditionParams)
+
+    if type(rpCopy.exportContext) == "table" and type(rpCopy.exportContext.propertyTable) == "table" then
+        rpCopy.exportContext.propertyTable = utils.anonymisePropertyTable(rpCopy.exportContext.propertyTable)
+    end
+
+    if type(rpCopy.propertyTable) == "table" then
+        rpCopy.propertyTable = utils.anonymisePropertyTable(rpCopy.propertyTable)
+    end
+
     return rpCopy
 end
 

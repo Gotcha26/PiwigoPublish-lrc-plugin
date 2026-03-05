@@ -123,8 +123,8 @@ local function buildCustomOverrideSettings(sourceSettings, collectionSettings)
             overrideSettings.LR_size_userWantsConstrain = false
         end
     else
-        overrideSettings.LR_size_doConstrain = false
-        overrideSettings.LR_size_userWantsConstrain = false
+        -- no custom resize override requested for this collection;
+        -- preserve the global export resize settings from sourceSettings
     end
 
     return overrideSettings

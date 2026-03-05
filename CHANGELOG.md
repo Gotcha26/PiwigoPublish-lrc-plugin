@@ -1,11 +1,12 @@
 # Changelog
-## [20269999.99]
+## [20260305.34]
 ### Fixed
 Fix #45 Unable to remove photos from Piwigo
 Associating an existing image with a new album should force re-upload of image if it had been changed in LrC since first upload to Piwigo
 ### Added
-Fix #12 Feature request: Keyword removal by filtering when publising images to Piwigo
 Image assoication behaviour made optional to allow per-album custom export settings
+Fix #12 Feature request: Keyword removal by filtering when publising images to Piwigo
+Fix #14 Incorporate per-album custom export settings
 
 ## [20260221.33] - 2026-02-21
 ### Fixed
