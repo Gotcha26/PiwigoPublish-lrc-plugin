@@ -133,13 +133,16 @@ end
 -- ************************************************
 local function getCustomRenderDecision(propertyTable, collectionSettings)
     local sourceSettings = resolveSourceSettings(propertyTable)
+    local customForThisCollectionEnabled = collectionSettings and collectionSettings.enableCustom and true or false
 
-    local customAlbumSettingsEnabled = false
-    if propertyTable and propertyTable.PWP_customAlbumSettings then
-        customAlbumSettingsEnabled = true
-    elseif sourceSettings and sourceSettings.PWP_customAlbumSettings then
-        customAlbumSettingsEnabled = true
+    local serviceToggle = nil
+    if propertyTable and propertyTable.PWP_customAlbumSettings ~= nil then
+        serviceToggle = propertyTable.PWP_customAlbumSettings
+    elseif sourceSettings and sourceSettings.PWP_customAlbumSettings ~= nil then
+        serviceToggle = sourceSettings.PWP_customAlbumSettings
     end
+
+    local customAlbumSettingsEnabled = customForThisCollectionEnabled and (serviceToggle ~= false)
 
 
     local rtnStatus = {
@@ -150,11 +153,11 @@ local function getCustomRenderDecision(propertyTable, collectionSettings)
         originalValue = nil,
         newValue = nil,
         customEnabled = false,
+        serviceToggle = serviceToggle,
+        collectionToggle = customForThisCollectionEnabled,
     }
 
-    local customForThisCollectionEnabled = collectionSettings and collectionSettings.enableCustom
-
-    if not (customAlbumSettingsEnabled and customForThisCollectionEnabled) then
+    if not customAlbumSettingsEnabled then
         return rtnStatus
     end
 
@@ -198,9 +201,18 @@ end
 -- ************************************************
 local function runCustomRenderForCollection(customRenderInfo, collectionSettings, rendition, filePath)
     -- run custom render using precomputed custom render info
-
-    utils.dumpPropertyTableToDesktop(customRenderInfo.sourceSettings, collectionSettings,
-        "before custom resize overrides")
+    local anonymisedCustomRenderInfo = {
+        sourceSettings = utils.anonymisePropertyTable(customRenderInfo.sourceSettings),
+        overrideSettings = utils.anonymisePropertyTable(customRenderInfo.overrideSettings),
+        settingsDiffer = customRenderInfo.settingsDiffer,
+        changedKey = customRenderInfo.changedKey,
+        originalValue = customRenderInfo.originalValue,
+        newValue = customRenderInfo.newValue,
+        customEnabled = customRenderInfo.customEnabled,
+    }
+    log:info("runCustomRenderForCollection - customRenderInfo:\n" .. utils.serialiseVar(anonymisedCustomRenderInfo))
+    --[[
+    utils.dumpPropertyTableToDesktop(customRenderInfo.sourceSettings, collectionSettings,"before custom resize overrides")
     log:info("Custom album export settings enabled, need to re-render photo with custom settings before upload")
     local anonSettings = utils.anonymisePropertyTable(cloneTable(customRenderInfo.sourceSettings))
     log:info("Property Table:\n" .. utils.serialiseVar(anonSettings))
@@ -229,7 +241,7 @@ local function runCustomRenderForCollection(customRenderInfo, collectionSettings
             original = resizeSnapshot(customRenderInfo.sourceSettings),
             custom = resizeSnapshot(customRenderInfo.overrideSettings)
         }))
-
+]]
     if customRenderInfo.settingsDiffer then
         log:info("Custom settings differ from original render settings - re-render required")
         log:info("Changed key: " .. tostring(customRenderInfo.changedKey) .. ", original=" ..
@@ -245,6 +257,138 @@ local function runCustomRenderForCollection(customRenderInfo, collectionSettings
 end
 
 -- ************************************************
+local function wasPhotoEditedSinceLastUpload(lrPhoto)
+    local uploadDate = lrPhoto:getPropertyForPlugin(_PLUGIN, "pwUploadDate")
+    if not uploadDate or uploadDate == "" then
+        return false
+    end
+
+    local uploadTime = lrPhoto:getPropertyForPlugin(_PLUGIN, "pwUploadTime") or "00:00:00"
+    local uploadTimestamp = utils.timeStamp(uploadDate .. " " .. uploadTime)
+    if not uploadTimestamp then
+        return false
+    end
+
+    local lastEditTime = lrPhoto:getRawMetadata("lastEditTime")
+    if type(lastEditTime) ~= "number" then
+        return false
+    end
+
+    return lastEditTime > uploadTimestamp
+end
+
+-- ************************************************
+local function buildFormatSnapshot(settings)
+    if type(settings) ~= "table" then
+        return { settingsType = type(settings) }
+    end
+
+    local function formatValue(value)
+        if value == nil then
+            return "<nil>"
+        end
+        return value
+    end
+
+    return {
+        LR_format = formatValue(settings.LR_format),
+        LR_jpeg_quality = formatValue(settings.LR_jpeg_quality),
+        LR_export_bitDepth = formatValue(settings.LR_export_bitDepth),
+        LR_png8 = formatValue(settings.LR_png8),
+        LR_colorSpace = formatValue(settings.LR_colorSpace),
+        LR_size_doConstrain = formatValue(settings.LR_size_doConstrain),
+        LR_size_userWantsConstrain = formatValue(settings.LR_size_userWantsConstrain),
+        LR_size_doNotEnlarge = formatValue(settings.LR_size_doNotEnlarge ~= nil and settings.LR_size_doNotEnlarge or
+            settings.LR_size_dontEnlarge),
+        LR_size_maxWidth = formatValue(settings.LR_size_maxWidth ~= nil and settings.LR_size_maxWidth or
+            settings.LR_size_maxW),
+        LR_size_maxHeight = formatValue(settings.LR_size_maxHeight ~= nil and settings.LR_size_maxHeight or
+            settings.LR_size_maxH),
+        LR_size_percentage = formatValue(settings.LR_size_percentage),
+        LR_size_resizeType = formatValue(settings.LR_size_resizeType),
+        LR_size_units = formatValue(settings.LR_size_units),
+    }
+end
+
+-- ************************************************
+local function getPathExtension(path)
+    if type(path) ~= "string" then
+        return ""
+    end
+    local ext = path:match("%.([^.]+)$")
+    if not ext then
+        return ""
+    end
+    return string.lower(ext)
+end
+
+-- ************************************************
+local function isTiffExtension(ext)
+    return ext == "tif" or ext == "tiff"
+end
+
+-- ************************************************
+local function extractCollectionSettings(infoSummary, fallback)
+    if type(infoSummary) == "table" and infoSummary.collectionSettings ~= nil then
+        return infoSummary.collectionSettings
+    end
+
+    if infoSummary ~= nil then
+        return infoSummary
+    end
+
+    return fallback or {}
+end
+
+-- ************************************************
+local function saveFailedRenderArtifacts(filePath, sourcePhotoName, debugInfo)
+    if not filePath or filePath == "" or not LrFileUtils.exists(filePath) then
+        return nil, nil, "No rendered file available to save"
+    end
+
+    local desktopDir = LrPathUtils.getStandardFilePath('desktop')
+    local debugRoot = LrPathUtils.child(desktopDir, "PiwigoPublishDebug")
+    local failedDir = LrPathUtils.child(debugRoot, "FailedRenders")
+    LrFileUtils.createAllDirectories(failedDir)
+
+    local leafName = LrPathUtils.leafName(filePath) or sourcePhotoName or "unknown"
+    local stem, ext = leafName:match("^(.*)%.([^.]+)$")
+    if not stem or stem == "" then
+        stem = leafName
+    end
+    ext = ext or "bin"
+
+    stem = stem:gsub("[^%w%._-]", "_")
+    local timestamp = os.date("%Y%m%d-%H%M%S")
+    local artifactBase = stem .. "--" .. timestamp
+    local failedImagePath = LrPathUtils.child(failedDir, artifactBase .. "." .. ext)
+
+    local copyOk = LrFileUtils.copy(filePath, failedImagePath)
+    if not copyOk then
+        return nil, nil, "Failed to copy rendered file to Desktop debug folder"
+    end
+
+    local debugTextPath = LrPathUtils.child(failedDir, artifactBase .. ".txt")
+    local debugText = "PiwigoPublish upload failure debug artifact\n" ..
+        "Generated: " .. os.date("%Y-%m-%d %H:%M:%S") .. "\n" ..
+        "Source photo: " .. tostring(sourcePhotoName) .. "\n" ..
+        "Original render path: " .. tostring(filePath) .. "\n" ..
+        "Saved render path: " .. tostring(failedImagePath) .. "\n\n" ..
+        "Debug info:\n" .. utils.serialiseVar(debugInfo) .. "\n"
+
+    local f, err = io.open(debugTextPath, "w")
+    if f then
+        f:write(debugText)
+        f:close()
+    else
+        log:warn("Failed to write upload failure debug text file: " .. tostring(err))
+        debugTextPath = nil
+    end
+
+    return failedImagePath, debugTextPath, nil
+end
+
+-- ************************************************
 function PublishTaskImageProcessing.processRenderedPhotos(functionContext, exportContext)
     -- render photos and upload to Piwigo
 
@@ -253,19 +397,23 @@ function PublishTaskImageProcessing.processRenderedPhotos(functionContext, expor
     local catalog = LrApplication.activeCatalog()
     local exportSession = exportContext.exportSession
     local propertyTable = exportContext.propertyTable
+    local anonymisedPropertyTable = utils.anonymisePropertyTable(propertyTable)
 
     local publishedCollection = exportContext.publishedCollection
     local publishService = publishedCollection:getService()
     local rv
     if not publishService then
         log:info('PublishTaskImageProcessing.processRenderedPhotos - propertyTable:\n' ..
-            utils.serialiseVar(utils.anonymisePropertyTable(propertyTable)))
+            utils.serialiseVar(anonymisedPropertyTable))
         LrErrors.throwUserError('Publish photos to Piwigo - cannot connect find publishService')
         return nil
     end
 
     local collectionInfo = publishedCollection:getCollectionInfoSummary()
-    local collectionSettings = collectionInfo.collectionSettings or {}
+    local collectionSettings = extractCollectionSettings(collectionInfo)
+    local effectiveCollectionSettings = collectionSettings
+    local sourceSettingsForDiagnostics = resolveSourceSettings(anonymisedPropertyTable)
+
     local collServiceState = {}
     local serviceState = {}
     if collectionSettings then
@@ -299,7 +447,7 @@ function PublishTaskImageProcessing.processRenderedPhotos(functionContext, expor
         rv = PiwigoAPI.login(propertyTable)
         if not rv then
             log:info('PublishTaskImageProcessing.processRenderedPhotos - propertyTable:\n' ..
-                utils.serialiseVar(utils.anonymisePropertyTable(propertyTable)))
+                utils.serialiseVar(anonymisedPropertyTable))
             PWStatusManager.setPiwigoBusy(publishService, false)
             LrErrors.throwUserError('Publish photos to Piwigo - cannot connect to piwigo at ' .. propertyTable.host)
             return nil
@@ -313,8 +461,13 @@ function PublishTaskImageProcessing.processRenderedPhotos(functionContext, expor
     if string.sub(albumName, 1, 1) == "[" and string.sub(albumName, -1) == "]" then
         if parentCollSet then
             albumName = parentCollSet:getName()
+            -- inherit collection settings from parent collection set for special collections
+            local parentInfo = parentCollSet:getCollectionSetInfoSummary()
+            effectiveCollectionSettings = extractCollectionSettings(parentInfo, collectionSettings)
         end
     end
+
+
     local albumId = publishedCollection:getRemoteId()
     local albumUrl = publishedCollection:getRemoteUrl()
 
@@ -322,6 +475,8 @@ function PublishTaskImageProcessing.processRenderedPhotos(functionContext, expor
     if parentCollSet then
         parentID = parentCollSet:getRemoteId()
     end
+
+
     local checkCats
     -- Check that collection exists as an album on Piwigo and create if not
     if albumId then
@@ -360,11 +515,11 @@ function PublishTaskImageProcessing.processRenderedPhotos(functionContext, expor
     local kwFilterExclude = propertyTable.KwFilterExclude or ""
     -- collection-level override if non-empty and albumAssoication disabled
     if not (propertyTable.PWP_albumAssociation) then
-        if not utils.nilOrEmpty(collectionSettings.KwFilterInclude) then
-            kwFilterInclude = collectionSettings.KwFilterInclude
+        if not utils.nilOrEmpty(effectiveCollectionSettings.KwFilterInclude) then
+            kwFilterInclude = effectiveCollectionSettings.KwFilterInclude
         end
-        if not utils.nilOrEmpty(collectionSettings.KwFilterExclude) then
-            kwFilterExclude = collectionSettings.KwFilterExclude
+        if not utils.nilOrEmpty(effectiveCollectionSettings.KwFilterExclude) then
+            kwFilterExclude = effectiveCollectionSettings.KwFilterExclude
         end
     end
     local includePatterns = utils.parseFilterPatterns(kwFilterInclude)
@@ -444,11 +599,17 @@ function PublishTaskImageProcessing.processRenderedPhotos(functionContext, expor
                     else
                         -- the image exists in another album in the service
                         -- is the publishedPhoto:getEditedFlag() set - if so then force it to be reuploaded
-                        if foundPubPhoto and foundPubPhoto:getEditedFlag() then
+                        local editedFlag = foundPubPhoto and foundPubPhoto:getEditedFlag() and true or false
+                        local editedSinceUpload = wasPhotoEditedSinceLastUpload(lrPhoto)
+
+                        if editedFlag and editedSinceUpload then
                             log:info("DEBUG multi-album: image " ..
                                 existingPwImageId ..
                                 " has been edited since last upload so force reupload to replace existing image on Piwigo")
                             forceUpload = true
+                        elseif editedFlag then
+                            log:info("DEBUG multi-album: getEditedFlag true but lastEditTime <= last upload, " ..
+                                "treating as unchanged for album association")
                         end
                     end
                 end
@@ -457,6 +618,17 @@ function PublishTaskImageProcessing.processRenderedPhotos(functionContext, expor
 
         -- ***************************************************
         -- Wait for next photo to render.
+        --
+        -- NOTE: do not use rendition:skipRender() in this callback path.
+        -- In practice, Lightroom has already started the export session rendering by the
+        -- time processRenderedPhotos/processCloneSync iterates renditions, so skipRender()
+        -- raises: "must not be called after exportSession has started rendering".
+        -- this means that where custom export settings are enabled, we still have to do the default
+        -- render and then discard the rendered file if we determine that a custom render with different settings is required,
+        -- which isn't ideal but is necessary due to the way Lightroom's export sessions and renderings work, and also means
+        -- that we can still support custom renders with different settings for albums where needed without having to do a
+        -- custom render for every photo in the album which would have performance implications, as we can just do the
+        -- default render for all photos and then only do a custom render for those photos where the custom settings differ from the default settings.
         -- ***************************************************
         local success, pathOrMessage = rendition:waitForRender()
         -- Check for cancellation again after photo has been rendered.
@@ -471,6 +643,11 @@ function PublishTaskImageProcessing.processRenderedPhotos(functionContext, expor
             -- upload to Piwigo
             callStatus = {}
             local filePath = pathOrMessage
+            local initialRenderExt = getPathExtension(filePath)
+            if isTiffExtension(initialRenderExt) then
+                log:warn("Initial render produced ." .. initialRenderExt .. " file: " .. tostring(filePath) ..
+                    " - format snapshot: " .. utils.serialiseVar(buildFormatSnapshot(sourceSettingsForDiagnostics)))
+            end
 
             -- If photo already exists on Piwigo, associate instead of uploading - will only be set if propertyTable.PWP_albumAssociation is true
             if existingPwImageId then
@@ -497,9 +674,19 @@ function PublishTaskImageProcessing.processRenderedPhotos(functionContext, expor
             end
 
             -- look for custom per-album export settings and re-render only when needed
-            local customRenderInfo = getCustomRenderDecision(propertyTable, collectionSettings)
+            local customRenderInfo = getCustomRenderDecision(propertyTable, effectiveCollectionSettings)
             if customRenderInfo.customEnabled then
-                filePath = runCustomRenderForCollection(customRenderInfo, collectionSettings, rendition, filePath)
+                filePath = runCustomRenderForCollection(customRenderInfo, effectiveCollectionSettings, rendition,
+                    filePath)
+            end
+
+            local finalRenderExt = getPathExtension(filePath)
+            if isTiffExtension(finalRenderExt) then
+                log:warn("Final render path is ." .. finalRenderExt .. " before upload: " .. tostring(filePath) ..
+                    " - customEnabled=" .. tostring(customRenderInfo.customEnabled) ..
+                    ", settingsDiffer=" .. tostring(customRenderInfo.settingsDiffer) ..
+                    ", sourceFormat=" .. utils.serialiseVar(buildFormatSnapshot(customRenderInfo.sourceSettings)) ..
+                    ", overrideFormat=" .. utils.serialiseVar(buildFormatSnapshot(customRenderInfo.overrideSettings)))
             end
 
             if not existingPwImageId or forceUpload then
@@ -507,7 +694,7 @@ function PublishTaskImageProcessing.processRenderedPhotos(functionContext, expor
                 -- build metadata structure
                 -- need to add custom collection settings for title and caption
 
-                metaData = utils.getPhotoMetadata(propertyTable, lrPhoto, collectionSettings)
+                metaData = utils.getPhotoMetadata(propertyTable, lrPhoto, effectiveCollectionSettings)
                 metaData.Albumid = albumId
                 metaData.Remoteid = remoteId
                 -- run to build missingTags - tags that will be created on upload to Piwigo
@@ -556,8 +743,8 @@ function PublishTaskImageProcessing.processRenderedPhotos(functionContext, expor
 
                     -- add kwfilterData to metaData so that it can be used in updateMetadata to apply keyword filters when updating keywords for existing photos
                     metaData.kwFilterData = kwFilterData
-                    metaData.KwFullHierarchy = collectionSettings.KwFullHierarchy or true
-                    metaData.KwSynonyms = collectionSettings.KwSynonyms or true
+                    metaData.KwFullHierarchy = effectiveCollectionSettings.KwFullHierarchy or true
+                    metaData.KwSynonyms = effectiveCollectionSettings.KwSynonyms or true
                     callStatus = PiwigoAPI.updateMetadata(propertyTable, lrPhoto, metaData)
                     if not callStatus.status then
                         LrDialogs.message("Unable to set metadata for uploaded photo - " .. callStatus.statusMsg)
@@ -567,13 +754,46 @@ function PublishTaskImageProcessing.processRenderedPhotos(functionContext, expor
                     local anonymiseRenditionParams = utils.anonymiseRenditionParams(renditionParams)
                     local expRenditionParams = utils.serialiseVar(anonymiseRenditionParams)
                     local expMetaData = utils.serialiseVar(metaData)
+                    local failureDebugInfo = {
+                        sourcePhotoName = sourcePhotoName,
+                        filePath = filePath,
+                        pathExtension = getPathExtension(filePath),
+                        customRenderInfo = {
+                            customEnabled = customRenderInfo and customRenderInfo.customEnabled,
+                            settingsDiffer = customRenderInfo and customRenderInfo.settingsDiffer,
+                            changedKey = customRenderInfo and customRenderInfo.changedKey,
+                            sourceFormat = customRenderInfo and buildFormatSnapshot(customRenderInfo.sourceSettings) or
+                            nil,
+                            overrideFormat = customRenderInfo and buildFormatSnapshot(customRenderInfo.overrideSettings) or
+                            nil,
+                        },
+                        hasContentsSubTable = type(anonymisedPropertyTable) == "table" and
+                            type(anonymisedPropertyTable["< contents >"]) == "table",
+                        propertyTableFormat = buildFormatSnapshot(anonymisedPropertyTable),
+                        sourceSettingsFormat = buildFormatSnapshot(sourceSettingsForDiagnostics),
+                        callStatus = callStatus,
+                        metaData = metaData,
+                    }
+
                     log:info("Upload failed for photo: " .. sourcePhotoName)
                     log:info("Upload failed - renditionParams\n" .. expRenditionParams)
                     log:info("Upload failed - metaData\n" .. expMetaData)
                     log:info("Upload failed - propertyTable\n" ..
-                        utils.serialiseVar(utils.anonymisePropertyTable(propertyTable)))
+                        utils.serialiseVar(anonymisedPropertyTable))
                     log:info("Upload failed - callStatus\n" .. utils.serialiseVar(callStatus))
                     log:info("Upload failed - filePath\n" .. filePath)
+                    log:info("Upload failed - extended debug info\n" .. utils.serialiseVar(failureDebugInfo))
+
+                    local savedImagePath, savedDebugPath, saveErr = saveFailedRenderArtifacts(filePath, sourcePhotoName,
+                        failureDebugInfo)
+                    if savedImagePath and propertyTable.debugFailedUpload then
+                        log:warn("Upload failed - saved rendered file copy to: " .. tostring(savedImagePath))
+                        if savedDebugPath then
+                            log:warn("Upload failed - saved debug context to: " .. tostring(savedDebugPath))
+                        end
+                    else
+                        log:warn("Upload failed - unable to save render artifact: " .. tostring(saveErr))
+                    end
 
                     rendition:uploadFailed(callStatus.message or "Upload failed")
                 end
@@ -601,7 +821,7 @@ function PublishTaskImageProcessing.processCloneSync(functionContext, exportCont
 
 
     local collectionInfo = publishedCollection:getCollectionInfoSummary()
-    local collectionSettings = collectionInfo.collectionSettings or {}
+    local collectionSettings = extractCollectionSettings(collectionInfo)
     local collServiceState = {}
     local serviceState = {}
     if collectionSettings then

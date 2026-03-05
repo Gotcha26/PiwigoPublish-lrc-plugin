@@ -45,21 +45,54 @@ end
 -- *************************************************
 function utils.anonymisePropertyTable(propertyTable)
     -- return copy of property table with sensitive data removed (for logging etc)
-    local ptCopy = {}
-    for k, v in pairs(propertyTable) do
-        ptCopy[k] = v
+    if type(propertyTable) ~= "table" then
+        return propertyTable
     end
-    ptCopy.userPW = "****"
-    ptCopy.userName = "****"
-    ptCopy.host = "****"
-    ptCopy.pwurl = "****"
-    ptCopy.cookieHeader = "****"
-    ptCopy.SessionCookie = "**** "
-    ptCopy.token = "****"
-    ptCopy.cookies = "****"
-    ptCopy.tagTable = nil
-    ptCopy._tagIndex = nil
-    return ptCopy
+
+    local redactedKeys = {
+        userpw = true,
+        username = true,
+        host = true,
+        pwurl = true,
+        cookieheader = true,
+        sessioncookie = true,
+        token = true,
+        cookies = true,
+    }
+
+    local droppedKeys = {
+        tagtable = true,
+        _tagindex = true,
+    }
+
+    local visited = {}
+
+    local function anonymiseValue(value)
+        if type(value) ~= "table" then
+            return value
+        end
+        if visited[value] then
+            return visited[value]
+        end
+
+        local copy = {}
+        visited[value] = copy
+
+        for k, v in pairs(value) do
+            local keyName = type(k) == "string" and string.lower(k) or nil
+            if keyName and droppedKeys[keyName] then
+                copy[k] = nil
+            elseif keyName and redactedKeys[keyName] then
+                copy[k] = "****"
+            else
+                copy[k] = anonymiseValue(v)
+            end
+        end
+
+        return copy
+    end
+
+    return anonymiseValue(propertyTable)
 end
 
 -- *************************************************
@@ -808,7 +841,7 @@ function utils.checkIncludeKeywordFilter(kwName, includePatterns)
 
     local doInclude = false
 
-    log:info("utils.checkIncludeKeywordFilter - kwName: " .. kwName)
+    --log:info("utils.checkIncludeKeywordFilter - kwName: " .. kwName)
     -- check include rules first
     if includePatterns and #includePatterns > 0 then
         for _, pat in ipairs(includePatterns) do
@@ -834,7 +867,7 @@ function utils.checkExcludeKeywordFilter(kwName, excludePatterns)
 
 
     local doExclude = false
-    log:info("utils.checkExcludeKeywordFilter - kwName: " .. kwName)
+    --log:info("utils.checkExcludeKeywordFilter - kwName: " .. kwName)
 
 
     -- check exclude rules

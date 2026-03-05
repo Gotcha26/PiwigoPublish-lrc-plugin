@@ -91,11 +91,16 @@ function UIHelpers.createPiwigoAlbumSettingsUI(f, share, bind, collectionSetting
 				fill_horizontal = 1,
 				f:static_text { title = "Album Description:", font = "<system>", alignment = 'right', width = share 'label_width', },
 				f:edit_field {
-					enabled = true,
+					enabled = bind {
+						key = 'syncAlbumDescriptions',
+						bind_to_object = publishSettings,
+					},
+					font = "<system>",
+					tooltip = "If synchronising album descriptions, description entered here will be sent to Piwigo. If not synchronising album descriptions, description entered here will be ignored.",
 					value = bind 'albumDescription',
 					fill_horizontal = 1,
 					width_in_chars = 70,
-					font = "<system>",
+
 					alignment = 'left',
 					height_in_lines = 4,
 				},
@@ -136,6 +141,12 @@ function UIHelpers.createPiwigoAlbumSettingsUI(f, share, bind, collectionSetting
 					enabled = bind {
 						key = 'PWP_customAlbumSettings',
 						bind_to_object = publishSettings,
+						transform = function(value, fromModel)
+							if fromModel then
+								return value == true
+							end
+							return value
+						end,
 					},
 
 				},
@@ -442,7 +453,7 @@ end
 --
 -- *************************************************
 
-function UIHelpers.createOtherSettingsGroupBox(f, bind)
+function UIHelpers.createOtherSettingsGroupBox(f, bind, propertyTable)
 	local otherSettingsDef = {
 		title = "Other Settings",
 		font = "<system/bold>",
@@ -585,6 +596,19 @@ function UIHelpers.createExportSettingsGroupBox(f, bind, collectionSettings, pro
 			end,
 		}
 	end
+
+	local function enabledWhenResize()
+		return bind {
+			key = 'reSize',
+			bind_to_object = collectionSettings,
+			transform = function(value, fromModel)
+				if fromModel then
+					return value and true or false
+				end
+				return value
+			end,
+		}
+	end
 	local metaDataOpts = {
 		{ title = "All Metadata",                        value = "All Metadata" },
 		{ title = "Copyright only",                      value = "Copyright Only" },
@@ -600,6 +624,13 @@ function UIHelpers.createExportSettingsGroupBox(f, bind, collectionSettings, pro
 		visible = bind {
 			key = 'enableCustom',
 			bind_to_object = collectionSettings,
+			transform = function(value, fromModel)
+				if fromModel then
+					return (value and true or false) and
+						(propertyTable and propertyTable.PWP_customAlbumSettings and true or false)
+				end
+				return value
+			end,
 		},
 		fill_horizontal = 1,
 		bind_to_object = assert(collectionSettings),
@@ -614,13 +645,14 @@ function UIHelpers.createExportSettingsGroupBox(f, bind, collectionSettings, pro
 
 					font = "<system>",
 					fill_horizontal = 1,
+					bind_to_object = assert(collectionSettings),
 					f:row {
 						fill_horizontal = 1,
 						spacing = f:label_spacing(),
 
 						f:checkbox {
 							title = "Resize Image",
-							tooltip = "If checked, published image will be resized per these settings",
+							tooltip = "If checked, published image will be resized using the settings below",
 							value = bind 'reSize',
 						},
 					},
@@ -628,7 +660,10 @@ function UIHelpers.createExportSettingsGroupBox(f, bind, collectionSettings, pro
 					f:row {
 						fill_horizontal = 1,
 						spacing = f:label_spacing(),
-						enabled = bind 'reSize',
+						enabled = bind {
+							key = 'reSize',
+							bind_to_object = collectionSettings,
+						},
 						f:static_text {
 							title = "Resize Method:",
 							alignment = 'right',
@@ -638,10 +673,12 @@ function UIHelpers.createExportSettingsGroupBox(f, bind, collectionSettings, pro
 							value = bind 'reSizeParam',
 							items = reSizeOptions,
 							value_equal = valueEqual,
+							enabled = enabledWhenResize(),
 						},
 						f:checkbox {
 							title = "Allow Enlarge Image",
 							tooltip = "If checked, published image will be enlarged if necessary",
+							enabled = enabledWhenResize(),
 							value = bind {
 								key = 'reSizeNoEnlarge',
 								transform = function(value)
@@ -654,7 +691,10 @@ function UIHelpers.createExportSettingsGroupBox(f, bind, collectionSettings, pro
 					f:row {
 						fill_horizontal = 1,
 						spacing = f:label_spacing(),
-						enabled = bind 'reSize',
+						enabled = bind {
+							key = 'reSize',
+							bind_to_object = collectionSettings,
+						},
 						visible = visibleWhenResizeMode("Long Edge"),
 						f:static_text {
 							title = "Long Edge (px):",
@@ -663,6 +703,7 @@ function UIHelpers.createExportSettingsGroupBox(f, bind, collectionSettings, pro
 						},
 						f:edit_field {
 							value = bind 'reSizeLongEdge',
+							enabled = enabledWhenResize(),
 							width_in_chars = 8,
 							tooltip = "Maximum length of the longest edge in pixels",
 						},
@@ -671,7 +712,10 @@ function UIHelpers.createExportSettingsGroupBox(f, bind, collectionSettings, pro
 					f:row {
 						fill_horizontal = 1,
 						spacing = f:label_spacing(),
-						enabled = bind 'reSize',
+						enabled = bind {
+							key = 'reSize',
+							bind_to_object = collectionSettings,
+						},
 						visible = visibleWhenResizeMode("Short Edge"),
 						f:static_text {
 							title = "Short Edge (px):",
@@ -680,6 +724,7 @@ function UIHelpers.createExportSettingsGroupBox(f, bind, collectionSettings, pro
 						},
 						f:edit_field {
 							value = bind 'reSizeShortEdge',
+							enabled = enabledWhenResize(),
 							width_in_chars = 8,
 							tooltip = "Maximum length of the shortest edge in pixels",
 						},
@@ -688,7 +733,10 @@ function UIHelpers.createExportSettingsGroupBox(f, bind, collectionSettings, pro
 					f:row {
 						fill_horizontal = 1,
 						spacing = f:label_spacing(),
-						enabled = bind 'reSize',
+						enabled = bind {
+							key = 'reSize',
+							bind_to_object = collectionSettings,
+						},
 						visible = visibleWhenResizeMode("Dimensions"),
 						f:static_text {
 							title = "Dimensions (px):",
@@ -697,6 +745,7 @@ function UIHelpers.createExportSettingsGroupBox(f, bind, collectionSettings, pro
 						},
 						f:edit_field {
 							value = bind 'reSizeW',
+							enabled = enabledWhenResize(),
 							width_in_chars = 8,
 							tooltip = "Maximum width in pixels",
 						},
@@ -707,6 +756,7 @@ function UIHelpers.createExportSettingsGroupBox(f, bind, collectionSettings, pro
 						},
 						f:edit_field {
 							value = bind 'reSizeH',
+							enabled = enabledWhenResize(),
 							width_in_chars = 8,
 							tooltip = "Maximum height in pixels",
 						},
@@ -715,7 +765,10 @@ function UIHelpers.createExportSettingsGroupBox(f, bind, collectionSettings, pro
 					f:row {
 						fill_horizontal = 1,
 						spacing = f:label_spacing(),
-						enabled = bind 'reSize',
+						enabled = bind {
+							key = 'reSize',
+							bind_to_object = collectionSettings,
+						},
 						visible = visibleWhenResizeMode("MegaPixels"),
 						f:static_text {
 							title = "Megapixels:",
@@ -724,6 +777,7 @@ function UIHelpers.createExportSettingsGroupBox(f, bind, collectionSettings, pro
 						},
 						f:edit_field {
 							value = bind 'reSizeMP',
+							enabled = enabledWhenResize(),
 							width_in_chars = 8,
 							tooltip = "Target image size in megapixels",
 						},
@@ -732,7 +786,10 @@ function UIHelpers.createExportSettingsGroupBox(f, bind, collectionSettings, pro
 					f:row {
 						fill_horizontal = 1,
 						spacing = f:label_spacing(),
-						enabled = bind 'reSize',
+						enabled = bind {
+							key = 'reSize',
+							bind_to_object = collectionSettings,
+						},
 						visible = visibleWhenResizeMode("Percent"),
 						f:static_text {
 							title = "Scale Percent:",
@@ -741,6 +798,7 @@ function UIHelpers.createExportSettingsGroupBox(f, bind, collectionSettings, pro
 						},
 						f:edit_field {
 							value = bind 'reSizePC',
+							enabled = enabledWhenResize(),
 							width_in_chars = 8,
 							tooltip = "Scale image by percentage",
 						},

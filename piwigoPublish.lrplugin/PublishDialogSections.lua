@@ -801,7 +801,7 @@ local function prefsDialog(f, propertyTable)
 
 		f:spacer { height = 2 },
 		-- other settings (album descriptions and comments handling)
-		UIHelpers.createOtherSettingsGroupBox(f, bind),
+		UIHelpers.createOtherSettingsGroupBox(f, bind, propertyTable),
 		
 	}
 end

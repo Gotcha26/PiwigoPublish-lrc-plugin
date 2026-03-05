@@ -257,15 +257,24 @@ function PublishTask.viewForCollectionSettings(f, publishSettings, info)
     local pwAlbumUI, sortOrderUI, kwFilterUI = buildCommonCollectionUI(f, bind, share, collectionSettings,
         publishSettings)
 
-    local customSettingsUI = UIHelpers.createExportSettingsGroupBox(f, bind, collectionSettings, publishSettings)
-    local UI = f:column {
-        spacing = f:control_spacing(),
-        pwAlbumUI,
-        --    sortOrderUI, --todo
-        kwFilterUI,
-        customSettingsUI,
-
-    }
+    local allowCustomAlbumSettings = publishSettings and publishSettings.PWP_customAlbumSettings == true
+    local UI
+    if allowCustomAlbumSettings then
+        local customSettingsUI = UIHelpers.createExportSettingsGroupBox(f, bind, collectionSettings, publishSettings)
+        UI = f:column {
+            spacing = f:control_spacing(),
+            pwAlbumUI,
+            --    sortOrderUI, --todo
+            kwFilterUI,
+            customSettingsUI,
+        }
+    else
+        UI = f:column {
+            spacing = f:control_spacing(),
+            pwAlbumUI,
+            --    sortOrderUI, --todo
+        }
+    end
     return UI
 end
 
@@ -375,14 +384,24 @@ function PublishTask.viewForCollectionSetSettings(f, publishSettings, info)
     local pwAlbumUI, sortOrderUI, kwFilterUI = buildCommonCollectionUI(f, bind, share, collectionSettings,
         publishSettings)
 
-    local customSettingsUI = UIHelpers.createExportSettingsGroupBox(f, bind, collectionSettings, publishSettings)
-    local UI = f:column {
-        spacing = f:control_spacing(),
-        pwAlbumUI,
-        --    sortOrderUI, --todo
-        kwFilterUI,
-        customSettingsUI,
-    }
+    local allowCustomAlbumSettings = publishSettings and publishSettings.PWP_customAlbumSettings == true
+    local UI
+    if allowCustomAlbumSettings then
+        local customSettingsUI = UIHelpers.createExportSettingsGroupBox(f, bind, collectionSettings, publishSettings)
+        UI = f:column {
+            spacing = f:control_spacing(),
+            pwAlbumUI,
+            --    sortOrderUI, --todo
+            kwFilterUI,
+            customSettingsUI,
+        }
+    else
+        UI = f:column {
+            spacing = f:control_spacing(),
+            pwAlbumUI,
+            --    sortOrderUI, --todo
+        }
+    end
 
     return UI
 end
