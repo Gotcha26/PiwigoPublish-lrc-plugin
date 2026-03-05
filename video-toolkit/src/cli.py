@@ -107,7 +107,7 @@ def run_process(args: argparse.Namespace, cfg: Config) -> int:
         _json_error("--input requis pour le mode process")
         return 1
 
-    preset_key = args.preset or cfg.get("default_preset", "medium")
+    preset_key: str = str(args.preset or cfg.get("default_preset", "medium"))
     dry_run = getattr(args, "dry_run", False)
     force = getattr(args, "force", False)
     thumbnail_only = getattr(args, "thumbnail_only", False)
@@ -339,7 +339,7 @@ def run_status(args: argparse.Namespace, cfg: Config) -> int:
         _json_error("--input requis pour le mode status")
         return 1
 
-    sm = StatusManager(args.input, cfg.get("vtk_dir_name", ".vtk"))
+    sm = StatusManager(args.input, str(cfg.get("vtk_dir_name") or ".vtk"))
     state = sm.get_state()
     source = sm.get_source()
     variants = {
@@ -530,7 +530,7 @@ class InteractiveCLI:
                 pause(self.c)
                 return
 
-            default_preset = self.cfg.get("default_preset", "medium")
+            default_preset: str = str(self.cfg.get("default_preset", "medium"))
 
             print(f"  {self.c.DIM}Entrez le chemin vers un fichier vidéo (x pour annuler) :{self.c.RESET}")
             path = input(self.c.prompt("  > ")).strip()
@@ -755,14 +755,14 @@ class InteractiveCLI:
             print(self.c.box_header("PARAMÈTRES — Configuration générale", width=70))
             print()
 
-            default_preset = self.cfg.get("default_preset", "medium")
+            default_preset: str = str(self.cfg.get("default_preset", "medium"))
             generate_poster = self.cfg.get("generate_poster", True)
             poster_ts = self.cfg.get("poster_timestamp_pct", 10)
             ffmpeg_path = self.cfg.get("ffmpeg_path", "") or self.c.DIM + "(auto)" + self.c.RESET
             ffprobe_path = self.cfg.get("ffprobe_path", "") or self.c.DIM + "(auto)" + self.c.RESET
             exiftool_path = self.cfg.get("exiftool_path", "") or self.c.DIM + "(auto)" + self.c.RESET
             presets_file = str(self.cfg.get_presets_file())
-            hw_accel = self.cfg.get("hardware_accel", "auto")
+            hw_accel: str = str(self.cfg.get("hardware_accel") or "auto")
 
             poster_status = f"{self.c.OK}activé{self.c.RESET}" if generate_poster else f"{self.c.DIM}désactivé{self.c.RESET}"
 
@@ -910,15 +910,15 @@ class InteractiveCLI:
 def _build_processor(cfg: Config, hwaccel_mode: str | None = None) -> VideoProcessor:
     """Construit un VideoProcessor avec les chemins d'outils depuis la config."""
     from .presets import PresetManager as PM
-    effective_hwaccel = hwaccel_mode or cfg.get("hardware_accel", "auto")
+    effective_hwaccel: str = str(hwaccel_mode or cfg.get("hardware_accel", "auto"))
     return VideoProcessor(
         ffmpeg_path=cfg.resolve_tool("ffmpeg") or "ffmpeg",
         ffprobe_path=cfg.resolve_tool("ffprobe") or "ffprobe",
         exiftool_path=cfg.resolve_tool("exiftool") or "exiftool",
         preset_manager=PM(cfg.get_presets_file()),
-        thumbnail_timestamp_pct=cfg.get("poster_timestamp_pct", 10),
-        thumbnail_max_width=cfg.get("thumbnail_width", 1280),
-        copy_metadata=cfg.get("copy_metadata", True),
+        thumbnail_timestamp_pct=int(cfg.get("poster_timestamp_pct") or 10),
+        thumbnail_max_width=int(cfg.get("thumbnail_width") or 1280),
+        copy_metadata=bool(cfg.get("copy_metadata", True)),
         hwaccel_mode=effective_hwaccel,
     )
 
@@ -929,7 +929,7 @@ def _json_error(msg: str) -> None:
     print(_json.dumps({"status": "error", "error": msg}), file=sys.stderr)
 
 
-def _format_size(size: int) -> str:
+def _format_size(size: float) -> str:
     for unit in ("o", "Ko", "Mo", "Go"):
         if size < 1024:
             return f"{size:.1f} {unit}"

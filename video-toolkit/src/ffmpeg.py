@@ -86,6 +86,7 @@ class FFmpeg:
 
         is_hdr = video_info.is_hdr if video_info else False
 
+        scale_filter = ""
         if preset.is_origin:
             cmd = self._build_remux_cmd(input_path, output_path)
             hw_config = None

@@ -159,9 +159,10 @@ class PresetManager:
 
     def save_presets(self, path: Path | str | None = None) -> None:
         """Sauvegarde les presets utilisateur dans un fichier JSON."""
-        path = Path(path or self._config_path)
-        if not path:
+        resolved = path or self._config_path
+        if resolved is None:
             raise ValueError("Aucun chemin de configuration défini")
+        path = Path(resolved)
 
         path.parent.mkdir(parents=True, exist_ok=True)
         data = {
