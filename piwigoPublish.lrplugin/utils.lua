@@ -1329,25 +1329,20 @@ function utils.extractPwImageIdFromUrl(url, expectedHost)
 end
 
 -- *************************************************
-function utils.findExistingPwImageId(publishService, lrPhoto, excludeCollection)
+function utils.findExistingPwImageId(publishService, lrPhoto)
     -- Searches if this LR photo is already published in another collection of the same service
-    -- Returns: (pubPhotoExists, foundPubPhoto, foundPubCollection) or (false, nil, nil)
+    -- Returns the Piwigo remoteId if found, nil otherwise
 
-    local foundPubPhoto = nil
-    local foundCollection = nil
+    local foundRemoteId = nil
 
     local function searchInCollection(collection)
-        if foundPubPhoto then return end
-        if excludeCollection and collection.localIdentifier == excludeCollection.localIdentifier then
-            return
-        end
+        if foundRemoteId then return end
         local pubPhotos = collection:getPublishedPhotos()
         for _, pubPhoto in ipairs(pubPhotos) do
             if pubPhoto:getPhoto().localIdentifier == lrPhoto.localIdentifier then
                 local rid = pubPhoto:getRemoteId()
                 if rid and rid ~= "" then
-                    foundPubPhoto = pubPhoto
-                    foundCollection = collection
+                    foundRemoteId = rid
                     return
                 end
             end
@@ -1355,13 +1350,13 @@ function utils.findExistingPwImageId(publishService, lrPhoto, excludeCollection)
     end
 
     local function searchInSet(collectionSet)
-        if foundPubPhoto then return end
+        if foundRemoteId then return end
         -- Search in child collections
         local childColls = collectionSet:getChildCollections()
         if childColls then
             for _, coll in ipairs(childColls) do
                 searchInCollection(coll)
-                if foundPubPhoto then return end
+                if foundRemoteId then return end
             end
         end
         -- Search in child sets (recursive)
@@ -1369,7 +1364,7 @@ function utils.findExistingPwImageId(publishService, lrPhoto, excludeCollection)
         if childSets then
             for _, childSet in ipairs(childSets) do
                 searchInSet(childSet)
-                if foundPubPhoto then return end
+                if foundRemoteId then return end
             end
         end
     end
@@ -1377,7 +1372,7 @@ function utils.findExistingPwImageId(publishService, lrPhoto, excludeCollection)
     -- Start search from service root
     searchInSet(publishService)
 
-    return foundPubPhoto ~= nil, foundPubPhoto, foundCollection
+    return foundRemoteId
 end
 
 -- *************************************************

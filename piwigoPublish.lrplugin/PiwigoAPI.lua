@@ -1470,7 +1470,7 @@ function PiwigoAPI.getServerVideoSupport(propertyTable)
 
     -- 1. Get server infos (photo/album counts etc.)
     local infosResult = PiwigoAPI.getInfos(propertyTable)
-    if type(infosResult) == "table" and infosResult.status and infosResult.result then
+    if infosResult.status and infosResult.result then
         -- pwg.getInfos returns a named array of {name, value} items
         for _, item in ipairs(infosResult.result) do
             if item.name and item.value then
