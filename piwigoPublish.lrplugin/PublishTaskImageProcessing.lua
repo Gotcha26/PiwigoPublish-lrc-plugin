@@ -22,6 +22,8 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ]]
 
+---@diagnostic disable: undefined-global
+
 PublishTaskImageProcessing = {}
 
 -- ************************************************
@@ -692,9 +694,7 @@ function PublishTaskImageProcessing.processRenderedPhotos(functionContext, expor
             if not existingPwImageId or forceUpload then
                 local metaData = {}
                 -- build metadata structure
-                -- need to add custom collection settings for title and caption
-
-                metaData = utils.getPhotoMetadata(propertyTable, lrPhoto, effectiveCollectionSettings)
+                metaData = utils.getPhotoMetadata(propertyTable, lrPhoto)
                 metaData.Albumid = albumId
                 metaData.Remoteid = remoteId
                 -- run to build missingTags - tags that will be created on upload to Piwigo
@@ -952,12 +952,12 @@ function PublishTaskImageProcessing.deletePhotosFromPublishedCollection(publishS
                         thisLrPhoto,
                         publishedCollection)
 
-                    if pubPhotoExists then
+                    if pubPhotoExists and foundPubPhoto ~= nil then
                         -- photo exists in another album in the same service, so update metadata with new image url and id for that photo
                         local remoteUrl = foundPubPhoto:getRemoteUrl() or ""
                         local urlParts = utils.stringtoTable(remoteUrl, "/")
                         local albumId = urlParts[#urlParts]
-                        local albumName = foundPubCollection:getName() or ""
+                        local albumName = foundPubCollection and foundPubCollection:getName() or ""
                         local imageId = urlParts[#urlParts - 2]
                         local hostUrl = remoteUrl:match("(.-)picture%.php")
                         local albumUrl = string.format("%s/index.php?/category/%s", hostUrl, albumId)
