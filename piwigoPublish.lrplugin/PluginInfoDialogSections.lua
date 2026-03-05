@@ -207,7 +207,7 @@ function PluginInfoDialogSections.sectionsForTopOfDialog(f, propertyTable)
                             f:push_button {
                                 title = "Visit website…",
                                 action = function()
-                                    LrHttp.openUrlInBrowser("https://gallery.fbphotography.uk/")
+                                    LrHttp.openUrlInBrowser("https://gallery.coastwisesomerset.org.uk/")
                                 end,
                             },
                         },
