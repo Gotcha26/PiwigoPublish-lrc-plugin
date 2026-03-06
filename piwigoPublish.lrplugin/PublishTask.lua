@@ -1046,8 +1046,8 @@ local function initCollectionSettingsDefaults(collectionSettings)
     end
 end
 
-local function buildCommonCollectionUI(f, bind, share, collectionSettings, publishSettings)
-    local pwAlbumUI = UIHelpers.createPiwigoAlbumSettingsUI(f, share, bind, collectionSettings, publishSettings)
+local function buildCommonCollectionUI(f, bind, share, collectionSettings)
+    local pwAlbumUI = UIHelpers.createPiwigoAlbumSettingsUI(f, share, bind, collectionSettings)
     local kwFilterUI = UIHelpers.createKeywordFilteringUI(f, bind, collectionSettings)
     local sortOrderUI = f:group_box {
         title = "Sort Order",
@@ -1111,7 +1111,7 @@ function PublishTask.viewForCollectionSettings(f, publishSettings, info)
         { title = "All Except Camera & Camera Raw Info", value = "All Except Camera & Camera Raw Info" },
     }
 
-    local pwAlbumUI, sortOrderUI, kwFilterUI = buildCommonCollectionUI(f, bind, share, collectionSettings, publishSettings)
+    local pwAlbumUI, sortOrderUI, kwFilterUI = buildCommonCollectionUI(f, bind, share, collectionSettings)
 
     local pubSettingsUI = f:group_box {
         title = "Custom Publish Settings (Overrides defaults set in Publish Settings)",
@@ -1341,7 +1341,7 @@ function PublishTask.viewForCollectionSetSettings(f, publishSettings, info)
 
     initCollectionSettingsDefaults(collectionSettings)
 
-    local pwAlbumUI, sortOrderUI, kwFilterUI = buildCommonCollectionUI(f, bind, share, collectionSettings, publishSettings)
+    local pwAlbumUI, sortOrderUI, kwFilterUI = buildCommonCollectionUI(f, bind, share, collectionSettings)
 
     local UI = f:column {
         spacing = f:control_spacing(),

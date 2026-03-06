@@ -57,7 +57,34 @@ end
 -- Create Piwigo Album Settings UI section
 -- Returns a group_box with album description and private checkbox
 -- *************************************************
-function UIHelpers.createPiwigoAlbumSettingsUI(f, share, bind, collectionSettings, publishSettings)
+function UIHelpers.createPiwigoAlbumSettingsUI(f, share, bind, collectionSettings)
+	local rows = {
+		f:separator { fill_horizontal = 1 },
+		f:row {
+			fill_horizontal = 1,
+			f:static_text { title = "Album Description:", font = "<system>", alignment = 'right', width = share 'label_width' },
+			f:edit_field {
+				enabled = true,
+				value = bind 'albumDescription',
+				fill_horizontal = 1,
+				width_in_chars = 70,
+				font = "<system>",
+				alignment = 'left',
+				height_in_lines = 4,
+			},
+		},
+		f:row {
+			fill_horizontal = 1,
+			f:static_text { title = "", alignment = 'right', width = share 'label_width' },
+			f:checkbox {
+				title = "",
+				tooltip = "If checked, this album will be private on Piwigo",
+				value = bind 'albumPrivate',
+			},
+			f:static_text { title = "Album is Private", font = "<system>" },
+		},
+	}
+
 	return f:group_box {
 		title = "Piwigo Album Settings",
 		font = "<system/bold>",
@@ -66,40 +93,7 @@ function UIHelpers.createPiwigoAlbumSettingsUI(f, share, bind, collectionSetting
 		bind_to_object = assert(collectionSettings),
 		f:column {
 			spacing = f:control_spacing(),
-
-			f:separator { fill_horizontal = 1 },
-
-			f:row {
-				fill_horizontal = 1,
-				f:static_text { title = "Album Description:", font = "<system>", alignment = 'right', width = share 'label_width', },
-				f:edit_field {
-					enabled = true,
-					value = bind 'albumDescription',
-					fill_horizontal = 1,
-					width_in_chars = 70,
-					font = "<system>",
-					alignment = 'left',
-					height_in_lines = 4,
-				},
-			},
-
-			f:row {
-				fill_horizontal = 1,
-				f:static_text {
-					title = "",
-					alignment = 'right',
-					width = share 'label_width',
-				},
-				f:checkbox {
-					title = "",
-					tooltip = "If checked, this album will be private on Piwigo",
-					value = bind 'albumPrivate',
-				},
-				f:static_text {
-					title = "Album is Private",
-					font = "<system>",
-				}
-			}
+			unpack(rows),
 		}
 	}
 end
