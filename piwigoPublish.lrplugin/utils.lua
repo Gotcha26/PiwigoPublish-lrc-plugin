@@ -62,6 +62,59 @@ function utils.uuid()
 end
 
 -- *************************************************
+function utils.anonymisePropertyTable(propertyTable)
+    -- return copy of property table with sensitive data removed (for logging etc)
+    if type(propertyTable) ~= "table" then
+        return propertyTable
+    end
+
+    local redactedKeys = {
+        userpw = true,
+        username = true,
+        host = true,
+        pwurl = true,
+        cookieheader = true,
+        sessioncookie = true,
+        token = true,
+        cookies = true,
+    }
+
+    local droppedKeys = {
+        tagtable = true,
+        _tagindex = true,
+    }
+
+    local visited = {}
+
+    local function anonymiseValue(value)
+        if type(value) ~= "table" then
+            return value
+        end
+        if visited[value] then
+            return visited[value]
+        end
+
+        local copy = {}
+        visited[value] = copy
+
+        for k, v in pairs(value) do
+            local keyName = type(k) == "string" and string.lower(k) or nil
+            if keyName and droppedKeys[keyName] then
+                copy[k] = nil
+            elseif keyName and redactedKeys[keyName] then
+                copy[k] = "****"
+            else
+                copy[k] = anonymiseValue(v)
+            end
+        end
+
+        return copy
+    end
+
+    return anonymiseValue(propertyTable)
+end
+
+-- *************************************************
 function utils.extractNumber(inStr)
     -- Extract first number (integer or decimal, optional sign) from a string
 

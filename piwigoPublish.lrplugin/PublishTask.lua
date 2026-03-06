@@ -415,7 +415,7 @@ function PublishTask.processRenderedPhotos(functionContext, exportContext)
                 if bSuccess and LrFileUtils.exists(bPath) then
                     LrFileUtils.delete(bPath)
                 end
-                rendition:uploadFailed("Blocked by keyword filter: " .. reason)
+                rendition:uploadFailed("Skipped (keyword filter): " .. reason)
                 kwBlocked = true
             end
         end
