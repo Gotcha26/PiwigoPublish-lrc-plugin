@@ -1561,6 +1561,26 @@ function PiwigoAPI.getServerVideoSupport(propertyTable)
             (cfgResponse.errorMessage or "unknown error"))
     end
 
+    -- companionAvailable alone no longer means "Pro" : since lightroom_companion #231,
+    -- getConfig also answers on a Free (unlicensed) server — it is read-only server
+    -- diagnostics, not a licensed feature. The write methods (enableVideoSupport,
+    -- setRepresentative, setVideoInfo, setVideoMeta) require the licensed Pro layer,
+    -- so gate on the server's OWN licence verdict, never on config heuristics
+    -- (upload_form_all_types/file_ext) that a Free admin could set by hand.
+    --
+    -- Default TRUE for backward compatibility: an OLDER Companion (pre-#231) never
+    -- sends a 'companion' key at all, and on such a server getConfig only ever
+    -- answered when Pro was already active — treating a missing key as "not Pro"
+    -- would wrongly re-block video upload for existing, already-licensed users who
+    -- have not yet updated their server plugin.
+    result.companionProActive = true
+    if result.serverConfig and type(result.serverConfig) == "table"
+        and type(result.serverConfig.companion) == "table"
+        and result.serverConfig.companion.pro_active == false then
+        result.companionProActive = false
+        log:info("PiwigoAPI.getServerVideoSupport - companion plugin reachable but NOT licensed (Free edition)")
+    end
+
     result.status = true
     return result
 end
