@@ -134,6 +134,20 @@ function vtk_core.checkServerSupport(propertyTable, videoPhotos, batchVideoCount
         table.insert(warnings, "  Without it, video upload cannot be authorized.")
         table.insert(warnings, "\nInstall and activate the 'Lightroom Companion' plugin in Piwigo,")
         table.insert(warnings, "then use 'Server Info' > 'Enable Video Support' to configure the server.")
+    elseif not videoSupport.companionProActive then
+        -- Reachable but NOT licensed: since lightroom_companion #231, a Free (unlicensed)
+        -- server also answers getConfig (read-only diagnostics), so mere reachability no
+        -- longer proves a Pro licence. Gate on the server's own verdict, never on
+        -- video_ready alone — an admin could set upload_form_all_types/file_ext by hand
+        -- on a Free server without ever holding a Pro licence, which would otherwise let
+        -- video upload through while the write methods (setRepresentative/setVideoInfo/
+        -- setVideoMeta) still fail server-side, silently degrading the upload.
+        companionAvailable = false
+        videoUploadBlocked = true
+        table.insert(warnings, "- The 'Lightroom Companion' plugin is installed but not licensed (Pro).")
+        table.insert(warnings, "  Without an active Pro licence, video upload cannot be authorized.")
+        table.insert(warnings, "\nActivate a 'Lightroom Companion' Pro licence on your Piwigo server,")
+        table.insert(warnings, "then use 'Server Info' > 'Enable Video Support' to configure the server.")
     else
         companionAvailable = true
         local cfg = videoSupport.serverConfig
