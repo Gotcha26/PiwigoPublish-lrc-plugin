@@ -35,7 +35,7 @@ return {
 	sectionsForBottomOfDialog = PublishDialogSections.sectionsForBottomOfDialog,
 	endDialog = PublishDialogSections.endDialog,
 
-	hideSections = { 'exportLocation' },
+	hideSections = { 'exportLocation', 'videoFileSettings' },
 
 
 	-- Behaviour Settings
@@ -44,7 +44,10 @@ return {
 	-- of these, LrC can only export JPEG and PNG, so we limit to those formats in the publish dialog.
 	allowFileFormats = { "JPEG", "PNG" },
 	allowColorSpaces = nil,
-	canExportVideo = false,
+	canExportVideo = true,
+	allowVideoExportPresets = {
+		{ formatID = "original" },  -- LrC does not re-encode; Video Toolkit handles transcoding
+	},
 	supportsCustomSortOrder = true,
 	hidePrintResolution = true,
 	supportsIncrementalPublish = 'only', -- plugin only visible in publish services, not export
@@ -67,6 +70,19 @@ return {
 		{ key = "PWP_customAlbumSettings", default = false },
 		{ key = "KwFilterExclude",         default = '' },
 		{ key = "KwFilterInclude",         default = '' },
+		-- Video Toolkit settings
+		{ key = "vtkEnabled",              default = false },
+		{ key = "vtkIncludeVideo",         default = true },
+		{ key = "vtkToolkitPath",          default = '' },
+		{ key = "vtkDefaultPreset",        default = "medium" },
+		{ key = "vtkGeneratePoster",       default = true },
+		{ key = "vtkPosterTimestamp",      default = 10 },
+		{ key = "vtkPythonPath",           default = '' },
+		{ key = "vtkFFmpegPath",           default = '' },
+		{ key = "vtkFFprobePath",          default = '' },
+		{ key = "vtkExifToolPath",         default = '' },
+		{ key = "vtkPresetsFile",          default = '' },
+		{ key = "vtkHardwareAccel",        default = 'auto' },
 	},
 
 	metadataThatTriggersRepublish       = function(publishSettings, photoId, fieldName)

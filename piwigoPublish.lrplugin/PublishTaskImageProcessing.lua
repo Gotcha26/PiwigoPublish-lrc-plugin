@@ -539,6 +539,49 @@ function PublishTaskImageProcessing.processRenderedPhotos(functionContext, expor
     -- flag to allow sync comments to manage process in PublishTaskImageProcessing.getCommentsFromPublishedCollection
     PWStatusManager.setRenderPhotos(publishService, true)
 
+    -- Video pre-scan + server support check (delegated to vtk_core)
+    local batchTotalCount = exportSession:countRenditions()
+    local videoPhotos, batchVideoCount = vtk_core.preScan(exportSession, propertyTable, effectiveCollectionSettings)
+    if batchVideoCount == 0 then
+        log:info("PublishTaskImageProcessing - pre-scan: no videos detected in batch")
+    else
+        log:info("PublishTaskImageProcessing - pre-scan: " .. batchVideoCount .. " video(s) detected in batch of " ..
+            batchTotalCount)
+    end
+
+    -- only query the server when the batch actually contains videos: a photo-only publish
+    -- must never raise a video warning dialog
+    local videoUploadBlocked, serverMaxBytes, companionAvailable, shouldAbort = false, nil, false, false
+    if batchVideoCount > 0 then
+        videoUploadBlocked, serverMaxBytes, companionAvailable, shouldAbort =
+            vtk_core.checkServerSupport(propertyTable, videoPhotos, batchVideoCount, batchTotalCount,
+                exportSession, publishService)
+        if shouldAbort then return end
+    end
+
+    -- Video Toolkit (delegated to vtk_core)
+    local vtkResults, metadataOnlyVideos
+    if not videoUploadBlocked and batchVideoCount > 0 and propertyTable.vtkEnabled then
+        log:info("PublishTaskImageProcessing - Video Toolkit enabled, processing " .. batchVideoCount .. " video(s)")
+        -- Remove ALL videos from export session to prevent LrC "This file is a video" dialog
+        for _, vEntry in ipairs(videoPhotos) do
+            exportSession:removePhoto(vEntry.photo)
+        end
+
+        -- Run VTK batch + upload variants (delegated to vtk_core)
+        vtkResults, metadataOnlyVideos = vtk_core.runBatch(
+            videoPhotos, batchVideoCount, propertyTable, effectiveCollectionSettings, progressScope)
+        vtk_core.uploadVariants(
+            vtkResults, propertyTable, effectiveCollectionSettings,
+            albumId, albumName, albumUrl,
+            catalog, publishedCollection,
+            companionAvailable, serverMaxBytes, progressScope)
+    end
+    metadataOnlyVideos = metadataOnlyVideos or {}
+
+    progressScope:setCaption("Publishing to Piwigo...")
+    progressScope:setPortionComplete(0, 100)
+
     -- now wait for photos to be exported and then upload to Piwigo
     for i, rendition in exportContext:renditions(renditionParams) do
         -- reset connection every 75 uploads
@@ -559,6 +602,12 @@ function PublishTaskImageProcessing.processRenderedPhotos(functionContext, expor
 
         local lrPhoto = rendition.photo
         local remoteId = rendition.publishedPhotoId or ""
+        -- videos not handled by the Video Toolkit are uploaded as-is (original file)
+        local isVideo = (lrPhoto:getRawMetadata("fileFormat") == "VIDEO")
+        if isVideo then
+            log:info("PublishTaskImageProcessing.processRenderedPhotos - video detected: "
+                .. (lrPhoto:getFormattedMetadata("fileName") or "unknown"))
+        end
 
         local existingPwImageId = nil
         local forceUpload = false
@@ -678,7 +727,8 @@ function PublishTaskImageProcessing.processRenderedPhotos(functionContext, expor
 
             -- look for custom per-album export settings and re-render only when needed
             local customRenderInfo = getCustomRenderDecision(propertyTable, effectiveCollectionSettings)
-            if customRenderInfo.customEnabled then
+            -- per-album image export settings never apply to an original video file
+            if customRenderInfo.customEnabled and not isVideo then
                 filePath = runCustomRenderForCollection(customRenderInfo, effectiveCollectionSettings, rendition,
                     filePath)
             end
@@ -807,6 +857,13 @@ function PublishTaskImageProcessing.processRenderedPhotos(functionContext, expor
             rendition:uploadFailed(pathOrMessage or "Render failed")
         end
     end
+
+    -- Metadata-only video updates (delegated to vtk_core)
+    vtk_core.updateMetadataOnly(
+        metadataOnlyVideos, propertyTable, albumId,
+        catalog, publishedCollection,
+        companionAvailable, progressScope)
+
     progressScope:done()
     PWStatusManager.setPiwigoBusy(publishService, false)
 end

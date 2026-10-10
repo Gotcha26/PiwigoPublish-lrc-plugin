@@ -1899,4 +1899,138 @@ function utils.buildAlbumSummary(publishService)
     return { nodes = nodes, totals = totals }
 end
 
+-- *************************************************
+-- Returns the path to the VTK result file (JSON, written to temp by VTK).
+function utils.getVtkResultPath()
+    return LrPathUtils.child(LrPathUtils.getStandardFilePath("temp"), "piwigoPublish_vtk_result.json")
+end
+
+-- *************************************************
+function utils.parsePhpSize(sizeStr)
+    -- Convert PHP size strings like "128M", "2G", "512K" to bytes
+    if not sizeStr or sizeStr == "" then return nil end
+    sizeStr = tostring(sizeStr):upper():gsub("%s+", "")
+    local num, unit = sizeStr:match("^(%d+%.?%d*)([KMGT]?)$")
+    if not num then return nil end
+    num = tonumber(num)
+    if not num then return nil end
+    local multipliers = { K = 1024, M = 1024*1024, G = 1024*1024*1024, T = 1024*1024*1024*1024 }
+    if unit and unit ~= "" then
+        num = num * (multipliers[unit] or 1)
+    end
+    return math.floor(num)
+end
+
+-- *************************************************
+function utils.findTool(toolName)
+    -- Auto-detect a CLI tool (python, ffmpeg, exiftool) in PATH and common locations.
+    -- Returns the resolved executable path, or nil if not found.
+
+    local isWindows = (LrSystemInfo.osVersion():lower():find("win") ~= nil)
+
+    -- 1. Try PATH lookup first (fast, covers most cases)
+    local whichCmd = isWindows and ("where " .. toolName .. " 2>nul") or ("which " .. toolName .. " 2>/dev/null")
+    local pHandle  = io.popen(whichCmd)
+    if pHandle then
+        local found = pHandle:read("*l")
+        pHandle:close()
+        if found and found ~= "" then
+            found = found:match("^(.-)%s*$")   -- trim trailing whitespace
+            found = found:gsub("\r", "")        -- strip CR (Windows CRLF via io.popen)
+            if found ~= "" then
+                return found
+            end
+        end
+    end
+
+    -- 2. Check well-known locations per OS
+    local candidates = {}
+
+    if toolName == "python" or toolName == "python3" then
+        if isWindows then
+            local user = os.getenv("USERNAME") or ""
+            candidates = {
+                "C:/Windows/py.exe",
+                "C:/Program Files/Python313/python.exe",
+                "C:/Program Files/Python312/python.exe",
+                "C:/Program Files/Python311/python.exe",
+                "C:/Program Files/Python310/python.exe",
+                "C:/Program Files/Python39/python.exe",
+                "C:/Users/" .. user .. "/AppData/Local/Programs/Python/Python313/python.exe",
+                "C:/Users/" .. user .. "/AppData/Local/Programs/Python/Python312/python.exe",
+                "C:/Users/" .. user .. "/AppData/Local/Programs/Python/Python311/python.exe",
+            }
+        else
+            candidates = {
+                "/usr/bin/python3", "/usr/local/bin/python3",
+                "/opt/homebrew/bin/python3",
+                "/usr/bin/python",  "/usr/local/bin/python",
+            }
+        end
+
+    elseif toolName == "ffmpeg" then
+        if isWindows then
+            local user = os.getenv("USERNAME") or ""
+            candidates = {
+                "C:/ffmpeg/bin/ffmpeg.exe",
+                "C:/Program Files/ffmpeg/bin/ffmpeg.exe",
+                "C:/Program Files (x86)/ffmpeg/bin/ffmpeg.exe",
+                "C:/Users/" .. user .. "/AppData/Local/Microsoft/WinGet/Packages/Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe/ffmpeg-7.1-full_build/bin/ffmpeg.exe",
+            }
+        else
+            candidates = {
+                "/usr/bin/ffmpeg", "/usr/local/bin/ffmpeg",
+                "/opt/homebrew/bin/ffmpeg", "/opt/local/bin/ffmpeg",
+            }
+        end
+
+    elseif toolName == "exiftool" then
+        if isWindows then
+            candidates = {
+                "C:/Windows/exiftool.exe",
+                "C:/Program Files/exiftool/exiftool.exe",
+                "C:/Program Files (x86)/exiftool/exiftool.exe",
+            }
+        else
+            candidates = {
+                "/usr/bin/exiftool", "/usr/local/bin/exiftool",
+                "/opt/homebrew/bin/exiftool", "/opt/local/bin/exiftool",
+            }
+        end
+    end
+
+    for _, path in ipairs(candidates) do
+        if utils.fileExists(path) then
+            return path
+        end
+    end
+
+    return nil
+end
+
+-- *************************************************
+function utils.resolveTool(configuredPath, toolName)
+    -- Return configuredPath if set, else auto-detect, else return toolName bare (PATH fallback at runtime).
+    if configuredPath and configuredPath ~= "" then
+        return configuredPath
+    end
+    return utils.findTool(toolName) or toolName
+end
+
+-- *************************************************
+-- Resolve the path to video_toolkit.py.
+-- Priority : 1) configured vtkToolkitPath
+--            2) <pluginPath>/video-toolkit/video_toolkit.py  (toolkit bundled inside plugin)
+--            3) <parent_of_pluginPath>/video-toolkit/video_toolkit.py  (toolkit beside plugin)
+function utils.resolveToolkitPath(configuredPath, pluginPath)
+    if configuredPath and configuredPath ~= "" then
+        return configuredPath
+    end
+    local inside = LrPathUtils.child(pluginPath, "video-toolkit/video_toolkit.py")
+    if utils.fileExists(inside) then
+        return inside
+    end
+    return LrPathUtils.child(LrPathUtils.parent(pluginPath), "video-toolkit/video_toolkit.py")
+end
+
 return utils

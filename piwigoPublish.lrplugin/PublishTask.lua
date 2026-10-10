@@ -184,6 +184,7 @@ local function initCollectionSettingsDefaults(collectionSettings)
         KwFilterInclude       = "",
         KwFilterExclude       = "",
         syncSortOrderOverride = "default",
+        vtkPresetOverride     = "", -- "" = use service default video preset
     }
     for key, defaultVal in pairs(defaults) do
         if collectionSettings[key] == nil then
@@ -204,6 +205,42 @@ local function buildCommonCollectionUI(f, bind, share, collectionSettings, publi
 
     return pwAlbumUI, metaDataUI, sortOrderUI, kwFilterUI
 end
+-- ************************************************
+-- Video preset override per collection (Video Toolkit)
+local function buildVideoPresetUI(f, bind, collectionSettings)
+    local vtkPresetItems = {
+        { title = "Use service default",   value = "" },
+        { title = "Small (480p)",          value = "small" },
+        { title = "Medium (720p)",         value = "medium" },
+        { title = "Large (1080p)",         value = "large" },
+        { title = "XLarge (1440p)",        value = "xlarge" },
+        { title = "XXL (2160p)",           value = "xxl" },
+        { title = "Origin (no transcode)", value = "origin" },
+    }
+    return f:group_box {
+        title = "Video Preset Override",
+        font = "<system/bold>",
+        size = 'regular',
+        fill_horizontal = 1,
+        bind_to_object = assert(collectionSettings),
+        f:spacer { height = 2 },
+        f:row {
+            fill_horizontal = 1,
+            f:static_text {
+                title = "Video preset:",
+                font = "<system>",
+                alignment = 'right',
+            },
+            f:popup_menu {
+                value = bind 'vtkPresetOverride',
+                items = vtkPresetItems,
+                tooltip = "Override the service-level video preset for this album only. 'Use service default' keeps the global setting.",
+            },
+        },
+        f:spacer { height = 2 },
+    }
+end
+
 -- ************************************************
 function PublishTask.viewForCollectionSettings(f, publishSettings, info)
     log:info("PublishTask.viewForCollectionSettings")
@@ -226,6 +263,8 @@ function PublishTask.viewForCollectionSettings(f, publishSettings, info)
     local pwAlbumUI, metaDataUI, sortOrderUI, kwFilterUI = buildCommonCollectionUI(f, bind, share, collectionSettings,
         publishSettings)
 
+    local videoPresetUI = buildVideoPresetUI(f, bind, collectionSettings)
+
     local allowCustomAlbumSettings = publishSettings and publishSettings.PWP_customAlbumSettings == true
     local UI
     if allowCustomAlbumSettings then
@@ -237,11 +276,13 @@ function PublishTask.viewForCollectionSettings(f, publishSettings, info)
             sortOrderUI,
             kwFilterUI,
             customSettingsUI,
+            videoPresetUI,
         }
     else
         UI = f:column {
             spacing = f:control_spacing(),
             pwAlbumUI,
+            videoPresetUI,
         }
     end
     return UI
@@ -353,6 +394,8 @@ function PublishTask.viewForCollectionSetSettings(f, publishSettings, info)
     local pwAlbumUI, metaDataUI, sortOrderUI, kwFilterUI = buildCommonCollectionUI(f, bind, share, collectionSettings,
         publishSettings)
 
+    local videoPresetUI = buildVideoPresetUI(f, bind, collectionSettings)
+
     local allowCustomAlbumSettings = publishSettings and publishSettings.PWP_customAlbumSettings == true
     local UI
     if allowCustomAlbumSettings then
@@ -364,11 +407,13 @@ function PublishTask.viewForCollectionSetSettings(f, publishSettings, info)
             sortOrderUI,
             kwFilterUI,
             customSettingsUI,
+            videoPresetUI,
         }
     else
         UI = f:column {
             spacing = f:control_spacing(),
             pwAlbumUI,
+            videoPresetUI,
         }
     end
 

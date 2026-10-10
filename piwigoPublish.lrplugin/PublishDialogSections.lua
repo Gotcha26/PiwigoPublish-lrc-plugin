@@ -826,6 +826,7 @@ end
 function PublishDialogSections.sectionsForTopOfDialog(f, propertyTable)
 	local conDlg = connectionDialog(f, propertyTable)
 	local prefDlg = prefsDialog(f, propertyTable)
+	local videoDlg = vtk_ui.videoDialog(f, propertyTable)
 	if utils.nilOrEmpty(propertyTable.host) or utils.nilOrEmpty(propertyTable.userName) or utils.nilOrEmpty(propertyTable.userPW) then
 		propertyTable.Connected = false
 		propertyTable.ConCheck = true
@@ -834,7 +835,7 @@ function PublishDialogSections.sectionsForTopOfDialog(f, propertyTable)
 
 	end
 
-	return { conDlg, prefDlg }
+	return { conDlg, prefDlg, videoDlg }
 end
 
 -- *************************************************
