@@ -178,6 +178,14 @@ end
 -- ************************************************
 local function createCustomRender(rendition, filePath, overrideSettings)
     local photoToRender = rendition.photo
+    -- The publish service hides 'exportLocation', so the cloned settings carry Lightroom's
+    -- default destination (an "Untitled Export" folder on the Desktop). Render into the
+    -- system temp folder instead; the file is deleted right after upload.
+    overrideSettings.LR_export_destinationType = "specificFolder"
+    overrideSettings.LR_export_destinationPathPrefix = LrPathUtils.getStandardFilePath("temp")
+    overrideSettings.LR_export_useSubfolder = true
+    overrideSettings.LR_export_destinationPathSuffix = "piwigoPublish_customRender"
+    overrideSettings.LR_collisionHandling = "overwrite"
     local customSession = LrExportSession {
         photosToExport = { photoToRender },
         exportSettings = overrideSettings,
