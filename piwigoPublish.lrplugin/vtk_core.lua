@@ -176,7 +176,10 @@ function vtk_core.checkServerSupport(propertyTable, videoPhotos, batchVideoCount
                 table.insert(warnings, "\nUse 'Server Info' > 'Enable Video Support' to fix this automatically.")
             end
 
-            if not videoSupport.videoJsInstalled then
+            -- VideoJS only matters when the Companion does not provide its own player (pre-#233)
+            if videoSupport.builtinPlayer then
+                log:info("vtk_core.checkServerSupport - gallery playback by built-in Companion player, VideoJS not required")
+            elseif not videoSupport.videoJsInstalled then
                 table.insert(warnings, "- VideoJS plugin is NOT installed (videos won't play in gallery)")
             elseif not videoSupport.videoJsActive then
                 table.insert(warnings, "- VideoJS plugin is installed but INACTIVE")

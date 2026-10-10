@@ -133,7 +133,7 @@ local function httpPost(propertyTable, params, headers)
         -- successful connection to Piwigo
         -- Now check login result
         local rtnBody = JSON:decode(stripPhpWarnings(httpResponse))
-        if rtnBody.stat == "ok" then
+        if rtnBody and rtnBody.stat == "ok" then
             -- login ok - store session cookies
             local cookies = {}
             local SessionCookie = ""
@@ -156,7 +156,7 @@ local function httpPost(propertyTable, params, headers)
             propertyTable.cookieHeader = table.concat(propertyTable.cookies, "; ")
             propertyTable.Connected = true
         else
-            LrDialogs.message("Cannot log in to Piwigo - ", rtnBody.err .. ", " .. rtnBody.message)
+            LrDialogs.message("Cannot log in to Piwigo - ", (rtnBody and (tostring(rtnBody.err) .. ", " .. tostring(rtnBody.message)) or "Unknown error"))
             return false
         end
     else
@@ -233,7 +233,7 @@ local function pwGetSessionStatus(propertyTable)
         if getResponse.response.result.status and (getResponse.response.result.status == "webmaster") then
             propertyTable.userStatus = getResponse.response.result.status
             propertyTable.token = getResponse.response.result.pwg_token
-            propertyTable.pwVersion = getResponse.response.result.version
+            propertyTable.pwVersion = getResponse.response.result.version or "unknown"
             propertyTable.Connected = true
             propertyTable.ConCheck = false
             propertyTable.ConStatus = "Connected to Piwigo Gallery at " .. propertyTable.host .. " as " ..
@@ -259,31 +259,39 @@ local function buildCatHierarchy(allCats)
     local nodes = {}
     local roots = {}
     for _, cat in ipairs(allCats) do
-        local id = tonumber(cat.id)
-        nodes[id] = {
-            id = id,
-            name = cat.name,
-            comment = cat.comment,
-            status = cat.status,
-            children = {}
-        }
+        if cat then
+            local id = tonumber(cat.id)
+            if id then
+                nodes[id] = {
+                    id = id,
+                    name = cat.name,
+                    comment = cat.comment,
+                    status = cat.status,
+                    children = {}
+                }
+            end
+        end
     end
     -- 2. Attach nodes to parents
     for _, cat in ipairs(allCats) do
-        -- uppercats is a comma-separated list like "16,28" or "24,27"
-        local path = utils.stringtoTable(cat.uppercats, ",")
-        local id = tonumber(cat.id)
-        local node = nodes[id]
+        if cat then
+            -- uppercats is a comma-separated list like "16,28" or "24,27"
+            local path = utils.stringtoTable(cat.uppercats, ",")
+            local id = tonumber(cat.id)
+            if id then
+                local node = nodes[id]
 
-        if #path == 1 then
-            -- Top-level category
-            roots[#roots + 1] = node
-        else
-            -- Parent is the second-to-last element
-            local parent_id = tonumber(path[#path - 1])
-            local parent = nodes[parent_id]
-            if parent then
-                parent.children[#parent.children + 1] = node
+                if #path == 1 then
+                    -- Top-level category
+                    roots[#roots + 1] = node
+                else
+                    -- Parent is the second-to-last element
+                    local parent_id = tonumber(path[#path - 1])
+                    local parent = nodes[parent_id]
+                    if parent then
+                        parent.children[#parent.children + 1] = node
+                    end
+                end
             end
         end
     end
@@ -1097,6 +1105,9 @@ function PiwigoAPI.storeMetaData(catalog, lrPhoto, pluginData)
         lrPhoto:setPropertyForPlugin(_PLUGIN, "pwUploadDate", pluginData.pwUploadDate)
         lrPhoto:setPropertyForPlugin(_PLUGIN, "pwUploadTime", pluginData.pwUploadTime)
         lrPhoto:setPropertyForPlugin(_PLUGIN, "pwCommentSync", pluginData.pwCommentSync)
+        if pluginData.pwVideoPreset then
+            lrPhoto:setPropertyForPlugin(_PLUGIN, "pwVideoPreset", pluginData.pwVideoPreset)
+        end
     end)
 end
 
@@ -1332,7 +1343,7 @@ function PiwigoAPI.pwConnect(propertyTable)
             LrDialogs.message("Cannot log in to Piwigo", "Invalid or unreadable server response")
             return false
         end
-        if rtnBody.stat == "ok" then
+        if rtnBody and rtnBody.stat == "ok" then
             -- login ok - store session cookies
             local cookies = {}
             local SessionCookie = ""
@@ -1669,6 +1680,7 @@ function PiwigoAPI.pwCategoriesGetThis(propertyTable, thisCat)
         return nil
     end
     -- go through allCats to find thisCat
+    allCats = allCats or {}
     for _, cat in ipairs(allCats) do
         if tostring(cat.id) == tostring(thisCat) then
             return cat
@@ -1782,16 +1794,16 @@ function PiwigoAPI.pwCategoriesMove(propertyTable, info, thisCat, newCat, callSt
         parseResp = JSON:decode(stripPhpWarnings(httpResponse))
     end
     if httpHeaders.status == 201 or httpHeaders.status == 200 then
-        if parseResp.stat == "ok" then
+        if parseResp and parseResp.stat == "ok" then
             callStatus.status = true
             callStatus.statusMsg = ""
         else
             callStatus.status = false
-            callStatus.statusMsg = parseResp.message or ""
+            callStatus.statusMsg = (parseResp and parseResp.message) or ""
         end
     else
         callStatus.status = false
-        callStatus.statusMsg = parseResp.message or ""
+        callStatus.statusMsg = (parseResp and parseResp.message) or ""
     end
 
     return callStatus
@@ -1955,16 +1967,16 @@ function PiwigoAPI.pwCategoriesDelete(propertyTable, info, metaData, callStatus)
         parseResp = JSON:decode(stripPhpWarnings(httpResponse))
     end
     if httpHeaders.status == 201 or httpHeaders.status == 200 then
-        if parseResp.stat == "ok" then
+        if parseResp and parseResp.stat == "ok" then
             callStatus.status = true
             callStatus.statusMsg = ""
         else
             callStatus.status = false
-            callStatus.statusMsg = parseResp.message or ""
+            callStatus.statusMsg = (parseResp and parseResp.message) or ""
         end
     else
         callStatus.status = false
-        callStatus.statusMsg = parseResp.message or ""
+        callStatus.statusMsg = (parseResp and parseResp.message) or ""
     end
     return callStatus
 end
@@ -2052,7 +2064,7 @@ function PiwigoAPI.pwCategoriesSetinfo(propertyTable, info, metaData)
         body = JSON:decode(stripPhpWarnings(httpResponse))
     end
     if httpHeaders.status == 201 or httpHeaders.status == 200 then
-        if body.stat == "ok" then
+        if body and body.stat == "ok" then
             callStatus.status = true
             callStatus.statusMsg = ""
         else
@@ -2060,14 +2072,14 @@ function PiwigoAPI.pwCategoriesSetinfo(propertyTable, info, metaData)
             log:info("PiwigoAPI.pwCategoriesSetinfo - httpHeaders\n" .. utils.serialiseVar(httpHeaders))
             log:info("PiwigoAPI.pwCategoriesSetinfo - httpResponse\n" .. utils.serialiseVar(httpResponse))
             callStatus.status = false
-            callStatus.statusMsg = "Category " .. tostring(remoteId) .. " - " .. (body.message or "")
+            callStatus.statusMsg = "Category " .. tostring(remoteId) .. " - " .. ((body and body.message) or "")
         end
     else
         log:info("PiwigoAPI.pwCategoriesSetinfo - params \n" .. utils.serialiseVar(params))
         log:info("PiwigoAPI.pwCategoriesSetinfo - httpHeaders\n" .. utils.serialiseVar(httpHeaders))
         log:info("PiwigoAPI.pwCategoriesSetinfo - httpResponse\n" .. utils.serialiseVar(httpResponse))
         callStatus.status = false
-        callStatus.statusMsg = "Category " .. tostring(remoteId) .. " - " .. (body.message or "")
+        callStatus.statusMsg = "Category " .. tostring(remoteId) .. " - " .. ((body and body.message) or "")
     end
 
     return callStatus
@@ -2370,15 +2382,25 @@ function PiwigoAPI.updateGallery(propertyTable, exportFilename, metaData)
         end
     end
     local fileType = LrPathUtils.extension(exportFilename):lower()
-    local contentType = ""
-    if fileType == "png" then
-        contentType = "image/png"
-    elseif fileType == "jpg" or fileType == "jpeg" then
-        contentType = "image/jpeg"
-    else
-        callStatus.statusMsg = "Upload failed - forbidden file type"
+    local contentTypeMap = {
+        png  = "image/png",
+        jpg  = "image/jpeg",
+        jpeg = "image/jpeg",
+        mp4  = "video/mp4",
+        m4v  = "video/mp4",
+        mov  = "video/quicktime",
+        avi  = "video/x-msvideo",
+        mpg  = "video/mpeg",
+        mpeg = "video/mpeg",
+        ogg  = "video/ogg",
+        ogv  = "video/ogg",
+        webm = "video/webm",
+    }
+    local contentType = contentTypeMap[fileType]
+    if not contentType then
+        callStatus.statusMsg = "Upload failed - unsupported file type: " .. fileType
         LrDialogs.message("Cannot upload " .. LrPathUtils.leafName(exportFilename) ..
-            " to Piwigo - forbidden file type. Check file settings in Publishing Manager.")
+            " to Piwigo - unsupported file type (" .. fileType .. "). Check file settings in Publishing Manager.")
         return callStatus
     end
     table.insert(params, {
@@ -2409,12 +2431,24 @@ function PiwigoAPI.updateGallery(propertyTable, exportFilename, metaData)
             log:info("PiwigoAPI.updateGallery - params \n" .. utils.serialiseVar(params))
             log:info("PiwigoAPI.updateGallery - httpHeaders\n" .. utils.serialiseVar(httpHeaders))
             log:info("PiwigoAPI.updateGallery - httpResponse\n" .. utils.serialiseVar(httpResponse))
-            callStatus.statusMsg = "Upload failed - Invalid JSON response - " .. tostring(httpResponse)
-            LrDialogs.message("Cannot upload " .. LrPathUtils.leafName(exportFilename) ..
-                " to Piwigo - Invalid JSON response - " .. tostring(httpResponse))
+            -- Detect Piwigo server-side file type rejection (die() responses, not JSON)
+            local rawResponse = tostring(httpResponse):lower()
+            if rawResponse:find("forbidden file type") or rawResponse:find("unexpected file type") then
+                callStatus.statusMsg = "Upload rejected by Piwigo server - file type not allowed"
+                LrDialogs.message("Cannot upload " .. LrPathUtils.leafName(exportFilename) ..
+                    " to Piwigo — the server rejected this file type.\n\n" ..
+                    "To allow video uploads, configure your Piwigo server:\n" ..
+                    "1. Edit local/config/config.inc.php\n" ..
+                    "2. Add: $conf['upload_form_all_types'] = true;\n" ..
+                    "3. Add video extensions to $conf['file_ext']")
+            else
+                callStatus.statusMsg = "Upload failed - Invalid JSON response - " .. tostring(httpResponse)
+                LrDialogs.message("Cannot upload " .. LrPathUtils.leafName(exportFilename) ..
+                    " to Piwigo - Invalid JSON response - " .. tostring(httpResponse))
+            end
             return callStatus
         end
-        if response.stat == "ok" then
+        if response and response.stat == "ok" then
             callStatus.remoteid = response.result.image_id
             callStatus.remoteurl = response.result.url
             callStatus.status = true
@@ -2661,7 +2695,7 @@ function PiwigoAPI.deletePhoto(propertyTable, pwCatID, pwImageID, callStatus)
     end
 
     if httpHeaders.status == 201 or httpHeaders.status == 200 then
-        if body.stat == "ok" then
+        if body and body.stat == "ok" then
             callStatus.status = true
             callStatus.statusMsg = ""
         else
@@ -2671,7 +2705,7 @@ function PiwigoAPI.deletePhoto(propertyTable, pwCatID, pwImageID, callStatus)
             log:info("PiwigoAPI.deletePhoto - httpResponse \n" .. utils.serialiseVar(httpResponse))
             log:info("PiwigoAPI.deletePhoto - httpHeaders \n" .. utils.serialiseVar(httpHeaders))
             callStatus.status = false
-            callStatus.statusMsg = body.message or ""
+            callStatus.statusMsg = (body and body.message) or ""
         end
     else
         log:info("PiwigoAPI.deletePhoto - propertyTable \n " ..
@@ -2680,7 +2714,7 @@ function PiwigoAPI.deletePhoto(propertyTable, pwCatID, pwImageID, callStatus)
         log:info("PiwigoAPI.deletePhoto - httpResponse \n" .. utils.serialiseVar(httpResponse))
         log:info("PiwigoAPI.deletePhoto - httpHeaders \n" .. utils.serialiseVar(httpHeaders))
         callStatus.status = false
-        callStatus.statusMsg = body.message or ""
+        callStatus.statusMsg = (body and body.message) or ""
     end
     return callStatus
 end
@@ -3236,7 +3270,7 @@ function PiwigoAPI.httpPostMultiPart(propertyTable, params)
         return postResponse
     end
     if httpHeaders.status == 201 or httpHeaders.status == 200 then
-        if body.stat == "ok" then
+        if body and body.stat == "ok" then
             postResponse.status = true
             postResponse.statusMsg = ""
         else
@@ -3245,7 +3279,7 @@ function PiwigoAPI.httpPostMultiPart(propertyTable, params)
             log:info("PiwigoAPI.httpPostMultiPart - httpResponse \n" .. utils.serialiseVar(httpResponse))
             log:info("PiwigoAPI.httpPostMultiPart - httpHeaders \n" .. utils.serialiseVar(httpHeaders))
             postResponse.status = false
-            postResponse.statusMsg = body.message or ""
+            postResponse.statusMsg = (body and body.message) or ""
         end
     else
         log:info("PiwigoAPI.httpPostMultiPart - params\n" .. utils.serialiseVar(params))
@@ -3253,7 +3287,7 @@ function PiwigoAPI.httpPostMultiPart(propertyTable, params)
         log:info("PiwigoAPI.httpPostMultiPart - httpResponse \n" .. utils.serialiseVar(httpResponse))
         log:info("PiwigoAPI.httpPostMultiPart - httpHeaders \n" .. utils.serialiseVar(httpHeaders))
         postResponse.status = false
-        postResponse.statusMsg = body.message or ""
+        postResponse.statusMsg = (body and body.message) or ""
     end
     return postResponse
 end
@@ -3590,6 +3624,22 @@ function PiwigoAPI.getServerVideoSupport(propertyTable)
         result.companionProActive = false
         log:info("PiwigoAPI.getServerVideoSupport - companion plugin reachable but NOT licensed (Free edition)")
     end
+
+    -- Since lightroom_companion #233, the Pro layer ships its own HTML5 gallery player
+    -- (registered under the same pro_active gate), so VideoJS is no longer required for
+    -- playback. Prefer an explicit 'builtin_player' flag when the server sends one;
+    -- otherwise infer it from an explicit pro_active = true (a pre-#231 Companion sends no
+    -- 'companion' key and has no built-in player: VideoJS is then still needed).
+    result.builtinPlayer = false
+    local comp = type(result.serverConfig) == "table" and result.serverConfig.companion or nil
+    if type(comp) == "table" then
+        if comp.builtin_player ~= nil then
+            result.builtinPlayer = (comp.builtin_player == true)
+        else
+            result.builtinPlayer = (comp.pro_active == true)
+        end
+    end
+    log:info("PiwigoAPI.getServerVideoSupport - built-in Companion video player: " .. tostring(result.builtinPlayer))
 
     result.status = true
     return result

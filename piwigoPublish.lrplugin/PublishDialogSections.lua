@@ -536,6 +536,9 @@ local function prefsDialog(f, propertyTable)
 							if videoSupport.videoJsActive then
 								local name = videoSupport.videoJsName or "VideoJS"
 								videoStatus = name .. " — Active"
+							elseif videoSupport.builtinPlayer then
+								-- lightroom_companion >= #233 plays videos itself; VideoJS is optional
+								videoStatus = "Built-in (Lightroom Companion)"
 							elseif videoSupport.videoJsInstalled then
 								local name = videoSupport.videoJsName or "VideoJS"
 								videoStatus = name .. " — INACTIVE"
@@ -631,7 +634,7 @@ local function prefsDialog(f, propertyTable)
 								table.insert(rows, dlgF:separator { fill_horizontal = 1 })
 							end
 
-							table.insert(rows, mkInfoRow("VideoJS plugin:", videoStatus, videoFont))
+							table.insert(rows, mkInfoRow("Video player:", videoStatus, videoFont))
 
 							if cfg then
 								-- exec() status
