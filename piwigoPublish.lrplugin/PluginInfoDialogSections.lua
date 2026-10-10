@@ -31,7 +31,7 @@ PluginInfoDialogSections = {}
 -- *************************************************
 -- CONSTANTS
 -- *************************************************
-local GITHUB_URL = "https://github.com/Piwigo/PiwigoPublish-lrc-plugin"
+local GITHUB_URL = "https://github.com/Gotcha26/PiwigoPublish-lrc-plugin"
 
 -- *************************************************
 -- HELPER FUNCTIONS

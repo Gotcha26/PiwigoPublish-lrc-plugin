@@ -31,7 +31,7 @@ local LrDate = import 'LrDate'
 local UpdateChecker = {}
 
 -- Configuration
-UpdateChecker.GITHUB_OWNER = "Piwigo"
+UpdateChecker.GITHUB_OWNER = "Gotcha26"
 UpdateChecker.GITHUB_REPO = "PiwigoPublish-lrc-plugin"
 UpdateChecker.CHECK_INTERVAL_DAYS = 1
 
