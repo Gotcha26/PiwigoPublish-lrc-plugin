@@ -236,8 +236,8 @@ local function pwGetSessionStatus(propertyTable)
             propertyTable.pwVersion = getResponse.response.result.version or "unknown"
             propertyTable.Connected = true
             propertyTable.ConCheck = false
-            propertyTable.ConStatus = "Connected to Piwigo Gallery at " .. propertyTable.host .. " as " ..
-                propertyTable.userStatus .. " - Piwigo version " .. propertyTable.pwVersion
+            -- keep it short: host and user are already shown above, a long line truncates the version (#42)
+            propertyTable.ConStatus = "Connected to your Piwigo gallery v" .. propertyTable.pwVersion
             return true
         else
             propertyTable.Connected = false
@@ -1407,9 +1407,8 @@ function PiwigoAPI.pwConnect(propertyTable)
         -- LrDialogs.message("Piwigo publish plugin not available","Some features of this plugin require the Piwigo publish plugin to be installed and activated on your Piwigo server. You can still use the publish service without the plugin but some features will not be available. Please check the plugin documentation for more details.")
     end
     propertyTable.ServerPluginAvailable = rv
-    propertyTable.ServerPluginStatus = rv
-        and "Server plugin: piwigoPublish-lrc-plugin detected"
-        or "Server plugin: not detected"
+    propertyTable.ServerPluginStatus = PiwigoAPI.serverPluginStatusText(
+        utils.getEffectivePropertyTable(propertyTable), rv)
 
     -- get list of all tagIDs
     rv, propertyTable.tagTable = PiwigoAPI.getTagList(propertyTable)
@@ -3447,8 +3446,10 @@ function PiwigoAPI.hasPiwigoPublishServerPlugin(propertyTable, forceRefresh)
     local plugins = extractPluginsFromResponse(getResponse)
 
     effectivePT.piwigoPublishServerPluginAvailable = false
+    effectivePT.companionServerPluginActive = false
     if originalPT ~= effectivePT then
         originalPT.piwigoPublishServerPluginAvailable = false
+        originalPT.companionServerPluginActive = false
     end
     if not plugins then
         return false
@@ -3470,12 +3471,35 @@ function PiwigoAPI.hasPiwigoPublishServerPlugin(propertyTable, forceRefresh)
                 end
                 log:info("PiwigoAPI.hasPiwigoPublishServerPlugin - detected id=" .. pluginId ..
                     ", name=" .. pluginName .. ", state=" .. state)
-                break
+            elseif idLower == "lightroom_companion" then
+                local state = plugin.state and tostring(plugin.state):lower() or "unknown"
+                effectivePT.companionServerPluginActive = (state == "active")
+                if originalPT ~= effectivePT then
+                    originalPT.companionServerPluginActive = effectivePT.companionServerPluginActive
+                end
+                log:info("PiwigoAPI.hasPiwigoPublishServerPlugin - Lightroom Companion state=" .. state)
             end
         end
     end
 
     return effectivePT.piwigoPublishServerPluginAvailable
+end
+
+-- *************************************************
+-- Status line shown under the connection settings. Reports the upstream piwigoPublish
+-- server plugin (sort order sync) and/or the fork's Lightroom Companion (video support).
+function PiwigoAPI.serverPluginStatusText(propertyTable, piwigoPublishAvailable)
+    local found = {}
+    if piwigoPublishAvailable then
+        table.insert(found, "piwigoPublish-lrc-plugin")
+    end
+    if propertyTable.companionServerPluginActive then
+        table.insert(found, "Lightroom Companion")
+    end
+    if #found == 0 then
+        return "Server plugin: not detected"
+    end
+    return "Server plugin: " .. table.concat(found, " + ") .. " detected"
 end
 
 -- *************************************************
@@ -3494,11 +3518,7 @@ function PiwigoAPI.refreshServerPluginStatus(propertyTable, forceRefresh)
 
     local available = PiwigoAPI.hasPiwigoPublishServerPlugin(propertyTable, forceRefresh)
     effectivePT.ServerPluginAvailable = available
-    if available then
-        effectivePT.ServerPluginStatus = "Server plugin: piwigoPublish-lrc-plugin detected"
-    else
-        effectivePT.ServerPluginStatus = "Server plugin: not detected"
-    end
+    effectivePT.ServerPluginStatus = PiwigoAPI.serverPluginStatusText(effectivePT, available)
     if originalPT ~= effectivePT then
         originalPT.ServerPluginAvailable = effectivePT.ServerPluginAvailable
         originalPT.ServerPluginStatus = effectivePT.ServerPluginStatus

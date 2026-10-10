@@ -35,7 +35,7 @@ return {
 	sectionsForBottomOfDialog = PublishDialogSections.sectionsForBottomOfDialog,
 	endDialog = PublishDialogSections.endDialog,
 
-	hideSections = { 'exportLocation', 'videoFileSettings' },
+	hideSections = { 'exportLocation', 'video' },
 
 
 	-- Behaviour Settings

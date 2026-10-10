@@ -28,6 +28,21 @@ from .metadata import ExifTool
 from .presets import PresetManager, VideoPreset
 from .status import StatusManager, STATE_PROCESSING, STATE_COMPLETE, STATE_ERROR
 
+# Codecs a source may keep through a remux: H.264 plays in every browser.
+_REMUX_SAFE_CODECS = {"h264"}
+
+
+def _source_fits_preset(info: VideoInfo, preset: VideoPreset) -> bool:
+    """True when re-encoding to `preset` would not reduce the source: its size already
+    fits the preset box (orientation-agnostic, so portrait videos count) and its codec
+    is browser-safe. Only then is a plain remux equivalent to the requested preset."""
+    if (info.video_codec or "").lower() not in _REMUX_SAFE_CODECS:
+        return False
+    src_long, src_short = max(info.width, info.height), min(info.width, info.height)
+    box_long = max(preset.max_width, preset.max_height)
+    box_short = min(preset.max_width, preset.max_height)
+    return src_long <= box_long and src_short <= box_short
+
 
 # ---------------------------------------------------------------------------
 # Résultat de traitement
@@ -119,14 +134,16 @@ class VideoProcessor:
         except ProbeError as e:
             return self._error_result(str(input_path), preset_key, str(e))
 
-        # --- 2b. Auto-downgrade preset pour SDR : origin = remux sans réencodage ---
-        # Si la source n'est pas HDR et que le preset n'est pas déjà "origin",
-        # on bascule sur "origin" (copie directe, sans transcode inutile).
+        # --- 2b. Auto-downgrade preset : origin = remux sans réencodage ---
+        # Uniquement quand le réencodage serait inutile : source SDR, qui tient déjà
+        # dans le preset demandé ET en H.264 (lisible par tous les navigateurs).
+        # Sinon le preset serait ignoré (ex. 4K HEVC SDR envoyée telle quelle avec
+        # un preset "small", et illisible dans une partie des navigateurs).
         # Le suffix du preset demandé est conservé pour nommer la variante
-        # (ex: preset "medium" SDR → remux → fichier nommé "..._medium.mp4").
+        # (ex: preset "medium" → remux → fichier nommé "..._medium.mp4").
         # Le preset_key d'origine est conservé dans le résultat pour Lightroom.
         output_suffix = preset.suffix  # suffix du preset demandé, avant downgrade éventuel
-        if not info.is_hdr and not preset.is_origin:
+        if not info.is_hdr and not preset.is_origin and _source_fits_preset(info, preset):
             preset = self._presets.get_preset("origin")
             preset_hash = preset.hash()
 
