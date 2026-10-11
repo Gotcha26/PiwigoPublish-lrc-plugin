@@ -113,6 +113,30 @@ function UIHelpers.createPiwigoAlbumSettingsUI(f, share, bind, collectionSetting
 					alignment = 'right',
 					width = share 'label_width',
 				},
+				f:static_text {
+					title = "Disabled: enable \"Synchronise Album Descriptions\" in the Publish Service settings to edit this field.",
+					font = "<system/small>",
+					text_color = LrColor(0.8, 0.4, 0),
+					visible = bind {
+						key = 'syncAlbumDescriptions',
+						bind_to_object = publishSettings,
+						transform = function(value, fromModel)
+							if fromModel then
+								return value ~= true
+							end
+							return value
+						end,
+					},
+				},
+			},
+
+			f:row {
+				fill_horizontal = 1,
+				f:static_text {
+					title = "",
+					alignment = 'right',
+					width = share 'label_width',
+				},
 				f:checkbox {
 					title = "",
 					tooltip = "If checked, this album will be private on Piwigo",
