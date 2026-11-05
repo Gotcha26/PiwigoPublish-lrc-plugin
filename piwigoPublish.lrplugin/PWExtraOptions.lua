@@ -314,6 +314,9 @@ local function sampleList(items, maxItems)
     return table.concat(lines, "\n")
 end
 
+-- forward declarations (defined after resyncAlbumWithPiwigo)
+local removeExtraPhotos, fixMissingPhotos
+
 local function resyncAlbumWithPiwigo(service)
     log:info("PWExtraOptions.resyncAlbumWithPiwigo")
 
@@ -438,7 +441,11 @@ local function resyncAlbumWithPiwigo(service)
     local missing = {}
     for rid, pubPhoto in pairs(lrIds) do
         if not pwIds[rid] then
-            table.insert(missing, (pubPhoto:getPhoto():getFormattedMetadata("fileName") or "?") .. " (id " .. rid .. ")")
+            table.insert(missing, {
+                id = rid,
+                pubPhoto = pubPhoto,
+                label = (pubPhoto:getPhoto():getFormattedMetadata("fileName") or "?") .. " (id " .. rid .. ")",
+            })
         end
     end
     progressScope:done()
@@ -453,31 +460,52 @@ local function resyncAlbumWithPiwigo(service)
         log:info("PWExtraOptions.resync - extra (unknown origin) id " .. e.id .. " " .. e.file)
     end
     for _, m in ipairs(missing) do
-        log:info("PWExtraOptions.resync - missing on piwigo: " .. m)
+        log:info("PWExtraOptions.resync - missing on piwigo: " .. m.label)
     end
 
     -- 6. summary
-    local summary = {}
-    table.insert(summary, string.format("Piwigo album: %d photo(s)    Lightroom collection: %d photo(s)",
-        #pwResult.images, lrCount))
+    local header = string.format("Piwigo album: %d photo(s)    Lightroom collection: %d photo(s)",
+        #pwResult.images, lrCount)
     if adminCount and adminCount ~= #pwResult.images then
-        table.insert(summary, string.format(
-            "WARNING: Piwigo reports %d photo(s) in this album but only %d are visible to this account " ..
-            "(privacy level?). Hidden photos are not checked.", adminCount, #pwResult.images))
-    end
-    if #missing > 0 then
-        table.insert(summary, string.format(
-            "\n%d photo(s) of the collection are no longer in the Piwigo album (listed in the log, not changed):\n%s",
-            #missing, sampleList(missing, 5)))
+        header = header .. string.format(
+            "\nWARNING: Piwigo reports %d photo(s) in this album but only %d are visible to this account " ..
+            "(privacy level?). Hidden photos are not checked.", adminCount, #pwResult.images)
     end
 
-    if #extraKnown == 0 and #extraUnknown == 0 then
-        local headline = (#missing == 0) and "Album and collection are in sync." or
-            "No extra photo on Piwigo, but some photos of the collection are missing from the album."
-        LrDialogs.message("Resync Album - " .. collName, headline .. "\n\n" .. table.concat(summary, "\n"),
-            (#missing == 0) and "info" or "warning")
+    if #extraKnown == 0 and #extraUnknown == 0 and #missing == 0 then
+        LrDialogs.message("Resync Album - " .. collName, "Album and collection are in sync.\n\n" .. header, "info")
         return true
     end
+
+    local reports = {}
+    local allOk = true
+
+    -- 7. photos on Piwigo that are no longer in the collection: remove them
+    if #extraKnown > 0 or #extraUnknown > 0 then
+        local ok, report = removeExtraPhotos(publishSettings, catalog, service, useCollection, collName, catId,
+            header, extraKnown, extraUnknown)
+        if report then table.insert(reports, report) end
+        allOk = allOk and ok
+    end
+
+    -- 8. photos of the collection that are no longer in the Piwigo album: re-add or republish them (issue #10)
+    if #missing > 0 then
+        local ok, report = fixMissingPhotos(publishSettings, catalog, service, collName, catId, header, missing)
+        if report then table.insert(reports, report) end
+        allOk = allOk and ok
+    end
+
+    if #reports > 0 then
+        LrDialogs.message("Resync Album - " .. collName, table.concat(reports, "\n\n"), allOk and "info" or "warning")
+    end
+    return allOk
+end
+
+-- *************************************************
+-- Step 7: remove photos left on Piwigo. Returns ok, report (report nil if cancelled)
+removeExtraPhotos = function(publishSettings, catalog, service, useCollection, collName, catId, header,
+                             extraKnown, extraUnknown)
+    local summary = { header }
 
     local knownNames, unknownNames = {}, {}
     for _, e in ipairs(extraKnown) do
@@ -506,9 +534,9 @@ local function resyncAlbumWithPiwigo(service)
     end
 
     local choice = LrDialogs.confirm("Resync Album - " .. collName, table.concat(summary, "\n"), actionVerb,
-        "Cancel", otherVerb)
+        "Skip", otherVerb)
     if choice == "cancel" then
-        return false
+        return true, nil
     end
 
     local toRemove = {}
@@ -550,14 +578,144 @@ local function resyncAlbumWithPiwigo(service)
     local report = string.format("%d photo(s) removed from the album, %d of them deleted from Piwigo.",
         removed, deleted)
     if #failed > 0 then
-        report = report .. string.format("\n\n%d failure(s) - run Resync again to retry:\n%s", #failed,
+        report = report .. string.format("\n%d removal failure(s) - run Resync again to retry:\n%s", #failed,
             sampleList(failed, 8))
     end
     if not ok then
-        report = report .. "\n\nUnexpected error: " .. tostring(err)
+        report = report .. "\nUnexpected error: " .. tostring(err)
     end
-    LrDialogs.message("Resync Album - " .. collName, report, (#failed > 0 or not ok) and "warning" or "info")
-    return ok and #failed == 0
+    return ok and #failed == 0, report
+end
+
+-- *************************************************
+-- Step 8: photos of the collection missing from the Piwigo album (issue #10).
+--   - image still on Piwigo (in other albums): re-add it to this album, the Piwigo ID is kept
+--   - image deleted from Piwigo: mark the photo to republish (it will be uploaded with a NEW ID)
+-- Returns ok, report (report nil if cancelled)
+fixMissingPhotos = function(publishSettings, catalog, service, collName, catId, header, missing)
+    local toReattach, toRepublish, inAlbum, unknown = {}, {}, {}, {}
+
+    local scope = LrProgressScope { title = "Resync album " .. collName, caption = "Checking missing photos..." }
+    for i, m in ipairs(missing) do
+        scope:setPortionComplete(i - 1, #missing)
+        local check = PiwigoAPI.checkPhoto(publishSettings, m.id)
+        if check.status then
+            local inThisAlbum = false
+            for _, cat in ipairs((check.imageDets and check.imageDets.categories) or {}) do
+                if tostring(cat.id) == catId then inThisAlbum = true end
+            end
+            if inThisAlbum then
+                -- associated to the album but not listed (privacy level): nothing to fix
+                table.insert(inAlbum, m)
+            else
+                table.insert(toReattach, m)
+            end
+        elseif PiwigoAPI.isImageNotFound(check) then
+            table.insert(toRepublish, m)
+        else
+            m.error = tostring(check.httpStatusDes)
+            table.insert(unknown, m)
+        end
+    end
+    scope:done()
+
+    local function labels(list)
+        local out = {}
+        for _, m in ipairs(list) do table.insert(out, m.label) end
+        return out
+    end
+    for _, m in ipairs(toReattach) do log:info("PWExtraOptions.resync - missing, still on Piwigo: " .. m.label) end
+    for _, m in ipairs(toRepublish) do log:info("PWExtraOptions.resync - missing, deleted from Piwigo: " .. m.label) end
+    for _, m in ipairs(inAlbum) do log:info("PWExtraOptions.resync - missing, but in album (hidden): " .. m.label) end
+    for _, m in ipairs(unknown) do
+        log:info("PWExtraOptions.resync - missing, cannot check: " .. m.label .. " - " .. m.error)
+    end
+
+    local notes = {}
+    if #inAlbum > 0 then
+        table.insert(notes, string.format("%d photo(s) are in the album but hidden from this account " ..
+            "(privacy level) - nothing to do.", #inAlbum))
+    end
+    if #unknown > 0 then
+        table.insert(notes, string.format("%d photo(s) could not be checked (see log):\n%s", #unknown,
+            sampleList(labels(unknown), 5)))
+    end
+
+    if #toReattach == 0 and #toRepublish == 0 then
+        return #unknown == 0, table.concat(notes, "\n")
+    end
+
+    local summary = { header, string.format("\n%d photo(s) of the collection are no longer in the Piwigo album.",
+        #missing) }
+    if #toReattach > 0 then
+        table.insert(summary, string.format(
+            "\n%d photo(s) still exist on Piwigo (in other albums). They will be added back to this album " ..
+            "and keep their Piwigo ID:\n%s", #toReattach, sampleList(labels(toReattach), 6)))
+    end
+    if #toRepublish > 0 then
+        table.insert(summary, string.format(
+            "\n%d photo(s) were deleted from Piwigo. They will be marked to republish: at the next publish " ..
+            "they are uploaded again with a NEW Piwigo ID (links, comments and favorites of the old image " ..
+            "cannot be recovered):\n%s", #toRepublish, sampleList(labels(toRepublish), 6)))
+    end
+    for _, n in ipairs(notes) do table.insert(summary, "\n" .. n) end
+
+    local choice = LrDialogs.confirm("Resync Album - " .. collName .. " - missing photos",
+        table.concat(summary, "\n"), "Fix " .. (#toReattach + #toRepublish) .. " photo(s)", "Skip")
+    if choice ~= "ok" then
+        return true, nil
+    end
+
+    local reattached, marked, failed = 0, 0, {}
+    PWStatusManager.setPiwigoBusy(service, true)
+    local ok, err = LrTasks.pcall(function()
+        local fixScope = LrProgressScope { title = "Resync album " .. collName, caption = "Adding photos back..." }
+        for i, m in ipairs(toReattach) do
+            if fixScope:isCanceled() then break end
+            fixScope:setPortionComplete(i - 1, #toReattach)
+            local callStatus = PiwigoAPI.withTokenRetry(publishSettings, "re-add image " .. m.id, function()
+                return PiwigoAPI.associateImageToCategory(publishSettings, m.id, catId)
+            end)
+            if callStatus.status then
+                reattached = reattached + 1
+                log:info("PWExtraOptions.resync - re-added id " .. m.id .. " to album " .. catId)
+            else
+                log:info("PWExtraOptions.resync - FAILED to re-add id " .. m.id .. ": " ..
+                    tostring(callStatus.statusMsg))
+                table.insert(failed, m.label .. ": " .. tostring(callStatus.statusMsg))
+            end
+        end
+        fixScope:done()
+
+        if #toRepublish > 0 then
+            catalog:withWriteAccessDo("Mark photos to republish", function()
+                for _, m in ipairs(toRepublish) do
+                    m.pubPhoto:setEditedFlag(true)
+                    marked = marked + 1
+                    log:info("PWExtraOptions.resync - marked to republish: " .. m.label)
+                end
+            end)
+        end
+    end)
+    PWStatusManager.setPiwigoBusy(service, false)
+
+    local lines = {}
+    if #toReattach > 0 then
+        table.insert(lines, string.format("%d photo(s) added back to the album (Piwigo ID kept).", reattached))
+    end
+    if #toRepublish > 0 then
+        table.insert(lines, string.format("%d photo(s) marked to republish - click Publish to upload them again.",
+            marked))
+    end
+    if #failed > 0 then
+        table.insert(lines, string.format("%d failure(s) - run Resync again to retry:\n%s", #failed,
+            sampleList(failed, 6)))
+    end
+    if not ok then
+        table.insert(lines, "Unexpected error: " .. tostring(err))
+    end
+    for _, n in ipairs(notes) do table.insert(lines, n) end
+    return ok and #failed == 0 and #unknown == 0, table.concat(lines, "\n")
 end
 
 -- *************************************************
@@ -806,8 +964,8 @@ local function main()
             f:row {
                 f:push_button {
                     title = 'Resync Album with Piwigo',
-                    tooltip = "Compares the selected published collection with its Piwigo album " ..
-                        "and removes photos left on Piwigo",
+                    tooltip = "Compares the selected published collection with its Piwigo album: removes photos " ..
+                        "left on Piwigo, adds back or marks to republish photos missing from the album",
                     width = share 'buttonwidth',
                     action = function()
                         LrTasks.startAsyncTask(function()
@@ -822,7 +980,7 @@ local function main()
                     end,
                 },
                 f:static_text {
-                    title = "Removes photos still on Piwigo but no longer in the selected collection",
+                    title = "Fixes differences between the selected collection and its Piwigo album",
                     alignment = 'left',
                     width_in_chars = 58,
                 },
