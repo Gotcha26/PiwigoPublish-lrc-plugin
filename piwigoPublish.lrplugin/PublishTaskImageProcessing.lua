@@ -936,9 +936,6 @@ end
 
 -- ************************************************
 function PublishTaskImageProcessing.deletePhotosFromPublishedCollection(publishSettings, arrayOfPhotoIds, deletedCallback, localCollectionId)
-    local callStatus = {}
-    local errStatus = ""
-
 
     -- build tables to allow access to catalog LrPhoto object
     local catalog = LrApplication.activeCatalog()
@@ -950,97 +947,117 @@ function PublishTaskImageProcessing.deletePhotosFromPublishedCollection(publishS
         LrErrors.throwUserError('Publish photos to Piwigo - cannot connect find publishService')
         return nil
     end
-    -- serviceState is a global table containing publishService specific statusData
+    -- serviceState is a global table containing publishService specific statusData.
+    -- Wait for another Piwigo operation of this service to finish rather than skipping:
+    -- a photo is only removed from the collection once Piwigo confirmed it (issue #8).
     local serviceState = PWStatusManager.getServiceState(publishService)
+    local waited = 0
+    while serviceState.PiwigoBusy and waited < 60 do
+        LrTasks.sleep(1)
+        waited = waited + 1
+    end
     if serviceState.PiwigoBusy then
+        log:info("PublishTaskImageProcessing.deletePhotosFromPublishedCollection - service still busy after 60s, " ..
+            "photos left pending deletion")
+        LrErrors.throwUserError("Piwigo Publisher is busy. The photos to remove are kept in the collection " ..
+            "and will be removed at the next publish.")
         return nil
     end
-    PWStatusManager.setPiwigoBusy(publishService, true)
 
     -- build lookup table to access photos by remoteId
-    local photosToUnpublish = {}
     local pubPhotoByRemoteID = {}
     for _, pubPhoto in pairs(publishedPhotos) do
         pubPhotoByRemoteID[pubPhoto:getRemoteId()] = pubPhoto
     end
 
-    -- build table of photo objects for each item in arrayofphotoids
-    local arrayPos = 1
+    local photosToUnpublish = {}
     for i = 1, #arrayOfPhotoIds do
-        local pwImageID = arrayOfPhotoIds[i] or nil
+        local pwImageID = arrayOfPhotoIds[i]
         if pwImageID then
             local pubPhoto = pubPhotoByRemoteID[pwImageID]
-            local lrphoto = pubPhoto:getPhoto()
-            photosToUnpublish[arrayPos] = {}
-            photosToUnpublish[arrayPos][1] = lrphoto
-            photosToUnpublish[arrayPos][2] = pwImageID
-            photosToUnpublish[arrayPos][3] = pubPhoto
-            arrayPos = arrayPos + 1
+            table.insert(photosToUnpublish, {
+                pwImageID = pwImageID,
+                lrPhoto = pubPhoto and pubPhoto:getPhoto() or nil,
+            })
         end
     end
 
     -- piwigo album id
     local pwCatID = publishedCollection:getRemoteId()
 
-    -- check connection to piwigo
-    if not (publishSettings.Connected) then
-        local rv = PiwigoAPI.login(publishSettings)
-        if not rv then
-            PWStatusManager.setPiwigoBusy(publishService, false)
-            LrErrors.throwUserError('Delete Photos from Collection - cannot connect to piwigo at ' .. publishSettings
-                .url)
-            return nil
-        end
-    end
-
-    -- set up async prococess for piwigo calls
-    LrTasks.startAsyncTask(function()
-        -- now go through each photo in photosToUnpublish and remove from Piwigo
-        for i, thisPhotoToUnpublish in pairs(photosToUnpublish) do
-            local thisLrPhoto = thisPhotoToUnpublish[1]
-            local thispwImageID = thisPhotoToUnpublish[2]
-            local thisPubPhoto = thisPhotoToUnpublish[3]
-
-            -- Use dissociate instead of delete to preserve multi-album associations
-            log:info("PublishTaskImageProcessing.deletePhotosFromPublishedCollection - dissociating photo " ..
-                thispwImageID .. " from category " .. pwCatID)
-
-            callStatus = PiwigoAPI.dissociateImageFromCategory(publishSettings, thispwImageID, pwCatID)
-            if callStatus.status then
-                -- this call will dissociate image from album and also delete image from Piwigo if it is not associated to any other albums,
-                if callStatus.deletedImage then
-                    -- image was deleted from Piwigo as it was only associated to this album, so we can clear metadata
-                    -- but same LrC image may still be in other albums and published as a different image on Piwigo (no album association)
-                    -- so look for that and set metadata accordingly
-
-                    local stillPublished = utils.refreshPwMetadataAfterRemoval(catalog, publishService, thisLrPhoto,
-                        publishedCollection)
-                    if not stillPublished then
-                        log:info("PublishTaskImageProcessing.deletePhotosFromPublishedCollection - photo " ..
-                            thispwImageID .. " deleted from Piwigo, metadata cleared")
-                    end
-                else
-                    log:info("PublishTaskImageProcessing.deletePhotosFromPublishedCollection - photo " ..
-                        thispwImageID .. " still in other collections, keeping metadata")
-                end
-                thisPhotoToUnpublish[4] = true
-            else
-                PWStatusManager.setPiwigoBusy(publishService, false)
-                LrErrors.throwUserError(
-                    'Failed to delete photo ' .. thispwImageID .. ' from Piwigo - ' .. callStatus.statusMsg,
-                    'Failed to delete photo')
+    -- Process synchronously (this callback already runs in a task) and report each photo to
+    -- Lightroom via deletedCallback ONLY once Piwigo confirmed its removal. Photos that fail stay
+    -- in the collection marked for deletion and are retried at the next publish.
+    PWStatusManager.setPiwigoBusy(publishService, true)
+    local failures = {}
+    local removedCount = 0
+    local ok, err = LrTasks.pcall(function()
+        if not publishSettings.Connected then
+            if not PiwigoAPI.login(publishSettings) then
+                error("cannot connect to Piwigo at " .. tostring(publishSettings.host))
             end
         end
-    end, errStatus)
 
-    -- now finish process via deletedCallback
-    for i, thisPhotoToUnpublish in pairs(photosToUnpublish) do
-        local thispwImageID = thisPhotoToUnpublish[2]
-        deletedCallback(thispwImageID)
-    end
+        for _, item in ipairs(photosToUnpublish) do
+            -- dissociate rather than delete to preserve multi-album associations;
+            -- the image is deleted from Piwigo only if it is in no other album
+            log:info("PublishTaskImageProcessing.deletePhotosFromPublishedCollection - dissociating photo " ..
+                item.pwImageID .. " from category " .. tostring(pwCatID))
 
+            local callStatus = PiwigoAPI.removeImageFromCategory(publishSettings, item.pwImageID, pwCatID)
+            if not callStatus.status and callStatus.notFound then
+                log:info("PublishTaskImageProcessing.deletePhotosFromPublishedCollection - photo " ..
+                    item.pwImageID .. " no longer exists on Piwigo, treating as removed")
+                callStatus.status = true
+                callStatus.deletedImage = true
+            end
 
+            if callStatus.status then
+                if callStatus.deletedImage and item.lrPhoto then
+                    -- the same LrC photo may still be published elsewhere as another Piwigo image
+                    local stillPublished = utils.refreshPwMetadataAfterRemoval(catalog, publishService,
+                        item.lrPhoto, publishedCollection)
+                    if not stillPublished then
+                        log:info("PublishTaskImageProcessing.deletePhotosFromPublishedCollection - photo " ..
+                            item.pwImageID .. " deleted from Piwigo, metadata cleared")
+                    end
+                elseif not callStatus.deletedImage then
+                    log:info("PublishTaskImageProcessing.deletePhotosFromPublishedCollection - photo " ..
+                        item.pwImageID .. " still in other albums, keeping metadata")
+                end
+                deletedCallback(item.pwImageID)
+                removedCount = removedCount + 1
+            else
+                log:info("PublishTaskImageProcessing.deletePhotosFromPublishedCollection - FAILED photo " ..
+                    item.pwImageID .. ": " .. tostring(callStatus.statusMsg))
+                local fileName = item.lrPhoto and item.lrPhoto:getFormattedMetadata("fileName") or "?"
+                table.insert(failures, fileName .. " (id " .. item.pwImageID .. "): " ..
+                    tostring(callStatus.statusMsg))
+            end
+        end
+    end)
     PWStatusManager.setPiwigoBusy(publishService, false)
+
+    local collName = publishedCollection:getName()
+    if not ok then
+        LrErrors.throwUserError("Removing photos from Piwigo album \"" .. collName .. "\" stopped: " ..
+            tostring(err) .. "\n\n" .. removedCount .. " photo(s) removed. The others are kept in the collection " ..
+            "and will be retried at the next publish.")
+    end
+    if #failures > 0 then
+        local lines = {}
+        for i, f in ipairs(failures) do
+            if i > 8 then
+                table.insert(lines, "... (+" .. (#failures - 8) .. " more, see log)")
+                break
+            end
+            table.insert(lines, f)
+        end
+        LrDialogs.message("Piwigo album \"" .. collName .. "\": " .. #failures .. " photo(s) could not be removed",
+            removedCount .. " photo(s) removed.\n\n" ..
+            "These photos are still online. They are kept in the collection and will be retried at the " ..
+            "next publish:\n\n" .. table.concat(lines, "\n"), "warning")
+    end
 end
 
 -- ************************************************

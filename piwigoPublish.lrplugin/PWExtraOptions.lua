@@ -302,24 +302,6 @@ local function collectServiceCollections(node, out)
     return out
 end
 
-local function isTokenError(msg)
-    return msg and string.find(string.lower(msg), "token", 1, true) ~= nil
-end
-
-local function dissociateWithRetry(publishSettings, imageId, catId)
-    -- dissociate (or delete if orphaned), retrying once after a fresh login when the
-    -- pwg_token has been invalidated by a concurrent session (see issue #8)
-    local callStatus = PiwigoAPI.dissociateImageFromCategory(publishSettings, imageId, catId)
-    if not callStatus.status and isTokenError(callStatus.statusMsg) then
-        log:info("PWExtraOptions.resync - token rejected for image " .. imageId .. ", reconnecting and retrying")
-        publishSettings.Connected = false
-        if PiwigoAPI.login(publishSettings) then
-            callStatus = PiwigoAPI.dissociateImageFromCategory(publishSettings, imageId, catId)
-        end
-    end
-    return callStatus
-end
-
 local function sampleList(items, maxItems)
     local lines = {}
     for i, item in ipairs(items) do
@@ -543,7 +525,7 @@ local function resyncAlbumWithPiwigo(service)
             scope:setPortionComplete(i - 1, #toRemove)
             scope:setCaption("Removing " .. i .. " of " .. #toRemove .. " - " .. e.file)
 
-            local callStatus = dissociateWithRetry(publishSettings, e.id, catId)
+            local callStatus = PiwigoAPI.removeImageFromCategory(publishSettings, e.id, catId)
             if callStatus.status then
                 removed = removed + 1
                 log:info("PWExtraOptions.resync - removed id " .. e.id .. " from album " .. catId ..

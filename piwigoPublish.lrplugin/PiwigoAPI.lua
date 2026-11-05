@@ -76,6 +76,11 @@ local function httpGet(url, params, headers)
         log:info("PWAPI.httpGet - httpResponse\n" .. utils.serialiseVar(body))
         getResponse.status = "error"
         getResponse.errorMessage = string.format("HTTP error %s", tostring(statusCode))
+        -- Piwigo mirrors its API error code in the HTTP status: keep its message when the body is JSON
+        local okDecode, errBody = pcall(JSON.decode, JSON, stripPhpWarnings(body))
+        if okDecode and type(errBody) == "table" and errBody.message then
+            getResponse.errorMessage = getResponse.errorMessage .. " - " .. tostring(errBody.message)
+        end
         getResponse.response = nil
         return getResponse
     end
@@ -2332,7 +2337,14 @@ function PiwigoAPI.dissociateImageFromCategory(propertyTable, imageId, categoryI
     -- First, get current categories for this image
     local checkStatus = PiwigoAPI.checkPhoto(propertyTable, imageId)
     if not checkStatus.status then
-        callStatus.statusMsg = "Cannot find image " .. tostring(imageId) .. " on Piwigo"
+        callStatus.statusMsg = "Cannot find image " .. tostring(imageId) .. " on Piwigo (" ..
+            tostring(checkStatus.httpStatusDes) .. ")"
+        -- image no longer exists on Piwigo (deleted outside Lightroom): callers may treat this as removed.
+        -- Require Piwigo's own message, not just a 404, so a wrong URL never looks like "already deleted".
+        local des = string.lower(tostring(checkStatus.httpStatusDes))
+        if string.find(des, "404", 1, true) and string.find(des, "image_id not found", 1, true) then
+            callStatus.notFound = true
+        end
         return callStatus
     end
 
@@ -2385,6 +2397,23 @@ function PiwigoAPI.dissociateImageFromCategory(propertyTable, imageId, categoryI
         else
             callStatus.statusMsg = postResponse.statusMsg or "Dissociation failed"
             log:info("PiwigoAPI.dissociateImageFromCategory - failed: " .. callStatus.statusMsg)
+        end
+    end
+    return callStatus
+end
+
+-- *************************************************
+function PiwigoAPI.removeImageFromCategory(propertyTable, imageId, categoryId)
+    -- dissociateImageFromCategory, retried once after a fresh login when the pwg_token
+    -- has been rejected (session renewed by a concurrent operation - see issue #8)
+    local callStatus = PiwigoAPI.dissociateImageFromCategory(propertyTable, imageId, categoryId)
+    local msg = string.lower(tostring(callStatus.statusMsg or ""))
+    if not callStatus.status and string.find(msg, "token", 1, true) then
+        log:info("PiwigoAPI.removeImageFromCategory - token rejected for image " .. tostring(imageId) ..
+            ", reconnecting and retrying")
+        propertyTable.Connected = false
+        if PiwigoAPI.login(propertyTable) then
+            callStatus = PiwigoAPI.dissociateImageFromCategory(propertyTable, imageId, categoryId)
         end
     end
     return callStatus
