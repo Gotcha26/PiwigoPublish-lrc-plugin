@@ -472,8 +472,10 @@ local function resyncAlbumWithPiwigo(service)
     end
 
     if #extraKnown == 0 and #extraUnknown == 0 then
-        LrDialogs.message("Resync Album - " .. collName,
-            "No extra photo on Piwigo: album and collection are in sync.\n\n" .. table.concat(summary, "\n"), "info")
+        local headline = (#missing == 0) and "Album and collection are in sync." or
+            "No extra photo on Piwigo, but some photos of the collection are missing from the album."
+        LrDialogs.message("Resync Album - " .. collName, headline .. "\n\n" .. table.concat(summary, "\n"),
+            (#missing == 0) and "info" or "warning")
         return true
     end
 
