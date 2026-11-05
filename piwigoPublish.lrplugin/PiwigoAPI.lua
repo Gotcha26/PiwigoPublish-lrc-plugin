@@ -3333,14 +3333,27 @@ function PiwigoAPI.httpPostMultiPart(propertyTable, params)
         value = propertyTable.SessionCookie
     }
 
+    local method = ""
+    for _, p in ipairs(params) do
+        if p.name == "method" then method = tostring(p.value) end
+    end
+
     local httpResponse, httpHeaders = LrHttp.postMultipart(propertyTable.pwurl, params, {
         headers = sendHeaders
-        --{
-        --    field = "Cookie",
-        --value = propertyTable.cookies
-        --    value = propertyTable.SessionCookie
-        --}
     })
+
+    -- Transport-level failure (no HTTP status at all, e.g. WinHTTP 12032 "operation must be retried"
+    -- on a keep-alive connection closed by the server): retry once. Not for addComment, which is
+    -- not idempotent; the other callers replace values and can safely be sent twice.
+    if not (httpHeaders and httpHeaders.status) and method ~= "pwg.images.addComment" then
+        local errName = httpHeaders and httpHeaders.error and httpHeaders.error.name or "no response"
+        log:info("PiwigoAPI.httpPostMultiPart - " .. method .. " transport error (" ..
+            tostring(errName):gsub("%s+$", "") .. "), retrying once")
+        LrTasks.sleep(1)
+        httpResponse, httpHeaders = LrHttp.postMultipart(propertyTable.pwurl, params, {
+            headers = sendHeaders
+        })
+    end
 
     local body
     if httpResponse then
@@ -3356,7 +3369,14 @@ function PiwigoAPI.httpPostMultiPart(propertyTable, params)
         log:info("PiwigoAPI.httpPostMultiPart - httpResponse \n" .. utils.serialiseVar(httpResponse))
         log:info("PiwigoAPI.httpPostMultiPart - httpHeaders \n" .. utils.serialiseVar(httpHeaders))
         postResponse.status = false
-        postResponse.statusMsg = postHeaders.status .. " - " .. postHeaders.statusDesc
+        if postHeaders.status then
+            postResponse.statusMsg = tostring(postHeaders.status) .. " - " .. tostring(postHeaders.statusDesc)
+        else
+            -- no HTTP status: network error reported by LrHttp (httpHeaders.error)
+            local netErr = httpHeaders and httpHeaders.error or {}
+            postResponse.statusMsg = "Network error " .. tostring(netErr.nativeCode or netErr.errorCode or "?") ..
+                " - " .. (tostring(netErr.name or "no response from server"):gsub("%s+$", ""))
+        end
         return postResponse
     end
     if httpHeaders.status == 201 or httpHeaders.status == 200 then
