@@ -289,6 +289,294 @@ local function convertSelectionCollectionToSet(publishService)
 end
 
 -- *************************************************
+-- Resync album with Piwigo (issue #9)
+-- *************************************************
+local function collectServiceCollections(node, out)
+    -- recursive walk of a publish service / collection set, returns every LrPublishedCollection
+    for _, coll in ipairs(node:getChildCollections() or {}) do
+        table.insert(out, coll)
+    end
+    for _, set in ipairs(node:getChildCollectionSets() or {}) do
+        collectServiceCollections(set, out)
+    end
+    return out
+end
+
+local function isTokenError(msg)
+    return msg and string.find(string.lower(msg), "token", 1, true) ~= nil
+end
+
+local function dissociateWithRetry(publishSettings, imageId, catId)
+    -- dissociate (or delete if orphaned), retrying once after a fresh login when the
+    -- pwg_token has been invalidated by a concurrent session (see issue #8)
+    local callStatus = PiwigoAPI.dissociateImageFromCategory(publishSettings, imageId, catId)
+    if not callStatus.status and isTokenError(callStatus.statusMsg) then
+        log:info("PWExtraOptions.resync - token rejected for image " .. imageId .. ", reconnecting and retrying")
+        publishSettings.Connected = false
+        if PiwigoAPI.login(publishSettings) then
+            callStatus = PiwigoAPI.dissociateImageFromCategory(publishSettings, imageId, catId)
+        end
+    end
+    return callStatus
+end
+
+local function sampleList(items, maxItems)
+    local lines = {}
+    for i, item in ipairs(items) do
+        if i > maxItems then
+            table.insert(lines, "  ... (+" .. (#items - maxItems) .. " more)")
+            break
+        end
+        table.insert(lines, "  " .. item)
+    end
+    return table.concat(lines, "\n")
+end
+
+local function resyncAlbumWithPiwigo(service)
+    log:info("PWExtraOptions.resyncAlbumWithPiwigo")
+
+    local catalog = LrApplication.activeCatalog()
+    local sources = catalog:getActiveSources()
+
+    -- 1. selected published collection in this service
+    local useCollection = nil
+    for _, source in pairs(sources or {}) do
+        if type(source) == "table" and source.type and source:type() == "LrPublishedCollection" then
+            local thisService = source:getService()
+            if thisService and thisService.localIdentifier == service.localIdentifier then
+                useCollection = source
+                break
+            end
+        end
+    end
+    if not useCollection then
+        LrDialogs.message("Resync Album",
+            "Please select a published collection (not a collection set) in the selected Piwigo Publisher service.",
+            "warning")
+        return false
+    end
+
+    local catId = useCollection:getRemoteId()
+    if utils.nilOrEmpty(catId) then
+        LrDialogs.message("Resync Album", "Selected collection has no linked Piwigo album (missing remote ID).",
+            "warning")
+        return false
+    end
+    catId = tostring(catId)
+    local collName = useCollection:getName()
+
+    local publishSettings = service:getPublishSettings()
+    if not publishSettings then
+        LrDialogs.message("Resync Album", "Cannot read publish settings for the selected service.", "warning")
+        return false
+    end
+
+    local serviceState = PWStatusManager.getServiceState(service)
+    if serviceState.PiwigoBusy then
+        utils.pwBusyMessage("PWExtraOptions.resyncAlbumWithPiwigo", "Resync Album")
+        return false
+    end
+
+    if not publishSettings.Connected then
+        if not PiwigoAPI.login(publishSettings) then
+            LrDialogs.message("Resync Album", "Cannot connect to Piwigo at " .. tostring(publishSettings.host),
+                "warning")
+            return false
+        end
+    end
+    if publishSettings.userStatus ~= "webmaster" then
+        LrDialogs.message("Resync Album", "User needs webmaster role on Piwigo gallery at " ..
+            tostring(publishSettings.host), "warning")
+        return false
+    end
+
+    local progressScope = LrProgressScope { title = "Resync album " .. collName, caption = "Reading Piwigo album..." }
+
+    -- 2. Piwigo side
+    local pwResult = PiwigoAPI.getCategoryImages(publishSettings, catId)
+    if not pwResult.status then
+        progressScope:done()
+        LrDialogs.message("Resync Album", "Cannot list photos of Piwigo album " .. catId .. " - " ..
+            tostring(pwResult.statusMsg), "warning")
+        return false
+    end
+
+    -- the admin count is not filtered by privacy level: warn if the listing looks incomplete
+    local adminCount = nil
+    local catInfo = PiwigoAPI.pwCategoriesGetThis(publishSettings, catId)
+    if catInfo and catInfo.nb_images then
+        adminCount = tonumber(catInfo.nb_images)
+    end
+
+    -- 3. Lightroom side: remote ids of every collection of this service linked to the same album
+    progressScope:setCaption("Reading Lightroom collections...")
+    local lrIds = {}
+    local lrCount = 0
+    for _, coll in ipairs(collectServiceCollections(service, {})) do
+        if tostring(coll:getRemoteId() or "") == catId then
+            for _, pubPhoto in ipairs(coll:getPublishedPhotos() or {}) do
+                local rid = pubPhoto:getRemoteId()
+                if not utils.nilOrEmpty(rid) and not lrIds[tostring(rid)] then
+                    lrIds[tostring(rid)] = pubPhoto
+                    lrCount = lrCount + 1
+                end
+            end
+        end
+    end
+
+    -- 4. index LrC photos by the Piwigo image id stored in their plugin metadata (pwImageURL)
+    progressScope:setCaption("Matching Piwigo images to Lightroom photos...")
+    local lrPhotoByPwId = {}
+    local withUrl = catalog:findPhotosWithProperty(_PLUGIN.id, "pwImageURL") or {}
+    if #withUrl > 0 then
+        local props = catalog:batchGetPropertyForPlugin(withUrl, _PLUGIN.id, { "pwImageURL" }) or {}
+        for _, lrPhoto in ipairs(withUrl) do
+            local p = props[lrPhoto]
+            local pwId = p and utils.extractPwImageIdFromUrl(p.pwImageURL, publishSettings.host)
+            if pwId then
+                lrPhotoByPwId[pwId] = lrPhoto
+            end
+        end
+    end
+
+    -- 5. compare
+    local pwIds = {}
+    local extraKnown, extraUnknown = {}, {}
+    for _, img in ipairs(pwResult.images) do
+        pwIds[img.id] = true
+        if not lrIds[img.id] then
+            local entry = { id = img.id, file = img.file, lrPhoto = lrPhotoByPwId[img.id] }
+            if entry.lrPhoto then
+                table.insert(extraKnown, entry)
+            else
+                table.insert(extraUnknown, entry)
+            end
+        end
+    end
+    local missing = {}
+    for rid, pubPhoto in pairs(lrIds) do
+        if not pwIds[rid] then
+            table.insert(missing, (pubPhoto:getPhoto():getFormattedMetadata("fileName") or "?") .. " (id " .. rid .. ")")
+        end
+    end
+    progressScope:done()
+
+    log:info(string.format("PWExtraOptions.resync - album %s (%s): piwigo=%d, admin count=%s, lightroom=%d, " ..
+        "extra known=%d, extra unknown=%d, missing on piwigo=%d", catId, collName, #pwResult.images,
+        tostring(adminCount), lrCount, #extraKnown, #extraUnknown, #missing))
+    for _, e in ipairs(extraKnown) do
+        log:info("PWExtraOptions.resync - extra (from Lightroom) id " .. e.id .. " " .. e.file)
+    end
+    for _, e in ipairs(extraUnknown) do
+        log:info("PWExtraOptions.resync - extra (unknown origin) id " .. e.id .. " " .. e.file)
+    end
+    for _, m in ipairs(missing) do
+        log:info("PWExtraOptions.resync - missing on piwigo: " .. m)
+    end
+
+    -- 6. summary
+    local summary = {}
+    table.insert(summary, string.format("Piwigo album: %d photo(s)    Lightroom collection: %d photo(s)",
+        #pwResult.images, lrCount))
+    if adminCount and adminCount ~= #pwResult.images then
+        table.insert(summary, string.format(
+            "WARNING: Piwigo reports %d photo(s) in this album but only %d are visible to this account " ..
+            "(privacy level?). Hidden photos are not checked.", adminCount, #pwResult.images))
+    end
+    if #missing > 0 then
+        table.insert(summary, string.format(
+            "\n%d photo(s) of the collection are no longer in the Piwigo album (listed in the log, not changed):\n%s",
+            #missing, sampleList(missing, 5)))
+    end
+
+    if #extraKnown == 0 and #extraUnknown == 0 then
+        LrDialogs.message("Resync Album - " .. collName,
+            "No extra photo on Piwigo: album and collection are in sync.\n\n" .. table.concat(summary, "\n"), "info")
+        return true
+    end
+
+    local knownNames, unknownNames = {}, {}
+    for _, e in ipairs(extraKnown) do
+        table.insert(knownNames, e.file .. " (id " .. e.id .. ")")
+    end
+    for _, e in ipairs(extraUnknown) do
+        table.insert(unknownNames, e.file .. " (id " .. e.id .. ")")
+    end
+    if #extraKnown > 0 then
+        table.insert(summary, string.format(
+            "\n%d photo(s) on Piwigo come from Lightroom but are no longer in this collection:\n%s",
+            #extraKnown, sampleList(knownNames, 8)))
+    end
+    if #extraUnknown > 0 then
+        table.insert(summary, string.format(
+            "\n%d photo(s) on Piwigo have no known Lightroom origin (e.g. uploaded from the web):\n%s",
+            #extraUnknown, sampleList(unknownNames, 8)))
+    end
+    table.insert(summary,
+        "\nRemoving a photo takes it out of this album; it is deleted from Piwigo only if it is in no other album.")
+
+    local actionVerb = (#extraKnown > 0) and ("Remove " .. #extraKnown .. " Lightroom photo(s)") or nil
+    local otherVerb = (#extraUnknown > 0) and ("Remove all " .. (#extraKnown + #extraUnknown) .. " photo(s)") or nil
+    if not actionVerb then
+        actionVerb, otherVerb = otherVerb, nil
+    end
+
+    local choice = LrDialogs.confirm("Resync Album - " .. collName, table.concat(summary, "\n"), actionVerb,
+        "Cancel", otherVerb)
+    if choice == "cancel" then
+        return false
+    end
+
+    local toRemove = {}
+    for _, e in ipairs(extraKnown) do table.insert(toRemove, e) end
+    if choice == "other" or #extraKnown == 0 then
+        for _, e in ipairs(extraUnknown) do table.insert(toRemove, e) end
+    end
+
+    -- 7. remove
+    PWStatusManager.setPiwigoBusy(service, true)
+    local removed, deleted, failed = 0, 0, {}
+    local ok, err = LrTasks.pcall(function()
+        local scope = LrProgressScope { title = "Resync album " .. collName, caption = "Removing photos..." }
+        for i, e in ipairs(toRemove) do
+            if scope:isCanceled() then break end
+            scope:setPortionComplete(i - 1, #toRemove)
+            scope:setCaption("Removing " .. i .. " of " .. #toRemove .. " - " .. e.file)
+
+            local callStatus = dissociateWithRetry(publishSettings, e.id, catId)
+            if callStatus.status then
+                removed = removed + 1
+                log:info("PWExtraOptions.resync - removed id " .. e.id .. " from album " .. catId ..
+                    (callStatus.deletedImage and " (deleted from Piwigo)" or " (kept in other albums)"))
+                if callStatus.deletedImage then
+                    deleted = deleted + 1
+                    if e.lrPhoto then
+                        utils.refreshPwMetadataAfterRemoval(catalog, service, e.lrPhoto, useCollection)
+                    end
+                end
+            else
+                log:info("PWExtraOptions.resync - FAILED id " .. e.id .. ": " .. tostring(callStatus.statusMsg))
+                table.insert(failed, e.file .. " (id " .. e.id .. "): " .. tostring(callStatus.statusMsg))
+            end
+        end
+        scope:done()
+    end)
+    PWStatusManager.setPiwigoBusy(service, false)
+
+    local report = string.format("%d photo(s) removed from the album, %d of them deleted from Piwigo.",
+        removed, deleted)
+    if #failed > 0 then
+        report = report .. string.format("\n\n%d failure(s) - run Resync again to retry:\n%s", #failed,
+            sampleList(failed, 8))
+    end
+    if not ok then
+        report = report .. "\n\nUnexpected error: " .. tostring(err)
+    end
+    LrDialogs.message("Resync Album - " .. collName, report, (#failed > 0 or not ok) and "warning" or "info")
+    return ok and #failed == 0
+end
+
+-- *************************************************
 local function syncCurrentAlbumSortNow(service)
     log:info("PWExtraOptions.syncCurrentAlbumSortNow")
 
@@ -525,6 +813,32 @@ local function main()
                 },
                 f:static_text {
                     title = "Converts selected published collection to a collection set",
+                    alignment = 'left',
+                    width_in_chars = 58,
+                },
+            },
+
+            f:spacer { height = 1 },
+            f:row {
+                f:push_button {
+                    title = 'Resync Album with Piwigo',
+                    tooltip = "Compares the selected published collection with its Piwigo album " ..
+                        "and removes photos left on Piwigo",
+                    width = share 'buttonwidth',
+                    action = function()
+                        LrTasks.startAsyncTask(function()
+                            local serviceNo = props.selectedService
+                            local service = serviceItems[serviceNo] and serviceItems[serviceNo].value or nil
+                            if not service then
+                                LrDialogs.message("Error", "Could not find publish service", "error")
+                                return
+                            end
+                            resyncAlbumWithPiwigo(service)
+                        end)
+                    end,
+                },
+                f:static_text {
+                    title = "Removes photos still on Piwigo but no longer in the selected collection",
                     alignment = 'left',
                     width_in_chars = 58,
                 },

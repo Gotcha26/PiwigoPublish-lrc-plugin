@@ -1013,43 +1013,11 @@ function PublishTaskImageProcessing.deletePhotosFromPublishedCollection(publishS
                     -- but same LrC image may still be in other albums and published as a different image on Piwigo (no album association)
                     -- so look for that and set metadata accordingly
 
-                    local pubPhotoExists, foundPubPhoto, foundPubCollection = utils.findExistingPwImageId(publishService,
-                        thisLrPhoto,
+                    local stillPublished = utils.refreshPwMetadataAfterRemoval(catalog, publishService, thisLrPhoto,
                         publishedCollection)
-
-                    if pubPhotoExists then
-                        -- photo exists in another album in the same service, so update metadata with new image url and id for that photo
-                        local remoteUrl = foundPubPhoto:getRemoteUrl() or ""
-                        local urlParts = utils.stringtoTable(remoteUrl, "/")
-                        local albumId = urlParts[#urlParts]
-                        local albumName = foundPubCollection:getName() or ""
-                        local imageId = urlParts[#urlParts - 2]
-                        local hostUrl = remoteUrl:match("(.-)picture%.php")
-                        local albumUrl = string.format("%s/index.php?/category/%s", hostUrl, albumId)
-                        -- get albumName from propertyTable.allCats
-                        catalog:withWriteAccessDo("Updating " .. thisLrPhoto:getFormattedMetadata("fileName"),
-                            function()
-                                thisLrPhoto:setPropertyForPlugin(_PLUGIN, "pwHostURL", hostUrl)
-                                thisLrPhoto:setPropertyForPlugin(_PLUGIN, "pwAlbumName", albumName)
-                                thisLrPhoto:setPropertyForPlugin(_PLUGIN, "pwAlbumURL", albumUrl)
-                                thisLrPhoto:setPropertyForPlugin(_PLUGIN, "pwImageURL", remoteUrl)
-                                --thisLrPhoto:setPropertyForPlugin(_PLUGIN, "pwUploadDate", "")
-                                --thisLrPhoto:setPropertyForPlugin(_PLUGIN, "pwUploadTime", "")
-                                thisLrPhoto:setPropertyForPlugin(_PLUGIN, "pwCommentSync", "")
-                            end)
-                    else
+                    if not stillPublished then
                         log:info("PublishTaskImageProcessing.deletePhotosFromPublishedCollection - photo " ..
-                            thispwImageID .. " deleted from Piwigo, clearing metadata")
-                        catalog:withWriteAccessDo("Updating " .. thisLrPhoto:getFormattedMetadata("fileName"),
-                            function()
-                                thisLrPhoto:setPropertyForPlugin(_PLUGIN, "pwHostURL", "")
-                                thisLrPhoto:setPropertyForPlugin(_PLUGIN, "pwAlbumName", "")
-                                thisLrPhoto:setPropertyForPlugin(_PLUGIN, "pwAlbumURL", "")
-                                thisLrPhoto:setPropertyForPlugin(_PLUGIN, "pwImageURL", "")
-                                thisLrPhoto:setPropertyForPlugin(_PLUGIN, "pwUploadDate", "")
-                                thisLrPhoto:setPropertyForPlugin(_PLUGIN, "pwUploadTime", "")
-                                thisLrPhoto:setPropertyForPlugin(_PLUGIN, "pwCommentSync", "")
-                            end)
+                            thispwImageID .. " deleted from Piwigo, metadata cleared")
                     end
                 else
                     log:info("PublishTaskImageProcessing.deletePhotosFromPublishedCollection - photo " ..

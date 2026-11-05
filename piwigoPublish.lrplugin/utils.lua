@@ -1660,6 +1660,43 @@ function utils.extractPwImageIdFromUrl(url, expectedHost)
 end
 
 -- *************************************************
+function utils.refreshPwMetadataAfterRemoval(catalog, publishService, lrPhoto, excludeCollection)
+    -- Called once a Piwigo image linked to lrPhoto has been deleted from Piwigo.
+    -- If the same LrC photo is still published elsewhere in the service (as another Piwigo image),
+    -- point the plugin metadata to that image; otherwise clear the plugin metadata.
+    local pubPhotoExists, foundPubPhoto, foundPubCollection = utils.findExistingPwImageId(publishService,
+        lrPhoto, excludeCollection)
+    local fileName = lrPhoto:getFormattedMetadata("fileName") or ""
+
+    if pubPhotoExists then
+        local remoteUrl = foundPubPhoto:getRemoteUrl() or ""
+        local urlParts = utils.stringtoTable(remoteUrl, "/")
+        local albumId = urlParts[#urlParts]
+        local albumName = foundPubCollection:getName() or ""
+        local hostUrl = remoteUrl:match("(.-)picture%.php")
+        local albumUrl = string.format("%s/index.php?/category/%s", hostUrl, albumId)
+        catalog:withWriteAccessDo("Updating " .. fileName, function()
+            lrPhoto:setPropertyForPlugin(_PLUGIN, "pwHostURL", hostUrl)
+            lrPhoto:setPropertyForPlugin(_PLUGIN, "pwAlbumName", albumName)
+            lrPhoto:setPropertyForPlugin(_PLUGIN, "pwAlbumURL", albumUrl)
+            lrPhoto:setPropertyForPlugin(_PLUGIN, "pwImageURL", remoteUrl)
+            lrPhoto:setPropertyForPlugin(_PLUGIN, "pwCommentSync", "")
+        end)
+    else
+        catalog:withWriteAccessDo("Updating " .. fileName, function()
+            lrPhoto:setPropertyForPlugin(_PLUGIN, "pwHostURL", "")
+            lrPhoto:setPropertyForPlugin(_PLUGIN, "pwAlbumName", "")
+            lrPhoto:setPropertyForPlugin(_PLUGIN, "pwAlbumURL", "")
+            lrPhoto:setPropertyForPlugin(_PLUGIN, "pwImageURL", "")
+            lrPhoto:setPropertyForPlugin(_PLUGIN, "pwUploadDate", "")
+            lrPhoto:setPropertyForPlugin(_PLUGIN, "pwUploadTime", "")
+            lrPhoto:setPropertyForPlugin(_PLUGIN, "pwCommentSync", "")
+        end)
+    end
+    return pubPhotoExists
+end
+
+-- *************************************************
 function utils.findExistingPwImageId(publishService, lrPhoto, excludeCollection)
     -- Searches if this LR photo is already published in another collection of the same service
     -- Returns the Piwigo remoteId if found, nil otherwise

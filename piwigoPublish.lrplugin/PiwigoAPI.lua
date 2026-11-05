@@ -2210,6 +2210,68 @@ function PiwigoAPI.checkPhoto(propertyTable, pwImageID)
 end
 
 -- *************************************************
+function PiwigoAPI.getCategoryImages(propertyTable, categoryId)
+    -- Lists every image directly associated to a Piwigo album (not its sub-albums)
+    -- via pwg.categories.getImages, following pagination.
+    -- Returns { status = bool, statusMsg = "...", images = { {id = "123", file = "x.jpg", name = "..."}, ... } }
+    log:info("PiwigoAPI.getCategoryImages - categoryId: " .. tostring(categoryId))
+
+    local callStatus = { status = false, images = {} }
+
+    if not propertyTable.Connected then
+        if not PiwigoAPI.login(propertyTable) then
+            callStatus.statusMsg = "Cannot connect to Piwigo"
+            return callStatus
+        end
+    end
+
+    local headers = {}
+    if propertyTable.cookieHeader ~= nil then
+        headers = { ["Cookie"] = propertyTable.cookieHeader }
+    end
+
+    local perPage = 500
+    local page = 0
+    while true do
+        local params = {
+            { name = "method",    value = "pwg.categories.getImages" },
+            { name = "cat_id",    value = tostring(categoryId) },
+            { name = "recursive", value = "false" },
+            { name = "per_page",  value = tostring(perPage) },
+            { name = "page",      value = tostring(page) },
+        }
+        local getResponse = httpGet(propertyTable.pwurl, params, headers)
+        if getResponse.status ~= "ok" or not getResponse.response or not getResponse.response.result then
+            callStatus.statusMsg = getResponse.errorMessage or getResponse.errormessage or "Unknown error"
+            log:info("PiwigoAPI.getCategoryImages - failed on page " .. page .. ": " .. callStatus.statusMsg)
+            return callStatus
+        end
+
+        local result = getResponse.response.result
+        local images = result.images or {}
+        for _, img in ipairs(images) do
+            table.insert(callStatus.images, {
+                id = tostring(img.id),
+                file = img.file or "",
+                name = img.name or "",
+            })
+        end
+
+        local paging = result.paging or {}
+        local totalCount = tonumber(paging.total_count)
+        if #images < perPage or (totalCount and #callStatus.images >= totalCount) then
+            break
+        end
+        page = page + 1
+    end
+
+    log:info("PiwigoAPI.getCategoryImages - " .. #callStatus.images .. " images found in category " ..
+        tostring(categoryId))
+    callStatus.status = true
+    return callStatus
+end
+
+-- *************************************************
 function PiwigoAPI.associateImageToCategory(propertyTable, imageId, categoryId)
     -- Associates an existing Piwigo image to an additional category without re-uploading
     log:info("PiwigoAPI.associateImageToCategory - imageId: " ..
