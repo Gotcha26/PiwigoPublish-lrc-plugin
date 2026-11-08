@@ -1334,7 +1334,9 @@ function PiwigoAPI.pwConnect(propertyTable)
     } }
 
     local httpResponse, httpHeaders = LrHttp.post(propertyTable.pwurl, body, headers)
-    local httpOK = httpHeaders and (httpHeaders.status >= 200 and httpHeaders.status < 300)
+    -- en cas d'échec réseau (DNS, connexion refusée, SSL, timeout), httpHeaders existe mais sans `status`
+    local httpStatus = httpHeaders and tonumber(httpHeaders.status)
+    local httpOK = httpStatus and (httpStatus >= 200 and httpStatus < 300)
     if httpOK then
         -- successful connection to Piwigo
         -- Now check login result
@@ -1384,14 +1386,24 @@ function PiwigoAPI.pwConnect(propertyTable)
         log:info("PiwigoAPI.pwConnect - response body:\n" .. tostring(httpResponse))
         local statusCode, statusDesc
         status = httpHeaders and httpHeaders.status
-        if httpHeaders and httpHeaders.error then
-            statusCode = httpHeaders.error.errorCode or "?"
-            statusDesc = httpHeaders.error.name or "Unknown error"
-        else
-            statusCode = status or "?"
-            statusDesc = (httpHeaders and (httpHeaders.statusDes or httpHeaders.statusDesc)) or ""
+        if not httpStatus then
+            -- aucune réponse HTTP : le serveur n'a pas pu être joint
+            local errCode = httpHeaders and httpHeaders.error and httpHeaders.error.errorCode
+            local errName = httpHeaders and httpHeaders.error and httpHeaders.error.name
+            local msg = "Cannot reach the Piwigo server:\n" .. tostring(propertyTable.host) ..
+                "\n\nCheck the address (typo? https/http? server online?) and your network connection."
+            if errCode or errName then
+                msg = msg .. "\n\nDetails: " .. tostring(errCode or "?") ..
+                    (errName and (", " .. tostring(errName)) or "")
+            end
+            propertyTable.ConStatus = "Server unreachable - check the Piwigo Host address"
+            LrDialogs.message("Cannot log in to Piwigo", msg)
+            return false
         end
+        statusCode = status
+        statusDesc = (httpHeaders.statusDes or httpHeaders.statusDesc) or ""
 
+        propertyTable.ConStatus = "HTTP error " .. tostring(statusCode)
         LrDialogs.message("Cannot log in to Piwigo",
             tostring(statusCode) .. (statusDesc ~= "" and (", " .. statusDesc) or ""))
         return false
