@@ -109,20 +109,6 @@ local function connectionDialog(f, propertyTable, pwInstance)
 					return false, url, 'Entered URL not valid.'
 				end,
 			},
-			f:push_button {
-				title = "Check Connection",
-				enabled = bind('ConCheck', propertyTable),
-				font = "<system/bold>",
-				action = function()
-					LrTasks.startAsyncTask(function()
-						if not PiwigoAPI.login(propertyTable) then
-							LrDialogs.message("Connection NOT successful")
-						else
-							PiwigoAPI.refreshServerPluginStatus(propertyTable, true)
-						end
-					end)
-				end,
-			},
 		},
 
 		-- Username
@@ -166,6 +152,21 @@ local function connectionDialog(f, propertyTable, pwInstance)
 				value = bind 'userPW',
 				alignment = 'left',
 				width_in_chars = 30,
+			},
+			-- Placé après le dernier champ : à cliquer une fois host / user / password renseignés
+			f:push_button {
+				title = "Check Connection",
+				enabled = bind('ConCheck', propertyTable),
+				font = "<system/bold>",
+				action = function()
+					LrTasks.startAsyncTask(function()
+						if not PiwigoAPI.login(propertyTable) then
+							LrDialogs.message("Connection NOT successful")
+						else
+							PiwigoAPI.refreshServerPluginStatus(propertyTable, true)
+						end
+					end)
+				end,
 			},
 		},
 
