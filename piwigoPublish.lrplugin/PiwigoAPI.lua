@@ -42,6 +42,19 @@ local function stripPhpWarnings(body)
 end
 
 -- *************************************************
+-- Describe an HTTP failure for the user/log. When LrHttp got no HTTP response at all
+-- (DNS, refused connection, SSL, timeout) httpHeaders has no `status`, only `error`.
+-- Returns a short explicit message, or nil when the call actually got an HTTP status.
+local function describeNetworkError(httpHeaders)
+    if httpHeaders and tonumber(httpHeaders.status) then
+        return nil
+    end
+    local err = httpHeaders and httpHeaders.error or {}
+    return "Server unreachable - " .. tostring(err.errorCode or err.nativeCode or "no response") ..
+        (err.name and (", " .. tostring(err.name)) or "")
+end
+
+-- *************************************************
 local function httpGet(url, params, headers)
     -- generic function to call LrHttp.Get
     local getResponse = {}
@@ -62,7 +75,7 @@ local function httpGet(url, params, headers)
         log:info("PWAPI.httpGet - httpHeaders\n" .. utils.serialiseVar(hdrs))
         log:info("PWAPI.httpGet - httpResponse\n" .. utils.serialiseVar(body))
         getResponse.status = "error"
-        getResponse.errormessage = "No response body received"
+        getResponse.errorMessage = describeNetworkError(hdrs) or "No response body received"
         getResponse.response = nil
         return getResponse
     end
@@ -1819,7 +1832,7 @@ function PiwigoAPI.pwCategoriesMove(propertyTable, info, thisCat, newCat, callSt
         end
     else
         callStatus.status = false
-        callStatus.statusMsg = (parseResp and parseResp.message) or ""
+        callStatus.statusMsg = (parseResp and parseResp.message) or describeNetworkError(httpHeaders) or ""
     end
 
     return callStatus
@@ -1992,7 +2005,7 @@ function PiwigoAPI.pwCategoriesDelete(propertyTable, info, metaData, callStatus)
         end
     else
         callStatus.status = false
-        callStatus.statusMsg = (parseResp and parseResp.message) or ""
+        callStatus.statusMsg = (parseResp and parseResp.message) or describeNetworkError(httpHeaders) or ""
     end
     return callStatus
 end
@@ -2095,7 +2108,8 @@ function PiwigoAPI.pwCategoriesSetinfo(propertyTable, info, metaData)
         log:info("PiwigoAPI.pwCategoriesSetinfo - httpHeaders\n" .. utils.serialiseVar(httpHeaders))
         log:info("PiwigoAPI.pwCategoriesSetinfo - httpResponse\n" .. utils.serialiseVar(httpResponse))
         callStatus.status = false
-        callStatus.statusMsg = "Category " .. tostring(remoteId) .. " - " .. ((body and body.message) or "")
+        callStatus.statusMsg = "Category " .. tostring(remoteId) .. " - " ..
+            ((body and body.message) or describeNetworkError(httpHeaders) or "")
     end
 
     return callStatus
@@ -2623,6 +2637,11 @@ function PiwigoAPI.updateGallery(propertyTable, exportFilename, metaData)
             statusDes = httpHeaders.statusDes or ""
             status = httpHeaders.status
         end
+        status = tostring(status or "?")
+        local netErr = describeNetworkError(httpHeaders)
+        if netErr then
+            statusDes = netErr .. " (" .. tostring(propertyTable.host) .. ")"
+        end
         LrDialogs.message("Cannot upload - " .. metaData.fileName .. " to Piwigo - " .. status, statusDes)
         callStatus.statusMsg = "Cannot upload - " .. metaData.fileName .. " to Piwigo - " .. status .. ", " .. statusDes
     end
@@ -2829,7 +2848,7 @@ function PiwigoAPI.deletePhoto(propertyTable, pwCatID, pwImageID, callStatus)
         log:info("PiwigoAPI.deletePhoto - httpResponse \n" .. utils.serialiseVar(httpResponse))
         log:info("PiwigoAPI.deletePhoto - httpHeaders \n" .. utils.serialiseVar(httpHeaders))
         callStatus.status = false
-        callStatus.statusMsg = (body and body.message) or ""
+        callStatus.statusMsg = (body and body.message) or describeNetworkError(httpHeaders) or ""
     end
     return callStatus
 end
@@ -3913,6 +3932,10 @@ function PiwigoAPI.uploadVideoChunked(propertyTable, filePath, metaData, chunkSi
         if not httpHeaders or (httpHeaders.status ~= 200 and httpHeaders.status ~= 201) then
             fh:close()
             callStatus.statusMsg = "uploadVideoChunked - HTTP error on chunk " .. chunkIdx
+            local netErr = describeNetworkError(httpHeaders)
+            if netErr then
+                callStatus.statusMsg = callStatus.statusMsg .. " - " .. netErr
+            end
             log:info("PiwigoAPI." .. callStatus.statusMsg)
             return callStatus
         end
