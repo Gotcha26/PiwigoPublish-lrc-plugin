@@ -462,6 +462,10 @@ function PublishTaskImageProcessing.processRenderedPhotos(functionContext, expor
             return nil
         end
     end
+    -- #14: format-alignment support is read once per batch (lazily, on the first format change)
+    propertyTable._formatAlignSupport = nil
+    -- counters filled by PiwigoAPI.updateGallery itself, so video variants (vtk_core) count too
+    propertyTable._formatAlignStats = { unsupported = 0, failed = 0 }
 
     local parentCollSet = publishedCollection:getParent()
     local parentID = ""
@@ -874,6 +878,25 @@ function PublishTaskImageProcessing.processRenderedPhotos(functionContext, expor
 
     progressScope:done()
     PWStatusManager.setPiwigoBusy(publishService, false)
+
+    -- #14: one summary for the whole batch, never one dialog per photo
+    local stats = propertyTable._formatAlignStats or { unsupported = 0, failed = 0 }
+    propertyTable._formatAlignStats = nil
+    local formatUnsupported, formatFailed = stats.unsupported, stats.failed
+    local checkCommand ="\"Check Image Formats on Piwigo\" from Library > Plug-in Extras > Piwigo Publisher Extra Options"
+    if formatUnsupported > 0 then
+        LrDialogs.message("Piwigo Publisher",
+            formatUnsupported .. " photo(s) changed format (e.g. PNG to JPEG) but their file on Piwigo still has the old extension.\n\n" ..
+            "Install or update the Lightroom Companion plugin on your Piwigo server (Free edition is enough), " ..
+            "then run " .. checkCommand .. ".",
+            "info")
+    end
+    if formatFailed > 0 then
+        LrDialogs.message("Piwigo Publisher",
+            formatFailed .. " photo(s) changed format, but the Lightroom Companion could not rename their file on Piwigo.\n\n" ..
+            "The reasons are in the plug-in log file. You can retry with " .. checkCommand .. ".",
+            "warning")
+    end
 end
 
 -- ************************************************

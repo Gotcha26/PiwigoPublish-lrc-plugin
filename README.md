@@ -6,6 +6,16 @@ Please see the [Wiki](https://github.com/Piwigo/PiwigoPublish-lrc-plugin/wiki) f
 
 ---
 
+## Changing the export format of a published service
+
+Republishing a photo replaces it on Piwigo in place: it keeps its Piwigo id, albums, comments and links. Piwigo itself, however, writes the new content to the **existing** file on the server, so after a format change (for example PNG to JPEG) the server file kept its old extension — a `.png` file containing a JPEG image. Tools that read the extension then build image URLs that do not exist.
+
+- **With the Lightroom Companion plugin** installed and active on your Piwigo server (the Free edition is enough), the plugin now renames the server file to match its new format right after each republish, and the photo keeps its Piwigo id.
+- **Without it**, photos are still updated as before, and one message at the end of the publish tells you how many photos kept their old extension.
+- **Photos already affected** can be fixed with *Library > Plug-in Extras > Piwigo Publisher Extra Options > Check Image Formats on Piwigo*. It only looks at the photos published by the selected service, lists those whose file extension no longer matches their format, and aligns them on confirmation. It needs the Lightroom Companion plugin.
+
+---
+
 ## Disclaimer
 
 With the exception of JSON.lua, Copyright 2010-2017 Jeffrey Friedl, which is released under a Creative Commons CC-BY "Attribution" License: http://creativecommons.org/licenses/by/3.0/deed.en_US, and md5.lua, Copyright (c) 2013 Enrique García Cota + Adam Baldwin + hanzao + Equi 4 Software which is released under an MIT license, this software is released under the GNU General Public License version 3 as published by the Free Software Foundation.
