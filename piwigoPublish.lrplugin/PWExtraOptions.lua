@@ -903,26 +903,35 @@ local function checkImageFormats(service)
         return false
     end
 
-    local aligned, already, failed = 0, 0, 0
-    local scope = LrProgressScope { title = "Aligning image formats" }
-    scope:setCancelable(true)
-    for i, img in ipairs(mismatches) do
-        if scope:isCanceled() then break end
-        scope:setPortionComplete(i - 1, #mismatches)
-        scope:setCaption(tostring(img.file))
-        local alignStatus = PiwigoAPI.alignImageFormat(publishSettings, img.id)
-        if alignStatus.status and alignStatus.aligned then
-            aligned = aligned + 1
-        elseif alignStatus.status and alignStatus.reason == "already" then
-            already = already + 1
-        else
-            failed = failed + 1
-            log:info("PWExtraOptions.checkImageFormats - image " .. tostring(img.id) .. " not aligned: " ..
-                tostring(alignStatus.statusMsg) .. " / " .. tostring(alignStatus.reason))
+    -- lock the service like Resync does: a publish running meanwhile could write to a path being renamed
+    local aligned, already, failed, canceled = 0, 0, 0, false
+    PWStatusManager.setPiwigoBusy(service, true)
+    local ok, err = LrTasks.pcall(function()
+        local scope = LrProgressScope { title = "Aligning image formats" }
+        scope:setCancelable(true)
+        for i, img in ipairs(mismatches) do
+            if scope:isCanceled() then break end
+            scope:setPortionComplete(i - 1, #mismatches)
+            scope:setCaption(tostring(img.file))
+            local alignStatus = PiwigoAPI.alignImageFormat(publishSettings, img.id)
+            if alignStatus.status and alignStatus.aligned then
+                aligned = aligned + 1
+            elseif alignStatus.status and alignStatus.reason == "already" then
+                already = already + 1
+            else
+                failed = failed + 1
+                log:info("PWExtraOptions.checkImageFormats - image " .. tostring(img.id) .. " not aligned: " ..
+                    tostring(alignStatus.statusMsg) .. " / " .. tostring(alignStatus.reason))
+            end
         end
+        canceled = scope:isCanceled()
+        scope:done()
+    end)
+    PWStatusManager.setPiwigoBusy(service, false)
+    if not ok then
+        log:info("PWExtraOptions.checkImageFormats - error: " .. tostring(err))
+        LrDialogs.message(title, "An error stopped the alignment: " .. tostring(err), "warning")
     end
-    local canceled = scope:isCanceled()
-    scope:done()
 
     LrDialogs.message(title,
         (canceled and "Canceled.\n\n" or "") ..

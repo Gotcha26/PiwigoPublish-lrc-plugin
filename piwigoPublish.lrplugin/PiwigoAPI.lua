@@ -2640,12 +2640,14 @@ function PiwigoAPI.updateGallery(propertyTable, exportFilename, metaData)
                     uploadSuccess = true
                     if formatChanged then
                         -- never alters callStatus.status: an alignment failure must not fail the publish
-                        callStatus.formatAlign = "unaligned"
+                        -- "unsupported": no companion able to align ; "failed": it tried and could not
+                        callStatus.formatAlign = "unsupported"
                         if PiwigoAPI.getFormatAlignSupport(propertyTable) then
                             local alignStatus = PiwigoAPI.alignImageFormat(propertyTable, callStatus.remoteid)
                             if alignStatus.status and alignStatus.aligned then
                                 callStatus.formatAlign = "aligned"
                             else
+                                callStatus.formatAlign = "failed"
                                 log:info("PiwigoAPI.updateGallery - format alignment failed for image " ..
                                     tostring(callStatus.remoteid) .. ": " .. tostring(alignStatus.statusMsg) ..
                                     " / " .. tostring(alignStatus.reason))

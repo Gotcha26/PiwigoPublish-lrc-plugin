@@ -464,7 +464,7 @@ function PublishTaskImageProcessing.processRenderedPhotos(functionContext, expor
     end
     -- #14: format-alignment support is read once per batch (lazily, on the first format change)
     propertyTable._formatAlignSupport = nil
-    local formatUnaligned = 0
+    local formatUnsupported, formatFailed = 0, 0
 
     local parentCollSet = publishedCollection:getParent()
     local parentID = ""
@@ -768,8 +768,10 @@ function PublishTaskImageProcessing.processRenderedPhotos(functionContext, expor
 
                 -- do the upload
                 callStatus = PiwigoAPI.updateGallery(propertyTable, filePath, metaData)
-                if callStatus.formatAlign == "unaligned" then
-                    formatUnaligned = formatUnaligned + 1
+                if callStatus.formatAlign == "unsupported" then
+                    formatUnsupported = formatUnsupported + 1
+                elseif callStatus.formatAlign == "failed" then
+                    formatFailed = formatFailed + 1
                 end
                 -- check status and complete rendition
                 if callStatus.status then
@@ -882,12 +884,19 @@ function PublishTaskImageProcessing.processRenderedPhotos(functionContext, expor
     PWStatusManager.setPiwigoBusy(publishService, false)
 
     -- #14: one summary for the whole batch, never one dialog per photo
-    if formatUnaligned > 0 then
+    local checkCommand = "\"Check Image Formats on Piwigo\" from Library > Plug-in Extras > Piwigo Publisher Extra Options"
+    if formatUnsupported > 0 then
         LrDialogs.message("Piwigo Publisher",
-            formatUnaligned .. " photo(s) changed format (e.g. PNG to JPEG) but their file on Piwigo still has the old extension.\n\n" ..
+            formatUnsupported .. " photo(s) changed format (e.g. PNG to JPEG) but their file on Piwigo still has the old extension.\n\n" ..
             "Install or update the Lightroom Companion plugin on your Piwigo server (Free edition is enough), " ..
-            "then run \"Check Image Formats on Piwigo\" from Library > Plug-in Extras > Piwigo Publisher Extra Options.",
+            "then run " .. checkCommand .. ".",
             "info")
+    end
+    if formatFailed > 0 then
+        LrDialogs.message("Piwigo Publisher",
+            formatFailed .. " photo(s) changed format, but the Lightroom Companion could not rename their file on Piwigo.\n\n" ..
+            "The reasons are in the plug-in log file. You can retry with " .. checkCommand .. ".",
+            "warning")
     end
 end
 
