@@ -464,7 +464,8 @@ function PublishTaskImageProcessing.processRenderedPhotos(functionContext, expor
     end
     -- #14: format-alignment support is read once per batch (lazily, on the first format change)
     propertyTable._formatAlignSupport = nil
-    local formatUnsupported, formatFailed = 0, 0
+    -- counters filled by PiwigoAPI.updateGallery itself, so video variants (vtk_core) count too
+    propertyTable._formatAlignStats = { unsupported = 0, failed = 0 }
 
     local parentCollSet = publishedCollection:getParent()
     local parentID = ""
@@ -768,11 +769,6 @@ function PublishTaskImageProcessing.processRenderedPhotos(functionContext, expor
 
                 -- do the upload
                 callStatus = PiwigoAPI.updateGallery(propertyTable, filePath, metaData)
-                if callStatus.formatAlign == "unsupported" then
-                    formatUnsupported = formatUnsupported + 1
-                elseif callStatus.formatAlign == "failed" then
-                    formatFailed = formatFailed + 1
-                end
                 -- check status and complete rendition
                 if callStatus.status then
                     rendition:recordPublishedPhotoId(callStatus.remoteid or "")
@@ -884,7 +880,10 @@ function PublishTaskImageProcessing.processRenderedPhotos(functionContext, expor
     PWStatusManager.setPiwigoBusy(publishService, false)
 
     -- #14: one summary for the whole batch, never one dialog per photo
-    local checkCommand = "\"Check Image Formats on Piwigo\" from Library > Plug-in Extras > Piwigo Publisher Extra Options"
+    local stats = propertyTable._formatAlignStats or { unsupported = 0, failed = 0 }
+    propertyTable._formatAlignStats = nil
+    local formatUnsupported, formatFailed = stats.unsupported, stats.failed
+    local checkCommand ="\"Check Image Formats on Piwigo\" from Library > Plug-in Extras > Piwigo Publisher Extra Options"
     if formatUnsupported > 0 then
         LrDialogs.message("Piwigo Publisher",
             formatUnsupported .. " photo(s) changed format (e.g. PNG to JPEG) but their file on Piwigo still has the old extension.\n\n" ..

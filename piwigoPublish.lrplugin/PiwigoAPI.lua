@@ -2672,11 +2672,18 @@ function PiwigoAPI.updateGallery(propertyTable, exportFilename, metaData)
                                 callStatus.formatAlign = nil
                             else
                                 callStatus.formatAlign = "failed"
+                                if type(propertyTable._formatAlignStats) == "table" then
+                                    propertyTable._formatAlignStats.failed = propertyTable._formatAlignStats.failed + 1
+                                end
                                 log:info("PiwigoAPI.updateGallery - format alignment failed for image " ..
                                     tostring(callStatus.remoteid) .. ": " .. tostring(alignStatus.statusMsg) ..
                                     " / " .. tostring(alignStatus.reason))
                             end
                         else
+                            -- counted here (not by the caller) so the video stack (vtk_core) is counted too
+                            if type(propertyTable._formatAlignStats) == "table" then
+                                propertyTable._formatAlignStats.unsupported = propertyTable._formatAlignStats.unsupported + 1
+                            end
                             log:info("PiwigoAPI.updateGallery - companion cannot align formats, image " ..
                                 tostring(callStatus.remoteid) .. " keeps its old file extension on Piwigo")
                         end
@@ -3912,7 +3919,17 @@ function PiwigoAPI.getFormatAlignSupport(propertyTable)
         end
     end
     log:info("PiwigoAPI.getFormatAlignSupport - " .. tostring(supported))
-    propertyTable._formatAlignSupport = supported
+    -- Cache only a definitive answer: success, or a Piwigo API error that kept its message
+    -- (e.g. unknown method on a server without the companion). A transient network or 5xx
+    -- failure is not cached, so one hiccup does not disable alignment for the whole batch.
+    local definitive = cfgResponse.status == "ok"
+        or string.find(tostring(cfgResponse.errorMessage or ""), " - ", 1, true) ~= nil
+    if definitive then
+        propertyTable._formatAlignSupport = supported
+    else
+        log:info("PiwigoAPI.getFormatAlignSupport - transient failure, not cached: " ..
+            tostring(cfgResponse.errorMessage))
+    end
     return supported
 end
 
