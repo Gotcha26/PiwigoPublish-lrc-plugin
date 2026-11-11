@@ -823,6 +823,116 @@ local function syncCurrentAlbumSortNow(service)
 end
 
 -- *************************************************
+-- Check image formats on Piwigo (issue #14)
+-- *************************************************
+local function checkImageFormats(service)
+    -- Finds photos published by THIS service whose file on Piwigo kept an old extension
+    -- after a republish in another format, and asks the companion to align them.
+    log:info("PWExtraOptions.checkImageFormats")
+    local title = "Check Image Formats"
+
+    local publishSettings = service:getPublishSettings()
+    if not publishSettings then
+        LrDialogs.message(title, "Cannot read publish settings for the selected service.", "warning")
+        return false
+    end
+
+    local serviceState = PWStatusManager.getServiceState(service)
+    if serviceState.PiwigoBusy then
+        utils.pwBusyMessage("PWExtraOptions.checkImageFormats", title)
+        return false
+    end
+
+    if not publishSettings.Connected then
+        if not PiwigoAPI.login(publishSettings) then
+            LrDialogs.message(title, "Cannot connect to Piwigo at " .. tostring(publishSettings.host), "warning")
+            return false
+        end
+    end
+    if publishSettings.userStatus ~= "webmaster" then
+        LrDialogs.message(title, "User needs webmaster role on Piwigo gallery at " ..
+            tostring(publishSettings.host), "warning")
+        return false
+    end
+
+    -- fresh check, never a cache left over by an earlier publish
+    publishSettings._formatAlignSupport = nil
+    if not PiwigoAPI.getFormatAlignSupport(publishSettings) then
+        LrDialogs.message(title,
+            "This needs the Lightroom Companion plugin (Free edition is enough) installed and active on your Piwigo server.",
+            "warning")
+        return false
+    end
+
+    -- only the photos published by this service (never web uploads or other services)
+    local ids, seen = {}, {}
+    for _, coll in ipairs(collectServiceCollections(service, {})) do
+        for _, pubPhoto in ipairs(coll:getPublishedPhotos() or {}) do
+            local remoteId = pubPhoto:getRemoteId()
+            if not utils.nilOrEmpty(remoteId) and not seen[tostring(remoteId)] then
+                seen[tostring(remoteId)] = true
+                table.insert(ids, tostring(remoteId))
+            end
+        end
+    end
+    if #ids == 0 then
+        LrDialogs.message(title, "The selected service has no published photos.", "info")
+        return false
+    end
+
+    local listStatus = PiwigoAPI.listFormatMismatches(publishSettings, ids)
+    if not listStatus.status then
+        LrDialogs.message(title, "Cannot read image formats from Piwigo - " .. tostring(listStatus.statusMsg), "warning")
+        return false
+    end
+    local mismatches = listStatus.images
+    if #mismatches == 0 then
+        LrDialogs.message(title, "All published photos are consistent.", "info")
+        return true
+    end
+
+    local samples = {}
+    for _, img in ipairs(mismatches) do
+        table.insert(samples, tostring(img.file) .. "  (" .. tostring(img.path) .. ")")
+    end
+    local answer = LrDialogs.confirm(title,
+        #mismatches .. " published photo(s) have a file extension that no longer matches their format.\n\n" ..
+        sampleList(samples, 10),
+        "Align all", "Cancel")
+    if answer ~= "ok" then
+        return false
+    end
+
+    local aligned, already, failed = 0, 0, 0
+    local scope = LrProgressScope { title = "Aligning image formats" }
+    scope:setCancelable(true)
+    for i, img in ipairs(mismatches) do
+        if scope:isCanceled() then break end
+        scope:setPortionComplete(i - 1, #mismatches)
+        scope:setCaption(tostring(img.file))
+        local alignStatus = PiwigoAPI.alignImageFormat(publishSettings, img.id)
+        if alignStatus.status and alignStatus.aligned then
+            aligned = aligned + 1
+        elseif alignStatus.status and alignStatus.reason == "already" then
+            already = already + 1
+        else
+            failed = failed + 1
+            log:info("PWExtraOptions.checkImageFormats - image " .. tostring(img.id) .. " not aligned: " ..
+                tostring(alignStatus.statusMsg) .. " / " .. tostring(alignStatus.reason))
+        end
+    end
+    local canceled = scope:isCanceled()
+    scope:done()
+
+    LrDialogs.message(title,
+        (canceled and "Canceled.\n\n" or "") ..
+        "Aligned: " .. aligned .. "\nAlready consistent: " .. already .. "\nFailed: " .. failed ..
+        (failed > 0 and "\n\nReasons are in the plug-in log file." or ""),
+        failed > 0 and "warning" or "info")
+    return failed == 0
+end
+
+-- *************************************************
 local function main()
     local share = LrView.share
     LrFunctionContext.callWithContext("PWExtraOptionsContext", function(context)
@@ -981,6 +1091,42 @@ local function main()
                 },
                 f:static_text {
                     title = "Fixes differences between the selected collection and its Piwigo album",
+                    alignment = 'left',
+                    width_in_chars = 58,
+                },
+            },
+
+            f:spacer { height = 20 },
+            f:row {
+                f:static_text {
+                    title = "Applies to the whole selected service",
+                    font = "<system/bold>",
+                    alignment = 'left',
+                    fill_horizontal = 1,
+                },
+            },
+
+            f:spacer { height = 4 },
+            f:row {
+                f:push_button {
+                    title = 'Check Image Formats on Piwigo',
+                    tooltip = "Finds photos of the selected service whose file on Piwigo kept an old extension " ..
+                        "after a format change (e.g. PNG to JPEG), and fixes them. Needs the Lightroom Companion plugin.",
+                    width = share 'buttonwidth',
+                    action = function()
+                        LrTasks.startAsyncTask(function()
+                            local serviceNo = props.selectedService
+                            local service = serviceItems[serviceNo] and serviceItems[serviceNo].value or nil
+                            if not service then
+                                LrDialogs.message("Error", "Could not find publish service", "error")
+                                return
+                            end
+                            checkImageFormats(service)
+                        end)
+                    end,
+                },
+                f:static_text {
+                    title = "Finds and fixes photos of the selected service whose file kept an old extension",
                     alignment = 'left',
                     width_in_chars = 58,
                 },

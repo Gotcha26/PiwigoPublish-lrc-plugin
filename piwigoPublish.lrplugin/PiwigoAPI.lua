@@ -3920,6 +3920,38 @@ function PiwigoAPI.alignImageFormat(propertyTable, imageId)
 end
 
 -- *************************************************
+function PiwigoAPI.listFormatMismatches(propertyTable, imageIds)
+    -- #14: images among imageIds whose path and file extensions differ on Piwigo
+    -- (pwg.companion.listFormatMismatches). Sent in chunks of 200 ids to keep URLs short.
+    -- Returns { status, statusMsg, images = { {id, file, path}, ... } }
+    local callStatus = { status = true, statusMsg = "", images = {} }
+    local headers = {}
+    if propertyTable.cookieHeader ~= nil then
+        headers = { ["Cookie"] = propertyTable.cookieHeader }
+    end
+    local chunkSize = 200
+    for first = 1, #imageIds, chunkSize do
+        local params = { { name = "method", value = "pwg.companion.listFormatMismatches" } }
+        for i = first, math.min(first + chunkSize - 1, #imageIds) do
+            table.insert(params, { name = "image_ids[]", value = tostring(imageIds[i]) })
+        end
+        local getResponse = httpGet(propertyTable.pwurl, params, headers)
+        if getResponse.status == "ok" and getResponse.response and type(getResponse.response.result) == "table" then
+            for _, img in ipairs(getResponse.response.result.images or {}) do
+                table.insert(callStatus.images, img)
+            end
+        else
+            callStatus.status = false
+            callStatus.statusMsg = "listFormatMismatches - " .. (getResponse.errorMessage or "unknown error")
+            log:info("PiwigoAPI." .. callStatus.statusMsg)
+            return callStatus
+        end
+    end
+    log:info("PiwigoAPI.listFormatMismatches - " .. #callStatus.images .. " mismatch(es) among " .. #imageIds .. " image(s)")
+    return callStatus
+end
+
+-- *************************************************
 -- *************************************************
 function PiwigoAPI.enableVideoSupport(propertyTable)
     -- Call pwg.companion.enableVideoSupport to auto-configure video uploads on the server
