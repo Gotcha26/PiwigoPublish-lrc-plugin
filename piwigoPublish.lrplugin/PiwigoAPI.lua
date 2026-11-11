@@ -2459,6 +2459,18 @@ function PiwigoAPI.removeImageFromCategory(propertyTable, imageId, categoryId)
 end
 
 -- *************************************************
+-- #14: true when two file names carry the same format extension
+-- (case-insensitive, jpg and jpeg being the same format)
+local function sameFormatExt(a, b)
+    local function canon(name)
+        local ext = string.lower(LrPathUtils.extension(name) or "")
+        if ext == "jpeg" then ext = "jpg" end
+        return ext
+    end
+    return canon(a) == canon(b)
+end
+
+-- *************************************************
 function PiwigoAPI.updateGallery(propertyTable, exportFilename, metaData)
     -- update gallery with image via pwg.images.addSimple
 
@@ -2498,6 +2510,10 @@ function PiwigoAPI.updateGallery(propertyTable, exportFilename, metaData)
         })
     end
 
+    -- #14: an in-place update (image_id) keeps the remote path, so a format change
+    -- (e.g. PNG -> JPEG) leaves the old extension on the server file. Detect it here,
+    -- from the path checkPhoto already returns (pwg.images.getInfo is a SELECT *).
+    local formatChanged = false
     if metaData.Remoteid ~= "" then
         -- check if remote photo exists and ignore parameter if not
         log:info("PiwigoAPI.updateGallery - checking for existing photo with remoteid " .. metaData.Remoteid)
@@ -2508,6 +2524,13 @@ function PiwigoAPI.updateGallery(propertyTable, exportFilename, metaData)
                 name = "image_id",
                 value = tostring(metaData.Remoteid)
             })
+            local remotePath = type(rtnStatus.imageDets) == "table" and rtnStatus.imageDets.path or nil
+            if type(remotePath) == "string" and remotePath ~= ""
+                and not sameFormatExt(remotePath, exportFilename) then
+                formatChanged = true
+                log:info("PiwigoAPI.updateGallery - format change detected: " .. remotePath ..
+                    " -> " .. LrPathUtils.extension(exportFilename))
+            end
         end
     end
     local fileType = LrPathUtils.extension(exportFilename):lower()
@@ -2615,6 +2638,23 @@ function PiwigoAPI.updateGallery(propertyTable, exportFilename, metaData)
                 if getResponse.status == "ok" then
                     callStatus.status = true
                     uploadSuccess = true
+                    if formatChanged then
+                        -- never alters callStatus.status: an alignment failure must not fail the publish
+                        callStatus.formatAlign = "unaligned"
+                        if PiwigoAPI.getFormatAlignSupport(propertyTable) then
+                            local alignStatus = PiwigoAPI.alignImageFormat(propertyTable, callStatus.remoteid)
+                            if alignStatus.status and alignStatus.aligned then
+                                callStatus.formatAlign = "aligned"
+                            else
+                                log:info("PiwigoAPI.updateGallery - format alignment failed for image " ..
+                                    tostring(callStatus.remoteid) .. ": " .. tostring(alignStatus.statusMsg) ..
+                                    " / " .. tostring(alignStatus.reason))
+                            end
+                        else
+                            log:info("PiwigoAPI.updateGallery - companion cannot align formats, image " ..
+                                tostring(callStatus.remoteid) .. " keeps its old file extension on Piwigo")
+                        end
+                    end
                 else
                     log:info("PiwigoAPI.updateGallery - params \n" .. utils.serialiseVar(params))
                     callStatus.statusMsg = "Cannot finalise upload - " .. metaData.fileName .. " to Piwigo - " ..
@@ -3427,6 +3467,7 @@ function PiwigoAPI.httpPostMultiPart(propertyTable, params)
         if body and body.stat == "ok" then
             postResponse.status = true
             postResponse.statusMsg = ""
+            postResponse.result = body.result
         else
             log:info("PiwigoAPI.httpPostMultiPart - params\n" .. utils.serialiseVar(params))
             log:info("PiwigoAPI.httpPostMultiPart - sendHeaders\n" .. utils.serialiseVar(sendHeaders))
@@ -3818,6 +3859,64 @@ function PiwigoAPI.getServerVideoSupport(propertyTable)
 
     result.status = true
     return result
+end
+
+-- *************************************************
+function PiwigoAPI.getFormatAlignSupport(propertyTable)
+    -- #14: true when the server companion announces pwg.companion.alignImageFormat
+    -- in getConfig's companion.capabilities. Cached in propertyTable._formatAlignSupport
+    -- (reset to nil at the start of each publish batch): one getConfig call per batch.
+    if propertyTable._formatAlignSupport ~= nil then
+        return propertyTable._formatAlignSupport
+    end
+    local supported = false
+    local headers = {}
+    if propertyTable.cookieHeader ~= nil then
+        headers = { ["Cookie"] = propertyTable.cookieHeader }
+    end
+    local cfgResponse = httpGet(propertyTable.pwurl, { { name = "method", value = "pwg.companion.getConfig" } }, headers)
+    if cfgResponse.status == "ok" and cfgResponse.response and type(cfgResponse.response.result) == "table" then
+        local comp = cfgResponse.response.result.companion
+        if type(comp) == "table" and type(comp.capabilities) == "table" then
+            for _, name in ipairs(comp.capabilities) do
+                if name == "pwg.companion.alignImageFormat" then
+                    supported = true
+                end
+            end
+        end
+    end
+    log:info("PiwigoAPI.getFormatAlignSupport - " .. tostring(supported))
+    propertyTable._formatAlignSupport = supported
+    return supported
+end
+
+-- *************************************************
+function PiwigoAPI.alignImageFormat(propertyTable, imageId)
+    -- #14: asks the companion to rename the image file so that its path and file
+    -- extensions match its real content, keeping the image id.
+    -- Returns { status, statusMsg, aligned, reason, newPath }
+    return PiwigoAPI.withTokenRetry(propertyTable, "align format " .. tostring(imageId), function()
+        local callStatus = { status = false, statusMsg = "", aligned = false, reason = "" }
+        local postResp = PiwigoAPI.httpPostMultiPart(propertyTable, {
+            { name = "method",    value = "pwg.companion.alignImageFormat" },
+            { name = "image_id",  value = tostring(imageId) },
+            { name = "pwg_token", value = propertyTable.token },
+        })
+        if postResp.status then
+            local res = type(postResp.result) == "table" and postResp.result or {}
+            callStatus.status = true
+            callStatus.aligned = (res.aligned == true)
+            callStatus.reason = tostring(res.reason or "")
+            callStatus.newPath = res.new_path
+            log:info("PiwigoAPI.alignImageFormat - image " .. tostring(imageId) .. ": aligned=" ..
+                tostring(callStatus.aligned) .. " reason=" .. callStatus.reason ..
+                " path=" .. tostring(callStatus.newPath))
+        else
+            callStatus.statusMsg = "alignImageFormat - failed: " .. (postResp.statusMsg or "")
+            log:info("PiwigoAPI." .. callStatus.statusMsg)
+        end
+        return callStatus
+    end)
 end
 
 -- *************************************************

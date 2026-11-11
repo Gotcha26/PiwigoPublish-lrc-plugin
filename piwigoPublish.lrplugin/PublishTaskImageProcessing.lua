@@ -462,6 +462,9 @@ function PublishTaskImageProcessing.processRenderedPhotos(functionContext, expor
             return nil
         end
     end
+    -- #14: format-alignment support is read once per batch (lazily, on the first format change)
+    propertyTable._formatAlignSupport = nil
+    local formatUnaligned = 0
 
     local parentCollSet = publishedCollection:getParent()
     local parentID = ""
@@ -765,6 +768,9 @@ function PublishTaskImageProcessing.processRenderedPhotos(functionContext, expor
 
                 -- do the upload
                 callStatus = PiwigoAPI.updateGallery(propertyTable, filePath, metaData)
+                if callStatus.formatAlign == "unaligned" then
+                    formatUnaligned = formatUnaligned + 1
+                end
                 -- check status and complete rendition
                 if callStatus.status then
                     rendition:recordPublishedPhotoId(callStatus.remoteid or "")
@@ -874,6 +880,15 @@ function PublishTaskImageProcessing.processRenderedPhotos(functionContext, expor
 
     progressScope:done()
     PWStatusManager.setPiwigoBusy(publishService, false)
+
+    -- #14: one summary for the whole batch, never one dialog per photo
+    if formatUnaligned > 0 then
+        LrDialogs.message("Piwigo Publisher",
+            formatUnaligned .. " photo(s) changed format (e.g. PNG to JPEG) but their file on Piwigo still has the old extension.\n\n" ..
+            "Install or update the Lightroom Companion plugin on your Piwigo server (Free edition is enough), " ..
+            "then run \"Check Image Formats on Piwigo\" from Library > Plug-in Extras > Piwigo Publisher Extra Options.",
+            "info")
+    end
 end
 
 -- ************************************************
