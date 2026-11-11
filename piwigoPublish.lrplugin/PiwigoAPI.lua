@@ -2470,6 +2470,28 @@ local function sameFormatExt(a, b)
     return canon(a) == canon(b)
 end
 
+-- #14: does the remote image carry another format than the exported file?
+-- pwg.images.getInfo does NOT return `path` (the core unsets it), so two signals are used:
+--  * `file` before the upload: it still holds the previous export name, so it catches a
+--    format change at the moment it happens (PNG -> JPEG republish);
+--  * `element_url`, only when it is a plain /upload/ URL (with original_url_protection it is
+--    action.php?…): its extension is the one of `path`, so it also catches an older drift.
+-- A false positive only costs one alignImageFormat call answering "already".
+local function remoteFormatDiffers(imageDets, exportFilename)
+    if type(imageDets) ~= "table" then return false end
+    if type(imageDets.file) == "string" and imageDets.file ~= ""
+        and not sameFormatExt(imageDets.file, exportFilename) then
+        return true, "file " .. imageDets.file
+    end
+    if type(imageDets.element_url) == "string" then
+        local url = imageDets.element_url:gsub("[?#].*$", "")
+        if url:find("/upload/", 1, true) and not sameFormatExt(url, exportFilename) then
+            return true, "element_url " .. url
+        end
+    end
+    return false
+end
+
 -- *************************************************
 function PiwigoAPI.updateGallery(propertyTable, exportFilename, metaData)
     -- update gallery with image via pwg.images.addSimple
@@ -2512,7 +2534,7 @@ function PiwigoAPI.updateGallery(propertyTable, exportFilename, metaData)
 
     -- #14: an in-place update (image_id) keeps the remote path, so a format change
     -- (e.g. PNG -> JPEG) leaves the old extension on the server file. Detect it here,
-    -- from the path checkPhoto already returns (pwg.images.getInfo is a SELECT *).
+    -- from what checkPhoto already returns (see remoteFormatDiffers).
     local formatChanged = false
     if metaData.Remoteid ~= "" then
         -- check if remote photo exists and ignore parameter if not
@@ -2524,11 +2546,10 @@ function PiwigoAPI.updateGallery(propertyTable, exportFilename, metaData)
                 name = "image_id",
                 value = tostring(metaData.Remoteid)
             })
-            local remotePath = type(rtnStatus.imageDets) == "table" and rtnStatus.imageDets.path or nil
-            if type(remotePath) == "string" and remotePath ~= ""
-                and not sameFormatExt(remotePath, exportFilename) then
+            local differs, why = remoteFormatDiffers(rtnStatus.imageDets, exportFilename)
+            if differs then
                 formatChanged = true
-                log:info("PiwigoAPI.updateGallery - format change detected: " .. remotePath ..
+                log:info("PiwigoAPI.updateGallery - format change detected: " .. tostring(why) ..
                     " -> " .. LrPathUtils.extension(exportFilename))
             end
         end
@@ -2646,6 +2667,9 @@ function PiwigoAPI.updateGallery(propertyTable, exportFilename, metaData)
                             local alignStatus = PiwigoAPI.alignImageFormat(propertyTable, callStatus.remoteid)
                             if alignStatus.status and alignStatus.aligned then
                                 callStatus.formatAlign = "aligned"
+                            elseif alignStatus.status and alignStatus.reason == "already" then
+                                -- false positive of remoteFormatDiffers: nothing to align
+                                callStatus.formatAlign = nil
                             else
                                 callStatus.formatAlign = "failed"
                                 log:info("PiwigoAPI.updateGallery - format alignment failed for image " ..
