@@ -365,8 +365,8 @@ function utils.dumpPropertyTableToDesktop(tableToDump, collectionSettings, conte
     local dumpText = "-- PiwigoPublish propertyTable debug dump\n" ..
         "-- Generated: " .. os.date("%Y-%m-%d %H:%M:%S") .. "\n" ..
         "-- Context: " .. (context or "runCustomRenderForCollection") .. "\n\n" ..
-        "collectionSettings = " .. utils.serialiseVar(collectionSettings) .. "\n\n" ..
-        "propertyTable = " .. utils.serialiseVar(tableToDump) .. "\n"
+        "collectionSettings = " .. utils.serialiseForLog(collectionSettings) .. "\n\n" ..
+        "propertyTable = " .. utils.serialiseForLog(tableToDump) .. "\n"
 
     local file, err = io.open(dumpPath, "w")
     if not file then
