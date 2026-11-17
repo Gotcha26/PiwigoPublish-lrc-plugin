@@ -93,7 +93,7 @@ function UpdateChecker.getInstalledVersionDate()
     --local versionInfo = _PLUGIN.VERSION or { major = 0, minor = 0, revision = 0 }
     -- _PLUGIN.VERSION is nil here for some reason
     -- use _G.versionInfo set in Init.lua 
-    log:info("UpdateChecker.getInstalledVersionDate - versionInfo\n" .. utils.serialiseVar(versionInfo))
+    log:info("UpdateChecker.getInstalledVersionDate - versionInfo\n" .. utils.serialiseForLog(versionInfo))
     local major = versionInfo.major or 0
     log:info("UpdateChecker.getInstalledVersionDate - major: " .. tostring(major))
     if major >= 20000000 then
@@ -141,8 +141,8 @@ function UpdateChecker.checkForUpdates(silent)
         
         -- Update last check timestamp
         prefs.lastUpdateCheck = LrDate.currentTime()
-        log:info("UpdateChecker.checkForUpdates - response\n" .. utils.serialiseVar(response))
-        log:info("UpdateChecker.checkForUpdates - headers\n" .. utils.serialiseVar(headers))        
+        log:info("UpdateChecker.checkForUpdates - response\n" .. utils.serialiseForLog(response))
+        log:info("UpdateChecker.checkForUpdates - headers\n" .. utils.serialiseForLog(headers))        
         -- Handle errors
 
         if not response or (headers and headers.status ~= 200) then

@@ -138,7 +138,7 @@ local function processSmartCollectionQueue(smartColls, publishService, propertyT
 
     PWStatusManager.setisCloningSync(publishService, true)
     local serviceState = PWStatusManager.getServiceState(publishService)
-    log:info("processSmartCollectionQueue - serviceState\n" .. utils.serialiseVar(serviceState))
+    log:info("processSmartCollectionQueue - serviceState\n" .. utils.serialiseForLog(serviceState))
 
     -- we only care about oldPubPhotos that have a remote Id - i.e. have been uploaded to Piwigo
     -- 1. Create a lookup table for the old published photos
@@ -166,7 +166,7 @@ local function processSmartCollectionQueue(smartColls, publishService, propertyT
     PWStatusManager.storeRemoteInfo(publishService, collId, RemoteInfoTable)
     serviceState = PWStatusManager.getServiceState(publishService)
     log:info("processSmartCollectionQueue - serviceState after RemoteInfoTable build\n" ..
-        utils.serialiseVar(serviceState))
+        utils.serialiseForLog(serviceState))
     -- add serviceState to collectionSettings to ensure it is passed to renderPhotos
     collectionSettings.serviceState = serviceState
     catalog:withWriteAccessDo("Add serviceState to collection", function()
@@ -528,7 +528,7 @@ local function importService(propertyTable, thisService, impService, serviceInde
     local childrenIndex = buildChildrenIndex(serviceIndex)
     local created = {}
     log:info("importService - importing " .. impService:getName() .. " to " .. thisService:getName())
-    log:info("pwDetails - " .. utils.serialiseVar(pwDetails))
+    log:info("pwDetails - " .. utils.serialiseForLog(pwDetails))
     --
     local statusData = {
         existing = 0,

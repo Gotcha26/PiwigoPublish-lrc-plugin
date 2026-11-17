@@ -303,7 +303,7 @@ function PublishTask.updateCollectionSettings(publishSettings, info)
 
     if not publishService then
         log:info('updateCollectionSettings - publishSettings:\n' ..
-            utils.serialiseVar(utils.anonymisePropertyTable(publishSettings)))
+            utils.serialiseForLog(utils.anonymisePropertyTable(publishSettings)))
         LrErrors.throwUserError('updateCollectionSettings - cannot connect find publishService')
         return nil
     end
@@ -432,7 +432,7 @@ function PublishTask.updateCollectionSetSettings(publishSettings, info)
 
     if not publishService then
         log:info('updateCollectionSettings - publishSettings:\n' ..
-            utils.serialiseVar(utils.anonymisePropertyTable(publishSettings)))
+            utils.serialiseForLog(utils.anonymisePropertyTable(publishSettings)))
         LrErrors.throwUserError('updateCollectionSettings - cannot connect find publishService')
         return nil
     end
@@ -479,8 +479,8 @@ function PublishTask.updateCollectionSetSettings(publishSettings, info)
     metaData.name = CollectionName
     metaData.type = "collectionset"
     metaData.description = collectionSettings.albumDescription
-    log:info("PublishTask.updateCollectionSetSettings - info\n" .. utils.serialiseVar(info))
-    log:info("PublishTask.updateCollectionSetSettings - metaData\n" .. utils.serialiseVar(metaData))
+    log:info("PublishTask.updateCollectionSetSettings - info\n" .. utils.serialiseForLog(info))
+    log:info("PublishTask.updateCollectionSetSettings - metaData\n" .. utils.serialiseForLog(metaData))
     if not (utils.nilOrEmpty(remoteId)) then
         -- collection has a remoteId so get album from piwigo
         local thisCat = PiwigoAPI.pwCategoriesGetThis(publishSettings, remoteId)
@@ -530,7 +530,7 @@ function PublishTask.reparentPublishedCollection(publishSettings, info)
     local publishService = info.publishService
     if not publishService then
         log:info('reparentPublishedCollection - publishSettings:\n' ..
-            utils.serialiseVar(utils.anonymisePropertyTable(publishSettings)))
+            utils.serialiseForLog(utils.anonymisePropertyTable(publishSettings)))
         LrErrors.throwUserError('reparentPublishedCollection - cannot connect find publishService')
         return nil
     end
@@ -583,7 +583,7 @@ function PublishTask.renamePublishedCollection(publishSettings, info)
     local publishService = info.publishService
     if not publishService then
         log:info('renamePublishedCollection - publishSettings:\n' ..
-            utils.serialiseVar(utils.anonymisePropertyTable(publishSettings)))
+            utils.serialiseForLog(utils.anonymisePropertyTable(publishSettings)))
         LrErrors.throwUserError('renamePublishedCollection - cannot connect find publishService')
         return nil
     end
@@ -666,7 +666,7 @@ function PublishTask.deletePublishedCollection(publishSettings, info)
     local publishCollection = info.publishedCollection
     if not publishService then
         log:info('deletePublishedCollection - publishSettings:\n' ..
-            utils.serialiseVar(utils.anonymisePropertyTable(publishSettings)))
+            utils.serialiseForLog(utils.anonymisePropertyTable(publishSettings)))
         LrErrors.throwUserError('deletePublishedCollection - cannot connect find publishService')
         return nil
     end

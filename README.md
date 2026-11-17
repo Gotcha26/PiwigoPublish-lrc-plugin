@@ -16,6 +16,17 @@ Republishing a photo replaces it on Piwigo in place: it keeps its Piwigo id, alb
 
 ---
 
+## Sharing the log file in a bug report
+
+The plugin log (`PiwigoPublishPlugin.log`) masks your Piwigo password, the `pwg_token` and the session cookies (`****`) before writing requests, parameters, headers or server responses.
+
+**Logs written by earlier versions may contain your password in clear** (it was logged when a connection failed). Delete the old log file before sharing it, or check it first and remove any `password=...` line. Its location:
+
+- Windows: `%USERPROFILE%\AppData\Local\Adobe\Lightroom\Logs\LrClassicLogs\PiwigoPublishPlugin.log` (Lightroom Classic 14 and later) or `%USERPROFILE%\Documents\LrClassicLogs\PiwigoPublishPlugin.log` (earlier versions)
+- macOS: `~/Library/Logs/Adobe/Lightroom/LrClassicLogs/PiwigoPublishPlugin.log` (Lightroom Classic 14 and later) or `~/Documents/LrClassicLogs/PiwigoPublishPlugin.log` (earlier versions)
+
+---
+
 ## Disclaimer
 
 With the exception of JSON.lua, Copyright 2010-2017 Jeffrey Friedl, which is released under a Creative Commons CC-BY "Attribution" License: http://creativecommons.org/licenses/by/3.0/deed.en_US, and md5.lua, Copyright (c) 2013 Enrique García Cota + Adam Baldwin + hanzao + Equi 4 Software which is released under an MIT license, this software is released under the GNU General Public License version 3 as published by the Free Software Foundation.

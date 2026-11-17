@@ -60,20 +60,20 @@ local function httpGet(url, params, headers)
     local getResponse = {}
     local getUrl = utils.buildGet(url, params)
 
-    -- log:info("PWAPI.httpGet - calling " .. getUrl)
-    -- log:info("PWAPI.httpGet - headers are " .. utils.serialiseVar(headers))
+    -- log:info("PWAPI.httpGet - calling " .. utils.redactString(getUrl))
+    -- log:info("PWAPI.httpGet - headers are " .. utils.serialiseForLog(headers))
 
     local body, hdrs = LrHttp.get(getUrl, headers)
 
-    -- log:info("PWAPI.httpGet - httpHeaders\n" .. utils.serialiseVar(hdrs))
-    -- log:info("PWAPI.httpGet - httpResponse\n" .. utils.serialiseVar(body))
+    -- log:info("PWAPI.httpGet - httpHeaders\n" .. utils.serialiseForLog(hdrs))
+    -- log:info("PWAPI.httpGet - httpResponse\n" .. utils.serialiseForLog(body))
 
     -- Missing or empty HTTP body
     if not body then
-        log:info("PWAPI.httpGet - calling " .. getUrl)
-        log:info("PWAPI.httpGet - headers are " .. utils.serialiseVar(headers))
-        log:info("PWAPI.httpGet - httpHeaders\n" .. utils.serialiseVar(hdrs))
-        log:info("PWAPI.httpGet - httpResponse\n" .. utils.serialiseVar(body))
+        log:info("PWAPI.httpGet - calling " .. utils.redactString(getUrl))
+        log:info("PWAPI.httpGet - headers are " .. utils.serialiseForLog(headers))
+        log:info("PWAPI.httpGet - httpHeaders\n" .. utils.serialiseForLog(hdrs))
+        log:info("PWAPI.httpGet - httpResponse\n" .. utils.serialiseForLog(body))
         getResponse.status = "error"
         getResponse.errorMessage = describeNetworkError(hdrs) or "No response body received"
         getResponse.response = nil
@@ -83,10 +83,10 @@ local function httpGet(url, params, headers)
     -- HTTP status check
     local statusCode = hdrs and hdrs.status or nil
     if not statusCode or statusCode < 200 or statusCode > 299 then
-        log:info("PWAPI.httpGet - calling " .. getUrl)
-        log:info("PWAPI.httpGet - headers are " .. utils.serialiseVar(headers))
-        log:info("PWAPI.httpGet - httpHeaders\n" .. utils.serialiseVar(hdrs))
-        log:info("PWAPI.httpGet - httpResponse\n" .. utils.serialiseVar(body))
+        log:info("PWAPI.httpGet - calling " .. utils.redactString(getUrl))
+        log:info("PWAPI.httpGet - headers are " .. utils.serialiseForLog(headers))
+        log:info("PWAPI.httpGet - httpHeaders\n" .. utils.serialiseForLog(hdrs))
+        log:info("PWAPI.httpGet - httpResponse\n" .. utils.serialiseForLog(body))
         getResponse.status = "error"
         getResponse.errorMessage = string.format("HTTP error %s", tostring(statusCode))
         -- Piwigo mirrors its API error code in the HTTP status: keep its message when the body is JSON
@@ -102,22 +102,22 @@ local function httpGet(url, params, headers)
     body = stripPhpWarnings(body)
     local decoded = JSON:decode(body)
     if not decoded then
-        log:info("PWAPI.httpGet - calling " .. getUrl)
-        log:info("PWAPI.httpGet - headers are " .. utils.serialiseVar(headers))
-        log:info("PWAPI.httpGet - httpHeaders\n" .. utils.serialiseVar(hdrs))
-        log:info("PWAPI.httpGet - httpResponse\n" .. utils.serialiseVar(body))
+        log:info("PWAPI.httpGet - calling " .. utils.redactString(getUrl))
+        log:info("PWAPI.httpGet - headers are " .. utils.serialiseForLog(headers))
+        log:info("PWAPI.httpGet - httpHeaders\n" .. utils.serialiseForLog(hdrs))
+        log:info("PWAPI.httpGet - httpResponse\n" .. utils.serialiseForLog(body))
         getResponse.status = "error"
-        getResponse.errorMessage = "Failed to parse JSON: " .. utils.serialiseVar(body)
+        getResponse.errorMessage = "Failed to parse JSON: " .. utils.serialiseForLog(body)
         getResponse.response = nil
         return getResponse
     end
 
     -- Piwigo API uses its own status
     if decoded.stat == "fail" or decoded.status == "fail" then
-        log:info("PWAPI.httpGet - calling " .. getUrl)
-        log:info("PWAPI.httpGet - headers are " .. utils.serialiseVar(headers))
-        log:info("PWAPI.httpGet - httpHeaders\n" .. utils.serialiseVar(hdrs))
-        log:info("PWAPI.httpGet - httpResponse\n" .. utils.serialiseVar(body))
+        log:info("PWAPI.httpGet - calling " .. utils.redactString(getUrl))
+        log:info("PWAPI.httpGet - headers are " .. utils.serialiseForLog(headers))
+        log:info("PWAPI.httpGet - httpHeaders\n" .. utils.serialiseForLog(hdrs))
+        log:info("PWAPI.httpGet - httpResponse\n" .. utils.serialiseForLog(body))
         getResponse.status = "error"
         getResponse.errorMessage = decoded.err .. " - " .. decoded.message
         getResponse.response = decoded
@@ -140,12 +140,12 @@ local function httpPost(propertyTable, params, headers)
     local body = utils.buildBodyFromParams(params)
 
     log:info("PiwigoAPI.pwConnect - connecting to " .. propertyTable.pwurl)
-    log:info("PiwigoAPI.pwConnect - body:\n" .. utils.serialiseVar(body))
+    log:info("PiwigoAPI.pwConnect - body:\n" .. utils.serialiseForLog(body))
 
     local httpResponse, httpHeaders = LrHttp.post(propertyTable.pwurl, body, headers)
 
-    log:info("PiwigoAPI.pwConnect - response headers:\n" .. utils.serialiseVar(httpHeaders))
-    log:info("PiwigoAPI.pwConnect - response body:\n" .. tostring(httpResponse))
+    log:info("PiwigoAPI.pwConnect - response headers:\n" .. utils.serialiseForLog(httpHeaders))
+    log:info("PiwigoAPI.pwConnect - response body:\n" .. utils.redactString(tostring(httpResponse)))
 
     if (httpHeaders.status == 201) or (httpHeaders.status == 200) then
         -- successful connection to Piwigo
@@ -272,7 +272,7 @@ end
 -- *************************************************
 local function buildCatHierarchy(allCats)
     -- convert flat list of categories to hierarchical table with children tables
-    -- log:info("buildCatHierarchy - allCats\n" .. utils.serialiseVar(allCats))
+    -- log:info("buildCatHierarchy - allCats\n" .. utils.serialiseForLog(allCats))
     -- 1. Create all nodes (no hierarchy yet)
     local nodes = {}
     local roots = {}
@@ -313,7 +313,7 @@ local function buildCatHierarchy(allCats)
             end
         end
     end
-    -- log:info("buildCatHierarchy - hierarchy\n" .. utils.serialiseVar(roots))
+    -- log:info("buildCatHierarchy - hierarchy\n" .. utils.serialiseForLog(roots))
     return roots
 end
 
@@ -419,7 +419,7 @@ local function normalisePublishService(publishService)
     local visit
     local visitSet
     local visitCollection
-    -- log:info("normalisePublishService - processing\n" .. utils.serialiseVar(publishService))
+    -- log:info("normalisePublishService - processing\n" .. utils.serialiseForLog(publishService))
     -- *************************************************
     visit = function(container, parentPath, parentId)
         local children = container:getChildCollectionSets()
@@ -601,9 +601,9 @@ local function vps_createMissingPiwigoAlbumsFromIssues(catalog, propertyTable, p
     table.sort(missing, function(a, b)
         return #a.path < #b.path
     end)
-    -- log:info("createMissingPiwigoAlbumsFromIssues - missing\n",utils.serialiseVar(missing))
-    -- log:info("createMissingPiwigoAlbumsFromIssues - lrIndexByPath\n",utils.serialiseVar(lrIndexByPath))
-    -- log:info("createMissingPiwigoAlbumsFromIssues - lrIndexById\n",utils.serialiseVar(lrIndexById))
+    -- log:info("createMissingPiwigoAlbumsFromIssues - missing\n",utils.serialiseForLog(missing))
+    -- log:info("createMissingPiwigoAlbumsFromIssues - lrIndexByPath\n",utils.serialiseForLog(lrIndexByPath))
+    -- log:info("createMissingPiwigoAlbumsFromIssues - lrIndexById\n",utils.serialiseForLog(lrIndexById))
 
     -- add progressScope
     local progressScope = LrProgressScope {
@@ -1357,9 +1357,9 @@ function PiwigoAPI.pwConnect(propertyTable)
         local ok, rtnBody = pcall(JSON.decode, JSON, stripPhpWarnings(httpResponse))
         if not ok or type(rtnBody) ~= "table" then
             log:info("PiwigoAPI.pwConnect - connecting to " .. propertyTable.pwurl)
-            log:info("PiwigoAPI.pwConnect - body:\n" .. utils.serialiseVar(body))
-            log:info("PiwigoAPI.pwConnect - response headers:\n" .. utils.serialiseVar(httpHeaders))
-            log:info("PiwigoAPI.pwConnect - response body:\n" .. tostring(httpResponse))
+            log:info("PiwigoAPI.pwConnect - body:\n" .. utils.serialiseForLog(body))
+            log:info("PiwigoAPI.pwConnect - response headers:\n" .. utils.serialiseForLog(httpHeaders))
+            log:info("PiwigoAPI.pwConnect - response body:\n" .. utils.redactString(tostring(httpResponse)))
             LrDialogs.message("Cannot log in to Piwigo", "Invalid or unreadable server response")
             return false
         end
@@ -1387,16 +1387,16 @@ function PiwigoAPI.pwConnect(propertyTable)
             propertyTable.Connected = true
         else
             log:info("PiwigoAPI.pwConnect - connecting to " .. propertyTable.pwurl)
-            log:info("PiwigoAPI.pwConnect - body:\n" .. utils.serialiseVar(body))
+            log:info("PiwigoAPI.pwConnect - body:\n" .. utils.serialiseForLog(body))
             LrDialogs.message("Cannot log in to Piwigo", tostring(rtnBody.err or "Unknown error") ..
                 (rtnBody.message and (", " .. rtnBody.message) or ""))
             return false
         end
     else
         log:info("PiwigoAPI.pwConnect - connecting to " .. propertyTable.pwurl)
-        log:info("PiwigoAPI.pwConnect - body:\n" .. utils.serialiseVar(body))
-        log:info("PiwigoAPI.pwConnect - response headers:\n" .. utils.serialiseVar(httpHeaders))
-        log:info("PiwigoAPI.pwConnect - response body:\n" .. tostring(httpResponse))
+        log:info("PiwigoAPI.pwConnect - body:\n" .. utils.serialiseForLog(body))
+        log:info("PiwigoAPI.pwConnect - response headers:\n" .. utils.serialiseForLog(httpHeaders))
+        log:info("PiwigoAPI.pwConnect - response body:\n" .. utils.redactString(tostring(httpResponse)))
         local statusCode, statusDesc
         status = httpHeaders and httpHeaders.status
         if not httpStatus then
@@ -1491,9 +1491,9 @@ function PiwigoAPI.getInfos(propertyTable)
     end
     local getResponse = httpGet(propertyTable.pwurl, Params, headers)
     if getResponse.errorMessage or (not getResponse.response) then
-        log:info("PiwigoAPI.getInfos - Params\n" .. utils.serialiseVar(Params))
-        log:info("PiwigoAPI.getInfos - headers\n" .. utils.serialiseVar(headers))
-        log:info("PiwigoAPI.getInfos - getResponse\n" .. utils.serialiseVar(getResponse))
+        log:info("PiwigoAPI.getInfos - Params\n" .. utils.serialiseForLog(Params))
+        log:info("PiwigoAPI.getInfos - headers\n" .. utils.serialiseForLog(headers))
+        log:info("PiwigoAPI.getInfos - getResponse\n" .. utils.serialiseForLog(getResponse))
         LrDialogs.message("PiwigoAPI.getInfos - Cannot get host information from Piwigo - " ..
             (getResponse.errorMessage or "Unknown error"))
         return false
@@ -1514,9 +1514,9 @@ function PiwigoAPI.getInfos(propertyTable)
             end
         end
     else
-        log:info("PiwigoAPI.getInfos - Params\n" .. utils.serialiseVar(Params))
-        log:info("PiwigoAPI.getInfos - headers\n" .. utils.serialiseVar(headers))
-        log:info("PiwigoAPI.getInfos - getResponse\n" .. utils.serialiseVar(getResponse))
+        log:info("PiwigoAPI.getInfos - Params\n" .. utils.serialiseForLog(Params))
+        log:info("PiwigoAPI.getInfos - headers\n" .. utils.serialiseForLog(headers))
+        log:info("PiwigoAPI.getInfos - getResponse\n" .. utils.serialiseForLog(getResponse))
         rtnStatus.message = "Cannot get host information from Piwigo - " ..
             ((getResponse.status .. " - " .. (getResponse.errorMessage or "Unknown error")) or "Unknown error")
     end
@@ -1547,9 +1547,9 @@ function PiwigoAPI.getCommentInfos(propertyTable)
     end
     local getResponse = httpGet(propertyTable.pwurl, Params, headers)
     if (not getResponse.response) then
-        log:info("PiwigoAPI.getCommentInfos - Params\n" .. utils.serialiseVar(Params))
-        log:info("PiwigoAPI.getCommentInfos - headers\n" .. utils.serialiseVar(headers))
-        log:info("PiwigoAPI.getCommentInfos - getResponse\n" .. utils.serialiseVar(getResponse))
+        log:info("PiwigoAPI.getCommentInfos - Params\n" .. utils.serialiseForLog(Params))
+        log:info("PiwigoAPI.getCommentInfos - headers\n" .. utils.serialiseForLog(headers))
+        log:info("PiwigoAPI.getCommentInfos - getResponse\n" .. utils.serialiseForLog(getResponse))
         LrDialogs.message("Cannot get comments information from  Piwigo - Unknown error")
         return rtnStatus
     end
@@ -1564,9 +1564,9 @@ function PiwigoAPI.getCommentInfos(propertyTable)
             rtnStatus.message = getResponse.message
             log:info("PiwigoAPI.getComments - comments are disabled")
         else
-            log:info("PiwigoAPI.getComments - Params\n" .. utils.serialiseVar(Params))
-            log:info("PiwigoAPI.getComments - headers\n" .. utils.serialiseVar(headers))
-            log:info("PiwigoAPI.getComments - getResponse\n" .. utils.serialiseVar(getResponse))
+            log:info("PiwigoAPI.getComments - Params\n" .. utils.serialiseForLog(Params))
+            log:info("PiwigoAPI.getComments - headers\n" .. utils.serialiseForLog(headers))
+            log:info("PiwigoAPI.getComments - getResponse\n" .. utils.serialiseForLog(getResponse))
             rtnStatus.message = "Cannot get comments information from  Piwigo - " ..
                 ((getResponse.stat .. " - Error" .. getResponse.err .. "- " .. getResponse.errorMessage) or "Unknown error")
         end
@@ -2097,16 +2097,16 @@ function PiwigoAPI.pwCategoriesSetinfo(propertyTable, info, metaData)
             callStatus.status = true
             callStatus.statusMsg = ""
         else
-            log:info("PiwigoAPI.pwCategoriesSetinfo - params \n" .. utils.serialiseVar(params))
-            log:info("PiwigoAPI.pwCategoriesSetinfo - httpHeaders\n" .. utils.serialiseVar(httpHeaders))
-            log:info("PiwigoAPI.pwCategoriesSetinfo - httpResponse\n" .. utils.serialiseVar(httpResponse))
+            log:info("PiwigoAPI.pwCategoriesSetinfo - params \n" .. utils.serialiseForLog(params))
+            log:info("PiwigoAPI.pwCategoriesSetinfo - httpHeaders\n" .. utils.serialiseForLog(httpHeaders))
+            log:info("PiwigoAPI.pwCategoriesSetinfo - httpResponse\n" .. utils.serialiseForLog(httpResponse))
             callStatus.status = false
             callStatus.statusMsg = "Category " .. tostring(remoteId) .. " - " .. ((body and body.message) or "")
         end
     else
-        log:info("PiwigoAPI.pwCategoriesSetinfo - params \n" .. utils.serialiseVar(params))
-        log:info("PiwigoAPI.pwCategoriesSetinfo - httpHeaders\n" .. utils.serialiseVar(httpHeaders))
-        log:info("PiwigoAPI.pwCategoriesSetinfo - httpResponse\n" .. utils.serialiseVar(httpResponse))
+        log:info("PiwigoAPI.pwCategoriesSetinfo - params \n" .. utils.serialiseForLog(params))
+        log:info("PiwigoAPI.pwCategoriesSetinfo - httpHeaders\n" .. utils.serialiseForLog(httpHeaders))
+        log:info("PiwigoAPI.pwCategoriesSetinfo - httpResponse\n" .. utils.serialiseForLog(httpResponse))
         callStatus.status = false
         callStatus.statusMsg = "Category " .. tostring(remoteId) .. " - " ..
             ((body and body.message) or describeNetworkError(httpHeaders) or "")
@@ -2165,9 +2165,9 @@ function PiwigoAPI.pwCategoriesSetSortOrder(propertyTable, categoryId, imageOrde
     local errMsg = body and tostring(body.message or "") or ""
     local methodMissing = (errCode == "501") or string.find(string.lower(errMsg), "method name is not valid", 1, true)
 
-    log:info("PiwigoAPI.pwCategoriesSetSortOrder - params \n" .. utils.serialiseVar(params))
-    log:info("PiwigoAPI.pwCategoriesSetSortOrder - httpHeaders\n" .. utils.serialiseVar(httpHeaders))
-    log:info("PiwigoAPI.pwCategoriesSetSortOrder - httpResponse\n" .. utils.serialiseVar(httpResponse))
+    log:info("PiwigoAPI.pwCategoriesSetSortOrder - params \n" .. utils.serialiseForLog(params))
+    log:info("PiwigoAPI.pwCategoriesSetSortOrder - httpHeaders\n" .. utils.serialiseForLog(httpHeaders))
+    log:info("PiwigoAPI.pwCategoriesSetSortOrder - httpResponse\n" .. utils.serialiseForLog(httpResponse))
 
     if methodMissing then
         callStatus.status = false
@@ -2601,9 +2601,9 @@ function PiwigoAPI.updateGallery(propertyTable, exportFilename, metaData)
             return JSON:decode(stripPhpWarnings(httpResponse))
         end)
         if not (rv) then
-            log:info("PiwigoAPI.updateGallery - params \n" .. utils.serialiseVar(params))
-            log:info("PiwigoAPI.updateGallery - httpHeaders\n" .. utils.serialiseVar(httpHeaders))
-            log:info("PiwigoAPI.updateGallery - httpResponse\n" .. utils.serialiseVar(httpResponse))
+            log:info("PiwigoAPI.updateGallery - params \n" .. utils.serialiseForLog(params))
+            log:info("PiwigoAPI.updateGallery - httpHeaders\n" .. utils.serialiseForLog(httpHeaders))
+            log:info("PiwigoAPI.updateGallery - httpResponse\n" .. utils.serialiseForLog(httpResponse))
             -- Detect Piwigo server-side file type rejection (die() responses, not JSON)
             local rawResponse = tostring(httpResponse):lower()
             if rawResponse:find("forbidden file type") or rawResponse:find("unexpected file type") then
@@ -2649,8 +2649,8 @@ function PiwigoAPI.updateGallery(propertyTable, exportFilename, metaData)
             end
             local getResponse = httpGet(propertyTable.pwurl, params, headers)
             if getResponse.errorMessage or (not getResponse.response) then
-                log:info("PiwigoAPI.updateGallery - params \n" .. utils.serialiseVar(params))
-                log:info("PiwigoAPI.updateGallery - getResponse\n" .. utils.serialiseVar(getResponse))
+                log:info("PiwigoAPI.updateGallery - params \n" .. utils.serialiseForLog(params))
+                log:info("PiwigoAPI.updateGallery - getResponse\n" .. utils.serialiseForLog(getResponse))
                 callStatus.statusMsg = "Cannot finalise upload - " .. metaData.fileName .. " to Piwigo - " ..
                     (getResponse.errorMessage or "Unknown error")
                 LrDialogs.message(callStatus.statusMsg)
@@ -2689,7 +2689,7 @@ function PiwigoAPI.updateGallery(propertyTable, exportFilename, metaData)
                         end
                     end
                 else
-                    log:info("PiwigoAPI.updateGallery - params \n" .. utils.serialiseVar(params))
+                    log:info("PiwigoAPI.updateGallery - params \n" .. utils.serialiseForLog(params))
                     callStatus.statusMsg = "Cannot finalise upload - " .. metaData.fileName .. " to Piwigo - " ..
                         (getResponse.errorMessage or "Unknown error")
                     LrDialogs.message(callStatus.statusMsg)
@@ -2697,9 +2697,9 @@ function PiwigoAPI.updateGallery(propertyTable, exportFilename, metaData)
                 end
             end
         else
-            log:info("PiwigoAPI.updateGallery - params \n" .. utils.serialiseVar(params))
-            log:info("PiwigoAPI.updateGallery - httpHeaders\n" .. utils.serialiseVar(httpHeaders))
-            log:info("PiwigoAPI.updateGallery - httpResponse\n" .. utils.serialiseVar(httpResponse))
+            log:info("PiwigoAPI.updateGallery - params \n" .. utils.serialiseForLog(params))
+            log:info("PiwigoAPI.updateGallery - httpHeaders\n" .. utils.serialiseForLog(httpHeaders))
+            log:info("PiwigoAPI.updateGallery - httpResponse\n" .. utils.serialiseForLog(httpResponse))
         end
     end
     if not (uploadSuccess) then
@@ -2907,19 +2907,19 @@ function PiwigoAPI.deletePhoto(propertyTable, pwCatID, pwImageID, callStatus)
             callStatus.statusMsg = ""
         else
             log:info("PiwigoAPI.deletePhoto - propertyTable \n " ..
-                utils.serialiseVar(utils.anonymisePropertyTable(propertyTable)))
-            log:info("PiwigoAPI.deletePhoto - params \n" .. utils.serialiseVar(params))
-            log:info("PiwigoAPI.deletePhoto - httpResponse \n" .. utils.serialiseVar(httpResponse))
-            log:info("PiwigoAPI.deletePhoto - httpHeaders \n" .. utils.serialiseVar(httpHeaders))
+                utils.serialiseForLog(utils.anonymisePropertyTable(propertyTable)))
+            log:info("PiwigoAPI.deletePhoto - params \n" .. utils.serialiseForLog(params))
+            log:info("PiwigoAPI.deletePhoto - httpResponse \n" .. utils.serialiseForLog(httpResponse))
+            log:info("PiwigoAPI.deletePhoto - httpHeaders \n" .. utils.serialiseForLog(httpHeaders))
             callStatus.status = false
             callStatus.statusMsg = (body and body.message) or ""
         end
     else
         log:info("PiwigoAPI.deletePhoto - propertyTable \n " ..
-            utils.serialiseVar(utils.anonymisePropertyTable(propertyTable)))
-        log:info("PiwigoAPI.deletePhoto - params \n" .. utils.serialiseVar(params))
-        log:info("PiwigoAPI.deletePhoto - httpResponse \n" .. utils.serialiseVar(httpResponse))
-        log:info("PiwigoAPI.deletePhoto - httpHeaders \n" .. utils.serialiseVar(httpHeaders))
+            utils.serialiseForLog(utils.anonymisePropertyTable(propertyTable)))
+        log:info("PiwigoAPI.deletePhoto - params \n" .. utils.serialiseForLog(params))
+        log:info("PiwigoAPI.deletePhoto - httpResponse \n" .. utils.serialiseForLog(httpResponse))
+        log:info("PiwigoAPI.deletePhoto - httpHeaders \n" .. utils.serialiseForLog(httpHeaders))
         callStatus.status = false
         callStatus.statusMsg = (body and body.message) or describeNetworkError(httpHeaders) or ""
     end
@@ -3086,13 +3086,13 @@ function PiwigoAPI.addComment(publishSettings, metaData)
     local rtnStatus = PiwigoAPI.checkPhoto(publishSettings, metaData.remoteId)
     if not rtnStatus.status then
         log:info("PiwigoAPI.addComment - unanble to retrieve token\n" ..
-            utils.serialiseVar(utils.anonymisePropertyTable(publishSettings)))
+            utils.serialiseForLog(utils.anonymisePropertyTable(publishSettings)))
         return false
     end
     local imageDets = rtnStatus.imageDets
 
     if (not imageDets.comment_post) then
-        log:info("PiwigoAPI.addComment - metaData\n" .. utils.serialiseVar(imageDets))
+        log:info("PiwigoAPI.addComment - metaData\n" .. utils.serialiseForLog(imageDets))
         LrDialogs.message("Unable to add comment - are comments enabled on " .. publishSettings.host .. "?")
         return false
     end
@@ -3101,21 +3101,21 @@ function PiwigoAPI.addComment(publishSettings, metaData)
 
     -- sanity check metaData
     if utils.nilOrEmpty(metaData.remoteId) then
-        log:info("PiwigoAPI.addComment - metaData\n" .. utils.serialiseVar(metaData))
+        log:info("PiwigoAPI.addComment - metaData\n" .. utils.serialiseForLog(metaData))
         return false
     end
     if utils.nilOrEmpty(metaData.comment) then
-        log:info("PiwigoAPI.addComment - metaData\n" .. utils.serialiseVar(metaData))
+        log:info("PiwigoAPI.addComment - metaData\n" .. utils.serialiseForLog(metaData))
         return false
     end
     if utils.nilOrEmpty(author) then
         log:info("PiwigoAPI.addComment - missing author\n" ..
-            utils.serialiseVar(utils.anonymisePropertyTable(publishSettings)))
+            utils.serialiseForLog(utils.anonymisePropertyTable(publishSettings)))
         return false
     end
     if utils.nilOrEmpty(key) then
         log:info("PiwigoAPI.addComment - missing key\n" ..
-            utils.serialiseVar(utils.anonymisePropertyTable(publishSettings)))
+            utils.serialiseForLog(utils.anonymisePropertyTable(publishSettings)))
         return false
     end
     -- Piwigo antispam forces a delay between the key being created and used
@@ -3123,7 +3123,7 @@ function PiwigoAPI.addComment(publishSettings, metaData)
     local ts, delay = key:match("^([^:]+):([^:]+):")
     delay = tonumber(delay)
     if not delay then
-        log:info("PiwigoAPI.addComment - unexpected ephemeral key format\n" .. utils.serialiseVar(imageDets))
+        log:info("PiwigoAPI.addComment - unexpected ephemeral key format\n" .. utils.serialiseForLog(imageDets))
         return false
     end
     local sleepSeconds = math.ceil(delay) + 1
@@ -3212,7 +3212,7 @@ function PiwigoAPI.setAlbumCover(publishService)
     log:info("publishservice" .. publishService:getName())
     local catalog = LrApplication.activeCatalog()
     local publishSettings = publishService:getPublishSettings()
-    log:info("publishSettings\n" .. utils.serialiseVar(utils.anonymisePropertyTable(publishSettings)))
+    log:info("publishSettings\n" .. utils.serialiseForLog(utils.anonymisePropertyTable(publishSettings)))
 
     if not publishSettings then
         LrDialogs.message("PiwigoAPI.setAlbumCover - Can't find PublishSettings for this publish collection", "",
@@ -3481,10 +3481,10 @@ function PiwigoAPI.httpPostMultiPart(propertyTable, params)
         postHeaders.statusDesc = (httpHeaders and (httpHeaders.statusDes or httpHeaders.statusDesc)) or ""
     end
     if not body then
-        log:info("PiwigoAPI.httpPostMultiPart - params\n" .. utils.serialiseVar(params))
-        log:info("PiwigoAPI.httpPostMultiPart - sendHeaders\n" .. utils.serialiseVar(sendHeaders))
-        log:info("PiwigoAPI.httpPostMultiPart - httpResponse \n" .. utils.serialiseVar(httpResponse))
-        log:info("PiwigoAPI.httpPostMultiPart - httpHeaders \n" .. utils.serialiseVar(httpHeaders))
+        log:info("PiwigoAPI.httpPostMultiPart - params\n" .. utils.serialiseForLog(params))
+        log:info("PiwigoAPI.httpPostMultiPart - sendHeaders\n" .. utils.serialiseForLog(sendHeaders))
+        log:info("PiwigoAPI.httpPostMultiPart - httpResponse \n" .. utils.serialiseForLog(httpResponse))
+        log:info("PiwigoAPI.httpPostMultiPart - httpHeaders \n" .. utils.serialiseForLog(httpHeaders))
         postResponse.status = false
         if postHeaders.status then
             postResponse.statusMsg = tostring(postHeaders.status) .. " - " .. tostring(postHeaders.statusDesc)
@@ -3502,18 +3502,18 @@ function PiwigoAPI.httpPostMultiPart(propertyTable, params)
             postResponse.statusMsg = ""
             postResponse.result = body.result
         else
-            log:info("PiwigoAPI.httpPostMultiPart - params\n" .. utils.serialiseVar(params))
-            log:info("PiwigoAPI.httpPostMultiPart - sendHeaders\n" .. utils.serialiseVar(sendHeaders))
-            log:info("PiwigoAPI.httpPostMultiPart - httpResponse \n" .. utils.serialiseVar(httpResponse))
-            log:info("PiwigoAPI.httpPostMultiPart - httpHeaders \n" .. utils.serialiseVar(httpHeaders))
+            log:info("PiwigoAPI.httpPostMultiPart - params\n" .. utils.serialiseForLog(params))
+            log:info("PiwigoAPI.httpPostMultiPart - sendHeaders\n" .. utils.serialiseForLog(sendHeaders))
+            log:info("PiwigoAPI.httpPostMultiPart - httpResponse \n" .. utils.serialiseForLog(httpResponse))
+            log:info("PiwigoAPI.httpPostMultiPart - httpHeaders \n" .. utils.serialiseForLog(httpHeaders))
             postResponse.status = false
             postResponse.statusMsg = (body and body.message) or ""
         end
     else
-        log:info("PiwigoAPI.httpPostMultiPart - params\n" .. utils.serialiseVar(params))
-        log:info("PiwigoAPI.httpPostMultiPart - sendHeaders\n" .. utils.serialiseVar(sendHeaders))
-        log:info("PiwigoAPI.httpPostMultiPart - httpResponse \n" .. utils.serialiseVar(httpResponse))
-        log:info("PiwigoAPI.httpPostMultiPart - httpHeaders \n" .. utils.serialiseVar(httpHeaders))
+        log:info("PiwigoAPI.httpPostMultiPart - params\n" .. utils.serialiseForLog(params))
+        log:info("PiwigoAPI.httpPostMultiPart - sendHeaders\n" .. utils.serialiseForLog(sendHeaders))
+        log:info("PiwigoAPI.httpPostMultiPart - httpResponse \n" .. utils.serialiseForLog(httpResponse))
+        log:info("PiwigoAPI.httpPostMultiPart - httpHeaders \n" .. utils.serialiseForLog(httpHeaders))
         postResponse.status = false
         postResponse.statusMsg = (body and body.message) or ""
     end
@@ -3795,7 +3795,7 @@ function PiwigoAPI.getServerVideoSupport(propertyTable)
     if getResponse.status == "ok" and getResponse.response and getResponse.response.result then
         local responseResult = getResponse.response.result
         log:info("PiwigoAPI.getServerVideoSupport - plugin list response keys: " ..
-            utils.serialiseVar(responseResult))
+            utils.serialiseForLog(responseResult))
 
         local plugins = extractPluginsFromResponse(getResponse)
 
@@ -4012,7 +4012,7 @@ function PiwigoAPI.enableVideoSupport(propertyTable)
     local getResponse = httpGet(propertyTable.pwurl, params, headers)
     if getResponse.status == "ok" and getResponse.response and getResponse.response.result then
         local apiResult = getResponse.response.result
-        log:info("PiwigoAPI.enableVideoSupport - result: " .. utils.serialiseVar(apiResult))
+        log:info("PiwigoAPI.enableVideoSupport - result: " .. utils.serialiseForLog(apiResult))
         return apiResult
     else
         log:info("PiwigoAPI.enableVideoSupport - failed: " .. (getResponse.errorMessage or "unknown error"))
