@@ -425,17 +425,12 @@ function PublishTaskImageProcessing.processRenderedPhotos(functionContext, expor
     local effectiveCollectionSettings = collectionSettings
     local sourceSettingsForDiagnostics = resolveSourceSettings(anonymisedPropertyTable)
 
-    local collServiceState = {}
-    local serviceState = {}
-    if collectionSettings then
-        collServiceState = collectionSettings.serviceState or {}
-    end
-    -- serviceState is a table containing publishService specific statusData
-    if collServiceState then
-        serviceState = collServiceState
-    else
-        serviceState = PWStatusManager.getServiceState(publishService)
-    end
+    -- #16: the clone flow (PWImportService) runs in another Lua environment and hands its state
+    -- over through collectionSettings.serviceState (persisted in the catalog); module tables are
+    -- not shared between environments. Use it when present, the live state otherwise.
+    -- (Before: an empty {} was truthy, so the live state was never read.)
+    local serviceState = (collectionSettings and collectionSettings.serviceState)
+        or PWStatusManager.getServiceState(publishService)
     if serviceState.isCloningSync and serviceState.isCloningSync == true then
         PWStatusManager.setisCloningSync(publishService, false)
         -- use minimal render photos for smart collection cloning
@@ -912,14 +907,19 @@ function PublishTaskImageProcessing.processCloneSync(functionContext, exportCont
 
     local collectionInfo = publishedCollection:getCollectionInfoSummary()
     local collectionSettings = extractCollectionSettings(collectionInfo)
-    local collServiceState = {}
-    local serviceState = {}
-    if collectionSettings then
-        collServiceState = collectionSettings.serviceState or {}
-    end
-
+    -- #16: RemoteInfoTable may be missing (crash "attempt to index nil" before); keys may come back
+    -- as strings after the round-trip through the catalog, so try both forms.
     local collId = publishedCollection.localIdentifier
-    local remoteInfoTable = collServiceState.RemoteInfoTable[collId] or {}
+    local function lookup(t, k)
+        if type(t) ~= "table" then return nil end
+        local v = t[k]
+        if v == nil then v = t[tostring(k)] end
+        return v
+    end
+    local persisted = collectionSettings and collectionSettings.serviceState
+    local remoteInfoTable = lookup(persisted and persisted.RemoteInfoTable, collId)
+        or PWStatusManager.getRemoteInfo(publishService, collId)
+        or {}
 
     local renditionParams = {
         stopIfCanceled = true,
@@ -939,7 +939,7 @@ function PublishTaskImageProcessing.processCloneSync(functionContext, exportCont
             LrFileUtils.delete(pathOrMessage)
         end
         -- extract remoteid and url
-        local remoteInfo = remoteInfoTable[photoId]
+        local remoteInfo = lookup(remoteInfoTable, photoId)
         local remoteId = ""
         local remoteUrl = ""
         if remoteInfo then
@@ -1157,7 +1157,7 @@ function PublishTaskImageProcessing.getCommentsFromPublishedCollection(publishSe
                 catalog:withWriteAccessDo("Updating " .. thisLrPhoto:getFormattedMetadata("fileName"),
                     function()
                         thisLrPhoto:setPropertyForPlugin(_PLUGIN, "pwCommentSync", "")
-                    end)
+                    end, { timeout = 120 })
             else
                 -- this photo was not part of recent processRenderedPhotos so ignore
                 syncThisPhoto = false

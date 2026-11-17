@@ -801,7 +801,7 @@ local function applyAlbumSettings(catalog, coll, isSet, settings, remoteId, remo
         else
             coll:setCollectionSettings(settings)
         end
-    end)
+    end, { timeout = 120 })
 end
 
 
@@ -871,7 +871,7 @@ function PiwigoAPI.createCollection(propertyTable, node, parentNode, isLeafNode,
             else
                 newColl = publishService:createPublishedCollection(collName, parentColl, true)
             end
-        end)
+        end, { timeout = 120 })
 
         if not newColl then
             stat.errors = stat.errors + 1
@@ -944,7 +944,7 @@ function PiwigoAPI.fixSpecialCollectionNames(catalog, publishService, propertyTa
                     log:info("PiwigoAPI.fixSpecialCollectionNames - " .. ccName .. " fixed to " .. newName)
                     catalog:withWriteAccessDo("Set Collection Name", function()
                         childCol:setName(newName)
-                    end)
+                    end, { timeout = 120 })
                 end
             end
         end
@@ -990,7 +990,7 @@ function PiwigoAPI.setCollectionDets(thisCollorSet, catalog, propertyTable, name
             thisCollorSet:setCollectionSetSettings(collectionSettings)
         end
 ]]
-    end)
+    end, { timeout = 120 })
 
     return true
 end
@@ -1002,7 +1002,7 @@ function PiwigoAPI.createPublishCollectionSet(catalog, publishService, propertyT
     local newColl
     catalog:withWriteAccessDo("Create PublishedCollectionSet ", function()
         newColl = publishService:createPublishedCollectionSet(name, parentSet, true)
-    end)
+    end, { timeout = 120 })
     -- add remoteids and urls to collection
     -- local metaData = {}
     -- metaData.name = name
@@ -1020,7 +1020,7 @@ function PiwigoAPI.createPublishCollection(catalog, publishService, propertyTabl
     local newColl
     catalog:withWriteAccessDo("Create PublishedCollection ", function()
         newColl = publishService:createPublishedCollection(name, parentSet, true)
-    end)
+    end, { timeout = 120 })
 
     -- add remoteids and urls to collection
     PiwigoAPI.setCollectionDets(newColl, catalog, propertyTable, name, remoteId, parentSet)
@@ -1126,7 +1126,7 @@ function PiwigoAPI.storeMetaData(catalog, lrPhoto, pluginData)
         if pluginData.pwVideoPreset then
             lrPhoto:setPropertyForPlugin(_PLUGIN, "pwVideoPreset", pluginData.pwVideoPreset)
         end
-    end)
+    end, { timeout = 120 })
 end
 
 -- *************************************************
@@ -1150,7 +1150,7 @@ function PiwigoAPI.updateMetaDataforCollection(propertyTable, pubCollection, met
             -- update metadata fields in lrPhoto
             catalog:withWriteAccessDo("Updating " .. lrPhoto:getFormattedMetadata("fileName"), function()
                 lrPhoto:setPropertyForPlugin(_PLUGIN, "pwAlbumName", albumName)
-            end)
+            end, { timeout = 120 })
         end
     end
 end

@@ -44,7 +44,7 @@ function PublishTask.didCreateNewPublishService(publishSettings, info)
         if childColl:getName() == "default" then
             catalog:withWriteAccessDo("Delete default collection", function()
                 childColl:delete()
-            end)
+            end, { timeout = 120 })
         end
     end
 end
@@ -371,7 +371,7 @@ function PublishTask.updateCollectionSettings(publishSettings, info)
         catalog:withWriteAccessDo("Add Piwigo details to collections", function()
             Collection:setRemoteId(callStatus.newCatId)
             Collection:setRemoteUrl(publishSettings.host .. "/index.php?/category/" .. callStatus.newCatId)
-        end)
+        end, { timeout = 120 })
         LrDialogs.message(
             "New Piwigo Album",
             "New Piwigo Album " .. metaData.name .. " created with Piwigo Cat Id " .. callStatus.newCatId,
@@ -510,7 +510,7 @@ function PublishTask.updateCollectionSetSettings(publishSettings, info)
         catalog:withWriteAccessDo("Add Piwigo details to collections", function()
             Collection:setRemoteId(callStatus.newCatId)
             Collection:setRemoteUrl(publishSettings.host .. "/index.php?/category/" .. callStatus.newCatId)
-        end)
+        end, { timeout = 120 })
         LrDialogs.message(
             "New Piwigo Album",
             "New Piwigo Album " .. metaData.name .. " created with id " .. callStatus.newCatId,
@@ -647,7 +647,7 @@ function PublishTask.renamePublishedCollection(publishSettings, info)
                 local cat = LrApplication.activeCatalog()
                 cat:withWriteAccessDo("Revert failed rename", function()
                     collection:setName(oldName)
-                end)
+                end, { timeout = 120 })
             end)
         end)
         LrDialogs.message(

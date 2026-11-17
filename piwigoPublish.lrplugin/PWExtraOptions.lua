@@ -694,7 +694,7 @@ fixMissingPhotos = function(publishSettings, catalog, service, collName, catId, 
                     marked = marked + 1
                     log:info("PWExtraOptions.resync - marked to republish: " .. m.label)
                 end
-            end)
+            end, { timeout = 120 })
         end
     end)
     PWStatusManager.setPiwigoBusy(service, false)
