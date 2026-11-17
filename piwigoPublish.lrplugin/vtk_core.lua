@@ -113,7 +113,6 @@ function vtk_core.checkServerSupport(propertyTable, videoPhotos, batchVideoCount
                 .. "Enable 'Include video files' in the Video section to publish videos.\n\n"
                 .. "No photos to publish in this batch.",
                 "info")
-            PWStatusManager.setPiwigoBusy(publishService, false)
             PWStatusManager.setRenderPhotos(publishService, false)
             return videoUploadBlocked, serverMaxBytes, companionAvailable, true  -- true = abort
         end
@@ -206,7 +205,6 @@ function vtk_core.checkServerSupport(propertyTable, videoPhotos, batchVideoCount
                 or "Video inclusion is disabled in this publish service settings.\n\nNo photos to publish in this batch."
             log:info("vtk_core.checkServerSupport - batch contained only videos, all blocked")
             LrDialogs.message("Video Upload Blocked", reason, "critical")
-            PWStatusManager.setPiwigoBusy(publishService, false)
             PWStatusManager.setRenderPhotos(publishService, false)
             return videoUploadBlocked, serverMaxBytes, companionAvailable, true  -- abort
         else
@@ -382,7 +380,23 @@ function vtk_core.runBatch(videoPhotos, batchVideoCount, propertyTable, collecti
         .. "Lightroom will appear frozen during processing. Please wait.",
         "info")
 
-    local vtkExitCode = LrTasks.execute('"' .. batPath .. '"')
+    -- #16: transcoding may run far longer than the busy-lock heartbeat delay. Run it in a side
+    -- task and keep the lock alive meanwhile, so no other task takes it for an abandoned one.
+    local vtkExitCode, vtkDone = nil, false
+    LrTasks.startAsyncTask(function()
+        local ok, code = LrTasks.pcall(LrTasks.execute, '"' .. batPath .. '"')
+        if ok then
+            vtkExitCode = code
+        else
+            log:warn("vtk_core.runBatch - LrTasks.execute raised: " .. tostring(code))
+            vtkExitCode = -1
+        end
+        vtkDone = true
+    end)
+    while not vtkDone do
+        LrTasks.sleep(2)
+        PWStatusManager.touchBusy()
+    end
     log:info("vtk_core.runBatch - LrTasks.execute returned: " .. tostring(vtkExitCode) .. " (type=" .. type(vtkExitCode) .. ")")
 
     if not LrFileUtils.exists(vtkResultPath) then

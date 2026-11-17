@@ -1681,7 +1681,7 @@ function utils.refreshPwMetadataAfterRemoval(catalog, publishService, lrPhoto, e
             lrPhoto:setPropertyForPlugin(_PLUGIN, "pwAlbumURL", albumUrl)
             lrPhoto:setPropertyForPlugin(_PLUGIN, "pwImageURL", remoteUrl)
             lrPhoto:setPropertyForPlugin(_PLUGIN, "pwCommentSync", "")
-        end)
+        end, { timeout = 120 })
     else
         catalog:withWriteAccessDo("Updating " .. fileName, function()
             lrPhoto:setPropertyForPlugin(_PLUGIN, "pwHostURL", "")
@@ -1691,7 +1691,7 @@ function utils.refreshPwMetadataAfterRemoval(catalog, publishService, lrPhoto, e
             lrPhoto:setPropertyForPlugin(_PLUGIN, "pwUploadDate", "")
             lrPhoto:setPropertyForPlugin(_PLUGIN, "pwUploadTime", "")
             lrPhoto:setPropertyForPlugin(_PLUGIN, "pwCommentSync", "")
-        end)
+        end, { timeout = 120 })
     end
     return pubPhotoExists
 end

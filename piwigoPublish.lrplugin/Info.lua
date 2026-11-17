@@ -28,6 +28,8 @@ return {
     LrMetadataProvider  = 'CustomMetadata.lua',
     LrMetadataTagsetFactory = 'Tagset.lua',
     LrInitPlugin = "Init.lua",
+    -- #16: wipe the shared Piwigo session on quit (must call doneFunction, see upstream #77)
+    LrShutdownApp = "PluginShutdown.lua",
 
 	LrExportServiceProvider = {
 		title = "Piwigo Publisher",

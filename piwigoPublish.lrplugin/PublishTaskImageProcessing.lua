@@ -425,42 +425,51 @@ function PublishTaskImageProcessing.processRenderedPhotos(functionContext, expor
     local effectiveCollectionSettings = collectionSettings
     local sourceSettingsForDiagnostics = resolveSourceSettings(anonymisedPropertyTable)
 
-    local collServiceState = {}
-    local serviceState = {}
-    if collectionSettings then
-        collServiceState = collectionSettings.serviceState or {}
-    end
-    -- serviceState is a table containing publishService specific statusData
-    if collServiceState then
-        serviceState = collServiceState
-    else
-        serviceState = PWStatusManager.getServiceState(publishService)
-    end
-    if serviceState.isCloningSync and serviceState.isCloningSync == true then
+    -- #16: the clone flow (PWImportService) runs in another Lua environment and hands its state
+    -- over through collectionSettings.serviceState (persisted in the catalog); module tables are
+    -- not shared between environments. The clone branch is taken ONLY from that per-collection
+    -- hand-over: a live flag is service-wide and could send an ordinary publish of another
+    -- collection down the clone path (photos marked published, nothing uploaded).
+    local serviceState = collectionSettings and collectionSettings.serviceState
+    if type(serviceState) == "table" and serviceState.isCloningSync == true then
         PWStatusManager.setisCloningSync(publishService, false)
         -- use minimal render photos for smart collection cloning
         PublishTaskImageProcessing.processCloneSync(functionContext, exportContext)
         return
     end
-    if serviceState.PiwigoBusy then
-        return nil
-    end
-    PWStatusManager.setPiwigoBusy(publishService, true)
-
     -- Set progress title.
     local nPhotos = exportSession:countRenditions()
     local progressScope = exportContext:configureProgress {
         title = "Publishing " .. nPhotos .. " photos to " .. propertyTable.host
     }
+
+    -- #16: one Piwigo operation at a time across all tasks. Lightroom may start several publishes
+    -- together (several collections selected): queue behind the running one instead of failing
+    -- (or, as before, silently doing nothing). Cancelling the progress bar stops waiting.
+    local busyToken = PWStatusManager.acquireBusy(publishService,
+        "publishing " .. tostring(publishedCollection:getName()), {
+            wait = math.huge,
+            isCanceled = function() return progressScope:isCanceled() end,
+            onWait = function(label)
+                progressScope:setCaption("Waiting for another Piwigo operation to finish (" ..
+                    tostring(label) .. ")...")
+            end,
+        })
+    if not busyToken then
+        log:info("PublishTaskImageProcessing.processRenderedPhotos - cancelled while waiting for the busy lock")
+        return nil
+    end
+    -- released whatever happens (error, cancel, normal end)
+    functionContext:addCleanupHandler(function()
+        PWStatusManager.releaseBusy(busyToken, publishService)
+    end)
     -- check connection to piwigo
-    if not (propertyTable.Connected) then
-        rv = PiwigoAPI.login(propertyTable)
-        if not rv then
-            log:info('PublishTaskImageProcessing.processRenderedPhotos - propertyTable: ' .. utils.serialiseVar(anonymisedPropertyTable))
-            PWStatusManager.setPiwigoBusy(publishService, false)
-            LrErrors.throwUserError('Publish photos to Piwigo - cannot connect to piwigo at ' .. propertyTable.host)
-            return nil
-        end
+    rv = PiwigoAPI.login(propertyTable)
+    if not rv then
+        log:info('PublishTaskImageProcessing.processRenderedPhotos - propertyTable: ' .. utils.serialiseVar(anonymisedPropertyTable))
+        PWStatusManager.releaseBusy(busyToken, publishService)
+        LrErrors.throwUserError('Publish photos to Piwigo - cannot connect to piwigo at ' .. propertyTable.host)
+        return nil
     end
     -- #14: format-alignment support is read once per batch (lazily, on the first format change)
     propertyTable._formatAlignSupport = nil
@@ -495,7 +504,7 @@ function PublishTaskImageProcessing.processRenderedPhotos(functionContext, expor
     if albumId then
         rv, checkCats = PiwigoAPI.pwCategoriesGet(propertyTable, albumId)
         if not rv then
-            PWStatusManager.setPiwigoBusy(publishService, false)
+            PWStatusManager.releaseBusy(busyToken, publishService)
             LrErrors.throwUserError('Publish photos to Piwigo - cannot check category exists on piwigo at ' ..
                 propertyTable.host)
             return nil
@@ -517,7 +526,7 @@ function PublishTaskImageProcessing.processRenderedPhotos(functionContext, expor
             LrDialogs.message("*** Missing Piwigo album ***", albumName .. ", Piwigo Cat ID " .. albumId .. " created")
             requestRepub = true
         else
-            PWStatusManager.setPiwigoBusy(publishService, false)
+            PWStatusManager.releaseBusy(busyToken, publishService)
             LrErrors.throwUserError('Publish photos to Piwigo - cannot create Piwigo album for  ' .. albumName)
             return nil
         end
@@ -544,7 +553,6 @@ function PublishTaskImageProcessing.processRenderedPhotos(functionContext, expor
         active = kwFilterActive,
     }
 
-    local resetConnectioncount = 0
     local renditionParams = {
         stopIfCanceled = true,
     }
@@ -596,14 +604,15 @@ function PublishTaskImageProcessing.processRenderedPhotos(functionContext, expor
 
     -- now wait for photos to be exported and then upload to Piwigo
     for i, rendition in exportContext:renditions(renditionParams) do
-        -- reset connection every 75 uploads
-        resetConnectioncount = resetConnectioncount + 1
-        if resetConnectioncount > 75 then
-            resetConnectioncount = 0
-            log:info("PublishTaskImageProcessing.processRenderedPhotos - resetting Piwigo connection after 75 uploads")
+        -- #16: heartbeat, so a long publish is never taken for an abandoned lock
+        PWStatusManager.touchBusy(busyToken)
+        -- #16: no forced re-login every 75 uploads any more (a new pwg.session.login kills the
+        -- session of any other running task). Instead, pick up the shared session before each photo:
+        -- no HTTP call while it is unchanged, adopts a session renewed by another task otherwise.
+        do
             rv = PiwigoAPI.login(propertyTable)
             if not rv then
-                PWStatusManager.setPiwigoBusy(publishService, false)
+                PWStatusManager.releaseBusy(busyToken, publishService)
                 PWStatusManager.setRenderPhotos(publishService, false)
                 log:info("PublishTaskImageProcessing.processRenderedPhotos - renditionSettings: " .. utils.serialiseVar(renditionParams))
                 LrErrors.throwUserError('Publish photos to Piwigo - cannot connect to piwigo at ' ..
@@ -810,7 +819,10 @@ function PublishTaskImageProcessing.processRenderedPhotos(functionContext, expor
                     metaData.kwFilterData = kwFilterData
                     metaData.KwFullHierarchy = effectiveCollectionSettings.KwFullHierarchy or true
                     metaData.KwSynonyms = effectiveCollectionSettings.KwSynonyms or true
-                    callStatus = PiwigoAPI.updateMetadata(propertyTable, lrPhoto, metaData)
+                    -- #16: setInfo is idempotent, so a session lost meanwhile is renewed and retried once
+                    callStatus = PiwigoAPI.withTokenRetry(propertyTable, "set metadata", function()
+                        return PiwigoAPI.updateMetadata(propertyTable, lrPhoto, metaData)
+                    end)
                     if not callStatus.status then
                         LrDialogs.message("Unable to set metadata for uploaded photo - " .. callStatus.statusMsg)
                     end
@@ -877,7 +889,7 @@ function PublishTaskImageProcessing.processRenderedPhotos(functionContext, expor
         companionAvailable, progressScope)
 
     progressScope:done()
-    PWStatusManager.setPiwigoBusy(publishService, false)
+    PWStatusManager.releaseBusy(busyToken, publishService)
 
     -- #14: one summary for the whole batch, never one dialog per photo
     local stats = propertyTable._formatAlignStats or { unsupported = 0, failed = 0 }
@@ -912,14 +924,19 @@ function PublishTaskImageProcessing.processCloneSync(functionContext, exportCont
 
     local collectionInfo = publishedCollection:getCollectionInfoSummary()
     local collectionSettings = extractCollectionSettings(collectionInfo)
-    local collServiceState = {}
-    local serviceState = {}
-    if collectionSettings then
-        collServiceState = collectionSettings.serviceState or {}
-    end
-
+    -- #16: RemoteInfoTable may be missing (crash "attempt to index nil" before); keys may come back
+    -- as strings after the round-trip through the catalog, so try both forms.
     local collId = publishedCollection.localIdentifier
-    local remoteInfoTable = collServiceState.RemoteInfoTable[collId] or {}
+    local function lookup(t, k)
+        if type(t) ~= "table" then return nil end
+        local v = t[k]
+        if v == nil then v = t[tostring(k)] end
+        return v
+    end
+    local persisted = collectionSettings and collectionSettings.serviceState
+    local remoteInfoTable = lookup(persisted and persisted.RemoteInfoTable, collId)
+        or PWStatusManager.getRemoteInfo(publishService, collId)
+        or {}
 
     local renditionParams = {
         stopIfCanceled = true,
@@ -939,7 +956,7 @@ function PublishTaskImageProcessing.processCloneSync(functionContext, exportCont
             LrFileUtils.delete(pathOrMessage)
         end
         -- extract remoteid and url
-        local remoteInfo = remoteInfoTable[photoId]
+        local remoteInfo = lookup(remoteInfoTable, photoId)
         local remoteId = ""
         local remoteUrl = ""
         if remoteInfo then
@@ -970,27 +987,13 @@ function PublishTaskImageProcessing.deletePhotosFromPublishedCollection(publishS
         LrErrors.throwUserError('Publish photos to Piwigo - cannot connect find publishService')
         return nil
     end
-    -- serviceState is a global table containing publishService specific statusData.
-    -- Wait for another Piwigo operation of this service to finish rather than skipping:
-    -- a photo is only removed from the collection once Piwigo confirmed it (issue #8).
-    local serviceState = PWStatusManager.getServiceState(publishService)
-    local waited = 0
-    while serviceState.PiwigoBusy and waited < 60 do
-        LrTasks.sleep(1)
-        waited = waited + 1
-    end
-    if serviceState.PiwigoBusy then
-        log:info("PublishTaskImageProcessing.deletePhotosFromPublishedCollection - service still busy after 60s, " ..
-            "photos left pending deletion")
-        LrErrors.throwUserError("Piwigo Publisher is busy. The photos to remove are kept in the collection " ..
-            "and will be removed at the next publish.")
-        return nil
-    end
-
-    -- build lookup table to access photos by remoteId
+    -- build lookup table to access photos by remoteId (a never-published photo has no remote id)
     local pubPhotoByRemoteID = {}
     for _, pubPhoto in pairs(publishedPhotos) do
-        pubPhotoByRemoteID[pubPhoto:getRemoteId()] = pubPhoto
+        local rid = pubPhoto:getRemoteId()
+        if rid then
+            pubPhotoByRemoteID[rid] = pubPhoto
+        end
     end
 
     local photosToUnpublish = {}
@@ -1011,17 +1014,28 @@ function PublishTaskImageProcessing.deletePhotosFromPublishedCollection(publishS
     -- Process synchronously (this callback already runs in a task) and report each photo to
     -- Lightroom via deletedCallback ONLY once Piwigo confirmed its removal. Photos that fail stay
     -- in the collection marked for deletion and are retried at the next publish.
-    PWStatusManager.setPiwigoBusy(publishService, true)
+
+    -- Wait for another Piwigo operation to finish rather than skipping (issue #8). #16: the lock is
+    -- shared by all tasks; no progress bar here to cancel from, so the wait is bounded (10 min).
+    -- Taken right before the protected block below, so no error can leave it held.
+    local busyToken = PWStatusManager.acquireBusy(publishService,
+        "removing photos from " .. tostring(publishedCollection:getName()), { wait = 600 })
+    if not busyToken then
+        log:info("PublishTaskImageProcessing.deletePhotosFromPublishedCollection - still busy after 10 min, " ..
+            "photos left pending deletion")
+        LrErrors.throwUserError("Piwigo Publisher is busy. The photos to remove are kept in the collection " ..
+            "and will be removed at the next publish.")
+        return nil
+    end
     local failures = {}
     local removedCount = 0
     local ok, err = LrTasks.pcall(function()
-        if not publishSettings.Connected then
-            if not PiwigoAPI.login(publishSettings) then
-                error("cannot connect to Piwigo at " .. tostring(publishSettings.host))
-            end
+        if not PiwigoAPI.login(publishSettings) then
+            error("cannot connect to Piwigo at " .. tostring(publishSettings.host))
         end
 
         for _, item in ipairs(photosToUnpublish) do
+            PWStatusManager.touchBusy(busyToken)
             -- dissociate rather than delete to preserve multi-album associations;
             -- the image is deleted from Piwigo only if it is in no other album
             log:info("PublishTaskImageProcessing.deletePhotosFromPublishedCollection - dissociating photo " ..
@@ -1059,7 +1073,7 @@ function PublishTaskImageProcessing.deletePhotosFromPublishedCollection(publishS
             end
         end
     end)
-    PWStatusManager.setPiwigoBusy(publishService, false)
+    PWStatusManager.releaseBusy(busyToken, publishService)
 
     local collName = publishedCollection:getName()
     if not ok then
@@ -1117,9 +1131,12 @@ function PublishTaskImageProcessing.getCommentsFromPublishedCollection(publishSe
     -- serviceState is a global table containing publishService specific statusData
     local serviceState = PWStatusManager.getServiceState(publishService)
     local serviceId = publishService.localIdentifier
-    -- check serviceState.PiwigoBusy flag
-    if serviceState.PiwigoBusy then
-        utils.pwBusyMessage("PublishTaskImageProcessing.getCommentsFromPublishedCollection", "Sync Comments")
+    -- #16: Lightroom calls this on its own (after each publish): when another Piwigo operation is
+    -- running, skip silently - the next sync catches up - rather than a dialog per collection
+    local busy, busyLabel = PWStatusManager.isPiwigoBusy()
+    if busy then
+        log:info("PublishTaskImageProcessing.getCommentsFromPublishedCollection - skipped, busy with " ..
+            tostring(busyLabel))
         return
     end
 
@@ -1157,7 +1174,7 @@ function PublishTaskImageProcessing.getCommentsFromPublishedCollection(publishSe
                 catalog:withWriteAccessDo("Updating " .. thisLrPhoto:getFormattedMetadata("fileName"),
                     function()
                         thisLrPhoto:setPropertyForPlugin(_PLUGIN, "pwCommentSync", "")
-                    end)
+                    end, { timeout = 120 })
             else
                 -- this photo was not part of recent processRenderedPhotos so ignore
                 syncThisPhoto = false

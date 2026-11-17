@@ -171,7 +171,7 @@ local function processSmartCollectionQueue(smartColls, publishService, propertyT
     collectionSettings.serviceState = serviceState
     catalog:withWriteAccessDo("Add serviceState to collection", function()
         collection:setCollectionSettings(collectionSettings)
-    end)
+    end, { timeout = 120 })
 
     -- now force publish and subsequent render process
     collection:publishNow(function(status)
@@ -201,7 +201,7 @@ local function processSmartCollectionQueue(smartColls, publishService, propertyT
                     catalog:withWriteAccessDo("Add Piwigo details to image", function()
                         thispubPhoto:setRemoteId(remoteId)
                         thispubPhoto:setRemoteUrl(remoteUrl)
-                    end)
+                    end, { timeout = 120 })
                     local pluginData = {
                         pwHostURL = propertyTable.host,
                         albumName = name,
@@ -224,7 +224,7 @@ local function processSmartCollectionQueue(smartColls, publishService, propertyT
         collectionSettings.serviceState = nil
         catalog:withWriteAccessDo("Add serviceState to collection", function()
             collection:setCollectionSettings(collectionSettings)
-        end)
+        end, { timeout = 120 })
         releasePublishLock(serviceId)
         log:info("processSmartCollectionQueue - finished processing collection " .. collection:getName())
         -- move to next smart collection
@@ -277,7 +277,7 @@ local function populateCollections(stdColls, smartColls, publishService, propert
                             pubFlag = true
                             catalog:withWriteAccessDo("Add Photo to collection", function()
                                 collection:addPhotoByRemoteId(lrPhoto, remoteId, remoteUrl, pubFlag)
-                            end)
+                            end, { timeout = 120 })
                             -- now set metadata
                             local pluginData = {
                                 pwHostURL = propertyTable.host,
@@ -314,7 +314,7 @@ local function populateCollections(stdColls, smartColls, publishService, propert
             if #lrPhotosToAdd > 0 then
                 catalog:withWriteAccessDo("Add Photos to collection", function()
                     collection:addPhotos(lrPhotosToAdd)
-                end)
+                end, { timeout = 120 })
                 stats.imagesCloned = stats.imagesCloned + #lrPhotosToAdd
                 progressScope:setPortionComplete(stats.imagesCloned, stats.images)
                 progressScope:setCaption("Cloning Images... " ..
@@ -381,7 +381,7 @@ local function createTree(nodes, parentSet, publishService, created, childrenInd
         if node.kind == "set" then
             catalog:withWriteAccessDo("Create PublishedCollectionSet ", function()
                 newCollorSet = publishService:createPublishedCollectionSet(name, parentSet, true)
-            end)
+            end, { timeout = 120 })
             if newCollorSet == nil then
                 LrErrors.throwUserError("Error in createCollection: Failed to create PublishedCollectionSet " ..
                     name .. " under parent " .. parentSet:getName())
@@ -426,7 +426,7 @@ local function createTree(nodes, parentSet, publishService, created, childrenInd
                             newCollorSet:setRemoteId(remoteAlbumId)
                             newCollorSet:setRemoteUrl(albumUrl)
                             newCollorSet:setCollectionSetSettings(collectionSettings)
-                        end)
+                        end, { timeout = 120 })
                     end
                 end
             end
@@ -445,7 +445,7 @@ local function createTree(nodes, parentSet, publishService, created, childrenInd
             if isSmartColl then
                 catalog:withWriteAccessDo("Create PublishedCollection ", function()
                     newCollorSet = publishService:createPublishedSmartCollection(name, searchDesc, parentSet, true)
-                end)
+                end, { timeout = 120 })
                 -- build table of smart collections for later processing
                 if pwDetails.isPiwigo and pwDetails.isSameHost then
                     table.insert(smartColls, {
@@ -457,7 +457,7 @@ local function createTree(nodes, parentSet, publishService, created, childrenInd
                 if newCollorSet == nil then
                     catalog:withWriteAccessDo("Create PublishedCollection ", function()
                         newCollorSet = publishService:createPublishedCollection(name, parentSet, true)
-                    end)
+                    end, { timeout = 120 })
                 end
                 if newCollorSet == nil then
                     LrErrors.throwUserError("Error in createCollection: Failed to create PublishedCollection " ..
@@ -507,7 +507,7 @@ local function createTree(nodes, parentSet, publishService, created, childrenInd
                             newCollorSet:setRemoteId(remoteAlbumId)
                             newCollorSet:setRemoteUrl(albumUrl)
                             newCollorSet:setCollectionSettings(collectionSettings)
-                        end)
+                        end, { timeout = 120 })
                     end
                 end
             end
