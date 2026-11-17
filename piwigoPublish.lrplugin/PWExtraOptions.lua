@@ -355,7 +355,7 @@ local function resyncAlbumWithPiwigo(service)
     end
 
     local serviceState = PWStatusManager.getServiceState(service)
-    if serviceState.PiwigoBusy then
+    if PWStatusManager.isPiwigoBusy() then
         utils.pwBusyMessage("PWExtraOptions.resyncAlbumWithPiwigo", "Resync Album")
         return false
     end
@@ -542,11 +542,16 @@ removeExtraPhotos = function(publishSettings, catalog, service, useCollection, c
     end
 
     -- 7. remove
-    PWStatusManager.setPiwigoBusy(service, true)
+    local busyToken = PWStatusManager.acquireBusy(service, "resync album (removing photos)")
+    if not busyToken then
+        utils.pwBusyMessage("PWExtraOptions", "Resync Album")
+        return false
+    end
     local removed, deleted, failed = 0, 0, {}
     local ok, err = LrTasks.pcall(function()
         local scope = LrProgressScope { title = "Resync album " .. collName, caption = "Removing photos..." }
         for i, e in ipairs(toRemove) do
+            PWStatusManager.touchBusy(busyToken)
             if scope:isCanceled() then break end
             scope:setPortionComplete(i - 1, #toRemove)
             scope:setCaption("Removing " .. i .. " of " .. #toRemove .. " - " .. e.file)
@@ -569,7 +574,7 @@ removeExtraPhotos = function(publishSettings, catalog, service, useCollection, c
         end
         scope:done()
     end)
-    PWStatusManager.setPiwigoBusy(service, false)
+    PWStatusManager.releaseBusy(busyToken, service)
 
     local report = string.format("%d photo(s) removed from the album, %d of them deleted from Piwigo.",
         removed, deleted)
@@ -663,10 +668,15 @@ fixMissingPhotos = function(publishSettings, catalog, service, collName, catId, 
     end
 
     local reattached, marked, failed = 0, 0, {}
-    PWStatusManager.setPiwigoBusy(service, true)
+    local busyToken = PWStatusManager.acquireBusy(service, "resync album (fixing missing photos)")
+    if not busyToken then
+        utils.pwBusyMessage("PWExtraOptions", "Resync Album")
+        return false
+    end
     local ok, err = LrTasks.pcall(function()
         local fixScope = LrProgressScope { title = "Resync album " .. collName, caption = "Adding photos back..." }
         for i, m in ipairs(toReattach) do
+            PWStatusManager.touchBusy(busyToken)
             if fixScope:isCanceled() then break end
             fixScope:setPortionComplete(i - 1, #toReattach)
             local callStatus = PiwigoAPI.withTokenRetry(publishSettings, "re-add image " .. m.id, function()
@@ -693,7 +703,7 @@ fixMissingPhotos = function(publishSettings, catalog, service, collName, catId, 
             end, { timeout = 120 })
         end
     end)
-    PWStatusManager.setPiwigoBusy(service, false)
+    PWStatusManager.releaseBusy(busyToken, service)
 
     local lines = {}
     if #toReattach > 0 then
@@ -834,7 +844,7 @@ local function checkImageFormats(service)
     end
 
     local serviceState = PWStatusManager.getServiceState(service)
-    if serviceState.PiwigoBusy then
+    if PWStatusManager.isPiwigoBusy() then
         utils.pwBusyMessage("PWExtraOptions.checkImageFormats", title)
         return false
     end
@@ -899,11 +909,16 @@ local function checkImageFormats(service)
 
     -- lock the service like Resync does: a publish running meanwhile could write to a path being renamed
     local aligned, already, failed, canceled = 0, 0, 0, false
-    PWStatusManager.setPiwigoBusy(service, true)
+    local busyToken = PWStatusManager.acquireBusy(service, "aligning image formats")
+    if not busyToken then
+        utils.pwBusyMessage("PWExtraOptions", "Check Image Formats")
+        return false
+    end
     local ok, err = LrTasks.pcall(function()
         local scope = LrProgressScope { title = "Aligning image formats" }
         scope:setCancelable(true)
         for i, img in ipairs(mismatches) do
+            PWStatusManager.touchBusy(busyToken)
             if scope:isCanceled() then break end
             scope:setPortionComplete(i - 1, #mismatches)
             scope:setCaption(tostring(img.file))
@@ -921,7 +936,7 @@ local function checkImageFormats(service)
         canceled = scope:isCanceled()
         scope:done()
     end)
-    PWStatusManager.setPiwigoBusy(service, false)
+    PWStatusManager.releaseBusy(busyToken, service)
     if not ok then
         log:info("PWExtraOptions.checkImageFormats - error: " .. tostring(err))
         LrDialogs.message(title, "An error stopped the alignment: " .. tostring(err), "warning")

@@ -4052,6 +4052,7 @@ function PiwigoAPI.uploadVideoChunked(propertyTable, filePath, metaData, chunkSi
         originalFilename, fileSize, totalChunks))
 
     for chunkIdx = 0, totalChunks - 1 do
+        PWStatusManager.touchBusy() -- #16: a big video keeps the busy lock alive chunk after chunk
         local data = fh:read(chunkSizeBytes)
         if not data then break end
 

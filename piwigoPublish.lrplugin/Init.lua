@@ -83,6 +83,8 @@ _G.iconPath = _PLUGIN:resourceId("icons/icon_med.png")
 
 -- #16: a Piwigo session stored by a previous Lightroom run is never reused
 PWConnectionManager.clearAll()
+-- #16: no Piwigo operation can be running yet; drop a busy lock left by a crash
+PWStatusManager.clearBusy()
 
 -- Build version string from Info.lua VERSION table
 --local versionInfo = _PLUGIN.VERSION or { major = 0, minor = 0, revision = 0 }
