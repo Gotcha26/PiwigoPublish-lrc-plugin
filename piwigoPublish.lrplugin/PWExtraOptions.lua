@@ -97,12 +97,10 @@ local function setAlbumCoverFromSelection(service)
         return false
     end
 
-    if not publishSettings.Connected then
-        local rv = PiwigoAPI.login(publishSettings)
-        if not rv then
-            LrDialogs.message("SetAlbumCover - cannot connect to Piwigo")
-            return false
-        end
+    local rv = PiwigoAPI.login(publishSettings)
+    if not rv then
+        LrDialogs.message("SetAlbumCover - cannot connect to Piwigo")
+        return false
     end
 
     if publishSettings.userStatus ~= "webmaster" then
@@ -362,12 +360,10 @@ local function resyncAlbumWithPiwigo(service)
         return false
     end
 
-    if not publishSettings.Connected then
-        if not PiwigoAPI.login(publishSettings) then
-            LrDialogs.message("Resync Album", "Cannot connect to Piwigo at " .. tostring(publishSettings.host),
-                "warning")
-            return false
-        end
+    if not PiwigoAPI.login(publishSettings) then
+        LrDialogs.message("Resync Album", "Cannot connect to Piwigo at " .. tostring(publishSettings.host),
+            "warning")
+        return false
     end
     if publishSettings.userStatus ~= "webmaster" then
         LrDialogs.message("Resync Album", "User needs webmaster role on Piwigo gallery at " ..
@@ -843,11 +839,9 @@ local function checkImageFormats(service)
         return false
     end
 
-    if not publishSettings.Connected then
-        if not PiwigoAPI.login(publishSettings) then
-            LrDialogs.message(title, "Cannot connect to Piwigo at " .. tostring(publishSettings.host), "warning")
-            return false
-        end
+    if not PiwigoAPI.login(publishSettings) then
+        LrDialogs.message(title, "Cannot connect to Piwigo at " .. tostring(publishSettings.host), "warning")
+        return false
     end
     if publishSettings.userStatus ~= "webmaster" then
         LrDialogs.message(title, "User needs webmaster role on Piwigo gallery at " ..

@@ -448,14 +448,12 @@ function PublishTaskImageProcessing.processRenderedPhotos(functionContext, expor
         title = "Publishing " .. nPhotos .. " photos to " .. propertyTable.host
     }
     -- check connection to piwigo
-    if not (propertyTable.Connected) then
-        rv = PiwigoAPI.login(propertyTable)
-        if not rv then
-            log:info('PublishTaskImageProcessing.processRenderedPhotos - propertyTable: ' .. utils.serialiseVar(anonymisedPropertyTable))
-            PWStatusManager.setPiwigoBusy(publishService, false)
-            LrErrors.throwUserError('Publish photos to Piwigo - cannot connect to piwigo at ' .. propertyTable.host)
-            return nil
-        end
+    rv = PiwigoAPI.login(propertyTable)
+    if not rv then
+        log:info('PublishTaskImageProcessing.processRenderedPhotos - propertyTable: ' .. utils.serialiseVar(anonymisedPropertyTable))
+        PWStatusManager.setPiwigoBusy(publishService, false)
+        LrErrors.throwUserError('Publish photos to Piwigo - cannot connect to piwigo at ' .. propertyTable.host)
+        return nil
     end
     -- #14: format-alignment support is read once per batch (lazily, on the first format change)
     propertyTable._formatAlignSupport = nil
@@ -539,7 +537,6 @@ function PublishTaskImageProcessing.processRenderedPhotos(functionContext, expor
         active = kwFilterActive,
     }
 
-    local resetConnectioncount = 0
     local renditionParams = {
         stopIfCanceled = true,
     }
@@ -591,11 +588,10 @@ function PublishTaskImageProcessing.processRenderedPhotos(functionContext, expor
 
     -- now wait for photos to be exported and then upload to Piwigo
     for i, rendition in exportContext:renditions(renditionParams) do
-        -- reset connection every 75 uploads
-        resetConnectioncount = resetConnectioncount + 1
-        if resetConnectioncount > 75 then
-            resetConnectioncount = 0
-            log:info("PublishTaskImageProcessing.processRenderedPhotos - resetting Piwigo connection after 75 uploads")
+        -- #16: no forced re-login every 75 uploads any more (a new pwg.session.login kills the
+        -- session of any other running task). Instead, pick up the shared session before each photo:
+        -- no HTTP call while it is unchanged, adopts a session renewed by another task otherwise.
+        do
             rv = PiwigoAPI.login(propertyTable)
             if not rv then
                 PWStatusManager.setPiwigoBusy(publishService, false)
@@ -805,7 +801,10 @@ function PublishTaskImageProcessing.processRenderedPhotos(functionContext, expor
                     metaData.kwFilterData = kwFilterData
                     metaData.KwFullHierarchy = effectiveCollectionSettings.KwFullHierarchy or true
                     metaData.KwSynonyms = effectiveCollectionSettings.KwSynonyms or true
-                    callStatus = PiwigoAPI.updateMetadata(propertyTable, lrPhoto, metaData)
+                    -- #16: setInfo is idempotent, so a session lost meanwhile is renewed and retried once
+                    callStatus = PiwigoAPI.withTokenRetry(propertyTable, "set metadata", function()
+                        return PiwigoAPI.updateMetadata(propertyTable, lrPhoto, metaData)
+                    end)
                     if not callStatus.status then
                         LrDialogs.message("Unable to set metadata for uploaded photo - " .. callStatus.statusMsg)
                     end
@@ -1015,10 +1014,8 @@ function PublishTaskImageProcessing.deletePhotosFromPublishedCollection(publishS
     local failures = {}
     local removedCount = 0
     local ok, err = LrTasks.pcall(function()
-        if not publishSettings.Connected then
-            if not PiwigoAPI.login(publishSettings) then
-                error("cannot connect to Piwigo at " .. tostring(publishSettings.host))
-            end
+        if not PiwigoAPI.login(publishSettings) then
+            error("cannot connect to Piwigo at " .. tostring(publishSettings.host))
         end
 
         for _, item in ipairs(photosToUnpublish) do
