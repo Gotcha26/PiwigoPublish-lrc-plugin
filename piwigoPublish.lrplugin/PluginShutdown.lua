@@ -25,10 +25,13 @@ return {
         -- #16: the shared Piwigo session (cookies + token) must not stay in the prefs file.
         -- doneFunction must be called whatever happens, or Lightroom shows a stuck
         -- background-task window on quit (upstream #77).
+        -- the shutdown script may run in an environment without Init.lua's globals: load what is
+        -- needed locally (PWConnectionManager only uses log, utils and LrPrefs for clearAll)
         pcall(function()
-            if PWConnectionManager then
-                PWConnectionManager.clearAll()
-            end
+            _G.log = _G.log or import 'LrLogger' ('PiwigoPublishPlugin')
+            _G.utils = _G.utils or require "utils"
+            local manager = _G.PWConnectionManager or require "PWConnectionManager"
+            manager.clearAll()
         end)
         doneFunction()
     end,

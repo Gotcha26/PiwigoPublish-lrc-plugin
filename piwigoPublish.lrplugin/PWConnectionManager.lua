@@ -45,6 +45,7 @@ local LOCK_STALE = 45       -- seconds after which a login lock is considered ab
 local LOCK_WAIT_MAX = 60    -- seconds a task waits for another task's login
 local LOCK_KEY = "piwigoLoginLock"
 local SESSION_PREFIX = "piwigoSession_"
+local connecting = {} -- [sessionKey] = true while this environment runs pwConnect for it
 
 -- *************************************************
 local function sharedPrefs()
@@ -168,6 +169,13 @@ function PWConnectionManager.ensureConnection(pt)
         log:info("PWConnectionManager.ensureConnection - missing host, username or password")
         return false
     end
+    -- re-entrancy: pwConnect itself calls code that logs in (getTagList, checkAdmin, server plugin
+    -- probe), possibly through another propertyTable (effectivePT). If the session could not be
+    -- stored (no pwg cookie / token), those nested calls must not wait for our own lock and log in
+    -- again, endlessly. Keyed by host+user, since the nested call may use another table.
+    if connecting[sessionKey(pt)] then
+        return pt.Connected and true or false
+    end
     if tryReuse(pt) then
         return true
     end
@@ -194,13 +202,16 @@ function PWConnectionManager.ensureConnection(pt)
     end
 
     -- another task may have logged in between our last check and taking the lock
+    local key = sessionKey(pt)
     local ok, rv = LrTasks.pcall(function()
         if tryReuse(pt) then
             return true
         end
-        log:info("PWConnectionManager.ensureConnection - logging in for " .. sessionKey(pt))
+        log:info("PWConnectionManager.ensureConnection - logging in for " .. key)
+        connecting[key] = true
         return PiwigoAPI.pwConnect(pt)
     end)
+    connecting[key] = nil
     local p = sharedPrefs()
     if type(p[LOCK_KEY]) == "table" and p[LOCK_KEY].owner == me then
         p[LOCK_KEY] = nil
@@ -224,9 +235,9 @@ end
 -- wipe every stored session and the login lock (plugin start, Lightroom shutdown)
 function PWConnectionManager.clearAll()
     local p = sharedPrefs()
-    local source = rawget(p, "< contents >") or p
     local stale = {}
-    for k in pairs(source) do
+    -- LrPrefs is a proxy: iterate with its documented pairs() method, not Lua's pairs()
+    for k in p:pairs() do
         if type(k) == "string" and string.sub(k, 1, #SESSION_PREFIX) == SESSION_PREFIX then
             stale[#stale + 1] = k
         end

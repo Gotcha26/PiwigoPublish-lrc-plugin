@@ -2451,9 +2451,11 @@ end
 -- #16: true when a failed callStatus means "session lost" (401 / rejected pwg_token)
 function PiwigoAPI.isSessionRejected(callStatus)
     local msg = string.lower(tostring(callStatus and callStatus.statusMsg or ""))
+    -- "401" only as a whole number (not inside an image id such as 14012)
+    local padded = " " .. msg .. " "
     return string.find(msg, "token", 1, true) ~= nil
-        or string.find(msg, "401", 1, true) ~= nil
         or string.find(msg, "unauthorized", 1, true) ~= nil
+        or string.find(padded, "[^%d]401[^%d]") ~= nil
 end
 
 -- *************************************************

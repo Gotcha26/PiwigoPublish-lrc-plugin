@@ -427,11 +427,11 @@ function PublishTaskImageProcessing.processRenderedPhotos(functionContext, expor
 
     -- #16: the clone flow (PWImportService) runs in another Lua environment and hands its state
     -- over through collectionSettings.serviceState (persisted in the catalog); module tables are
-    -- not shared between environments. Use it when present, the live state otherwise.
-    -- (Before: an empty {} was truthy, so the live state was never read.)
-    local serviceState = (collectionSettings and collectionSettings.serviceState)
-        or PWStatusManager.getServiceState(publishService)
-    if serviceState.isCloningSync and serviceState.isCloningSync == true then
+    -- not shared between environments. The clone branch is taken ONLY from that per-collection
+    -- hand-over: a live flag is service-wide and could send an ordinary publish of another
+    -- collection down the clone path (photos marked published, nothing uploaded).
+    local serviceState = collectionSettings and collectionSettings.serviceState
+    if type(serviceState) == "table" and serviceState.isCloningSync == true then
         PWStatusManager.setisCloningSync(publishService, false)
         -- use minimal render photos for smart collection cloning
         PublishTaskImageProcessing.processCloneSync(functionContext, exportContext)
@@ -987,23 +987,13 @@ function PublishTaskImageProcessing.deletePhotosFromPublishedCollection(publishS
         LrErrors.throwUserError('Publish photos to Piwigo - cannot connect find publishService')
         return nil
     end
-    -- Wait for another Piwigo operation to finish rather than skipping: a photo is only removed from
-    -- the collection once Piwigo confirmed it (issue #8). #16: the lock is shared by all tasks;
-    -- no progress bar here to cancel from, so the wait is bounded (10 min).
-    local busyToken = PWStatusManager.acquireBusy(publishService,
-        "removing photos from " .. tostring(publishedCollection:getName()), { wait = 600 })
-    if not busyToken then
-        log:info("PublishTaskImageProcessing.deletePhotosFromPublishedCollection - still busy after 10 min, " ..
-            "photos left pending deletion")
-        LrErrors.throwUserError("Piwigo Publisher is busy. The photos to remove are kept in the collection " ..
-            "and will be removed at the next publish.")
-        return nil
-    end
-
-    -- build lookup table to access photos by remoteId
+    -- build lookup table to access photos by remoteId (a never-published photo has no remote id)
     local pubPhotoByRemoteID = {}
     for _, pubPhoto in pairs(publishedPhotos) do
-        pubPhotoByRemoteID[pubPhoto:getRemoteId()] = pubPhoto
+        local rid = pubPhoto:getRemoteId()
+        if rid then
+            pubPhotoByRemoteID[rid] = pubPhoto
+        end
     end
 
     local photosToUnpublish = {}
@@ -1024,6 +1014,19 @@ function PublishTaskImageProcessing.deletePhotosFromPublishedCollection(publishS
     -- Process synchronously (this callback already runs in a task) and report each photo to
     -- Lightroom via deletedCallback ONLY once Piwigo confirmed its removal. Photos that fail stay
     -- in the collection marked for deletion and are retried at the next publish.
+
+    -- Wait for another Piwigo operation to finish rather than skipping (issue #8). #16: the lock is
+    -- shared by all tasks; no progress bar here to cancel from, so the wait is bounded (10 min).
+    -- Taken right before the protected block below, so no error can leave it held.
+    local busyToken = PWStatusManager.acquireBusy(publishService,
+        "removing photos from " .. tostring(publishedCollection:getName()), { wait = 600 })
+    if not busyToken then
+        log:info("PublishTaskImageProcessing.deletePhotosFromPublishedCollection - still busy after 10 min, " ..
+            "photos left pending deletion")
+        LrErrors.throwUserError("Piwigo Publisher is busy. The photos to remove are kept in the collection " ..
+            "and will be removed at the next publish.")
+        return nil
+    end
     local failures = {}
     local removedCount = 0
     local ok, err = LrTasks.pcall(function()

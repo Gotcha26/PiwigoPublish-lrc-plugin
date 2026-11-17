@@ -82,9 +82,16 @@ end
 _G.iconPath = _PLUGIN:resourceId("icons/icon_med.png")
 
 -- #16: a Piwigo session stored by a previous Lightroom run is never reused
-PWConnectionManager.clearAll()
+-- (protected: a failure here must never prevent the plugin from loading)
+local okClear, errClear = pcall(PWConnectionManager.clearAll)
+if not okClear then
+    log:warn("Init - clearing stored Piwigo sessions failed: " .. tostring(errClear))
+end
 -- #16: no Piwigo operation can be running yet; drop a busy lock left by a crash
-PWStatusManager.clearBusy()
+local okBusy, errBusy = pcall(PWStatusManager.clearBusy)
+if not okBusy then
+    log:warn("Init - clearing the busy lock failed: " .. tostring(errBusy))
+end
 
 -- Build version string from Info.lua VERSION table
 --local versionInfo = _PLUGIN.VERSION or { major = 0, minor = 0, revision = 0 }
