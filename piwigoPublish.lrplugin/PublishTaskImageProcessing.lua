@@ -218,19 +218,19 @@ local function runCustomRenderForCollection(customRenderInfo, collectionSettings
         newValue = customRenderInfo.newValue,
         customEnabled = customRenderInfo.customEnabled,
     }
-    -- log:info("runCustomRenderForCollection - customRenderInfo:" .. utils.serialiseVar(anonymisedCustomRenderInfo))
+    -- log:info("runCustomRenderForCollection - customRenderInfo:" .. utils.serialiseForLog(anonymisedCustomRenderInfo))
     --[[
     utils.dumpPropertyTableToDesktop(customRenderInfo.sourceSettings, collectionSettings,"before custom resize overrides")
     log:info("Custom album export settings enabled, need to re-render photo with custom settings before upload")
     local anonSettings = utils.anonymisePropertyTable(cloneTable(customRenderInfo.sourceSettings))
     log:info("Property Table:
-" .. utils.serialiseVar(anonSettings))
+" .. utils.serialiseForLog(anonSettings))
     log:info("Collection Settings:
-" .. utils.serialiseVar(collectionSettings))
+" .. utils.serialiseForLog(collectionSettings))
 
     anonSettings = utils.anonymisePropertyTable(cloneTable(customRenderInfo.overrideSettings))
     log:info("Override render settings:
-" .. utils.serialiseVar(anonSettings))
+" .. utils.serialiseForLog(anonSettings))
 
     local function resizeSnapshot(settings)
         return {
@@ -249,7 +249,7 @@ local function runCustomRenderForCollection(customRenderInfo, collectionSettings
 
     log:info("Resize keys original/custom:
 " ..
-        utils.serialiseVar({
+        utils.serialiseForLog({
             original = resizeSnapshot(customRenderInfo.sourceSettings),
             custom = resizeSnapshot(customRenderInfo.overrideSettings)
         }))
@@ -386,7 +386,7 @@ local function saveFailedRenderArtifacts(filePath, sourcePhotoName, debugInfo)
         "Source photo: " .. tostring(sourcePhotoName) ..
         "Original render path: " .. tostring(filePath) ..
         "Saved render path: " .. tostring(failedImagePath) ..
-        "Debug info: " .. utils.serialiseVar(debugInfo)
+        "Debug info: " .. utils.serialiseForLog(debugInfo)
 
     local f, err = io.open(debugTextPath, "w")
     if f then
@@ -404,7 +404,7 @@ end
 function PublishTaskImageProcessing.processRenderedPhotos(functionContext, exportContext)
     -- render photos and upload to Piwigo
 
-    log:info("PublishTaskImageProcessing.processRenderedPhotos - version: " .. utils.serialiseVar(_PLUGIN.VERSION))
+    log:info("PublishTaskImageProcessing.processRenderedPhotos - version: " .. utils.serialiseForLog(_PLUGIN.VERSION))
     local callStatus = {}
     local catalog = LrApplication.activeCatalog()
     local exportSession = exportContext.exportSession
@@ -415,7 +415,7 @@ function PublishTaskImageProcessing.processRenderedPhotos(functionContext, expor
     local publishService = publishedCollection:getService()
     local rv
     if not publishService then
-        log:info('PublishTaskImageProcessing.processRenderedPhotos - propertyTable:' .. utils.serialiseVar(anonymisedPropertyTable))
+        log:info('PublishTaskImageProcessing.processRenderedPhotos - propertyTable:' .. utils.serialiseForLog(anonymisedPropertyTable))
         LrErrors.throwUserError('Publish photos to Piwigo - cannot connect find publishService')
         return nil
     end
@@ -456,7 +456,7 @@ function PublishTaskImageProcessing.processRenderedPhotos(functionContext, expor
     if not (propertyTable.Connected) then
         rv = PiwigoAPI.login(propertyTable)
         if not rv then
-            log:info('PublishTaskImageProcessing.processRenderedPhotos - propertyTable: ' .. utils.serialiseVar(anonymisedPropertyTable))
+            log:info('PublishTaskImageProcessing.processRenderedPhotos - propertyTable: ' .. utils.serialiseForLog(anonymisedPropertyTable))
             PWStatusManager.setPiwigoBusy(publishService, false)
             LrErrors.throwUserError('Publish photos to Piwigo - cannot connect to piwigo at ' .. propertyTable.host)
             return nil
@@ -605,7 +605,7 @@ function PublishTaskImageProcessing.processRenderedPhotos(functionContext, expor
             if not rv then
                 PWStatusManager.setPiwigoBusy(publishService, false)
                 PWStatusManager.setRenderPhotos(publishService, false)
-                log:info("PublishTaskImageProcessing.processRenderedPhotos - renditionSettings: " .. utils.serialiseVar(renditionParams))
+                log:info("PublishTaskImageProcessing.processRenderedPhotos - renditionSettings: " .. utils.serialiseForLog(renditionParams))
                 LrErrors.throwUserError('Publish photos to Piwigo - cannot connect to piwigo at ' ..
                     propertyTable.host)
                 break
@@ -710,7 +710,7 @@ function PublishTaskImageProcessing.processRenderedPhotos(functionContext, expor
             -- render settings in these cases to try and identify the root cause of the issue
             if isTiffExtension(initialRenderExt) then
                 log:warn("Initial render produced ." .. initialRenderExt .. " file: " .. tostring(filePath) ..
-                    " - format snapshot: " .. utils.serialiseVar(buildFormatSnapshot(sourceSettingsForDiagnostics)))
+                    " - format snapshot: " .. utils.serialiseForLog(buildFormatSnapshot(sourceSettingsForDiagnostics)))
             end
 
             -- If photo already exists on Piwigo, associate instead of uploading - will only be set if propertyTable.PWP_albumAssociation is true
@@ -750,8 +750,8 @@ function PublishTaskImageProcessing.processRenderedPhotos(functionContext, expor
                 log:warn("Final render path is ." .. finalRenderExt .. " before upload: " .. tostring(filePath) ..
                     " - customEnabled=" .. tostring(customRenderInfo.customEnabled) ..
                     ", settingsDiffer=" .. tostring(customRenderInfo.settingsDiffer) ..
-                    ", sourceFormat=" .. utils.serialiseVar(buildFormatSnapshot(customRenderInfo.sourceSettings)) ..
-                    ", overrideFormat=" .. utils.serialiseVar(buildFormatSnapshot(customRenderInfo.overrideSettings)))
+                    ", sourceFormat=" .. utils.serialiseForLog(buildFormatSnapshot(customRenderInfo.sourceSettings)) ..
+                    ", overrideFormat=" .. utils.serialiseForLog(buildFormatSnapshot(customRenderInfo.overrideSettings)))
             end
 
             if not existingPwImageId or forceUpload then
@@ -817,8 +817,8 @@ function PublishTaskImageProcessing.processRenderedPhotos(functionContext, expor
                 else
                     local sourcePhotoName = lrPhoto:getFormattedMetadata("fileName")
                     local anonymiseRenditionParams = utils.anonymiseRenditionParams(renditionParams)
-                    local expRenditionParams = utils.serialiseVar(anonymiseRenditionParams)
-                    local expMetaData = utils.serialiseVar(metaData)
+                    local expRenditionParams = utils.serialiseForLog(anonymiseRenditionParams)
+                    local expMetaData = utils.serialiseForLog(metaData)
                     local failureDebugInfo = {
                         sourcePhotoName = sourcePhotoName,
                         filePath = filePath,
@@ -843,10 +843,10 @@ function PublishTaskImageProcessing.processRenderedPhotos(functionContext, expor
                     log:info("Upload failed for photo: " .. sourcePhotoName)
                     log:info("Upload failed - renditionParams " .. expRenditionParams)
                     log:info("Upload failed - metaData" .. expMetaData)
-                    log:info("Upload failed - propertyTable " .. utils.serialiseVar(anonymisedPropertyTable))
-                    log:info("Upload failed - callStatus" .. utils.serialiseVar(callStatus))
+                    log:info("Upload failed - propertyTable " .. utils.serialiseForLog(anonymisedPropertyTable))
+                    log:info("Upload failed - callStatus" .. utils.serialiseForLog(callStatus))
                     log:info("Upload failed - filePath" .. filePath)
-                    log:info("Upload failed - extended debug info" .. utils.serialiseVar(failureDebugInfo))
+                    log:info("Upload failed - extended debug info" .. utils.serialiseForLog(failureDebugInfo))
 
                     local savedImagePath, savedDebugPath, saveErr = saveFailedRenderArtifacts(filePath, sourcePhotoName,
                         failureDebugInfo)
@@ -966,7 +966,7 @@ function PublishTaskImageProcessing.deletePhotosFromPublishedCollection(publishS
     local publishedPhotos = publishedCollection:getPublishedPhotos()
     local publishService = publishedCollection:getService()
     if not publishService then
-        log:info('deletePhotosFromPublishedCollection - publishSettings: ' .. utils.serialiseVar(utils.anonymisePropertyTable(publishSettings)))
+        log:info('deletePhotosFromPublishedCollection - publishSettings: ' .. utils.serialiseForLog(utils.anonymisePropertyTable(publishSettings)))
         LrErrors.throwUserError('Publish photos to Piwigo - cannot connect find publishService')
         return nil
     end
@@ -1109,7 +1109,7 @@ function PublishTaskImageProcessing.getCommentsFromPublishedCollection(publishSe
 
     local rv, publishService = PiwigoAPI.getPublishService(publishSettings)
     if not (publishService) or not (rv) then
-        log:info('PublishTaskImageProcessing.getCommentsFromPublishedCollection - publishSettings: ' .. utils.serialiseVar(utils.anonymisePropertyTable(publishSettings)))
+        log:info('PublishTaskImageProcessing.getCommentsFromPublishedCollection - publishSettings: ' .. utils.serialiseForLog(utils.anonymisePropertyTable(publishSettings)))
         LrErrors.throwUserError(
             'PublishTaskImageProcessing.getCommentsFromPublishedCollection - cannot find publishService')
         return nil
@@ -1142,7 +1142,7 @@ function PublishTaskImageProcessing.getCommentsFromPublishedCollection(publishSe
     local catalog = LrApplication.activeCatalog()
     -- loop through all photos to check for any with pwCommentSync set to "NO"
     for i, photoInfo in ipairs(arrayOfPhotoInfo) do
-        --log:info("PublishTaskImageProcessing.getCommentsFromPublishedCollection - photoInfo:" .. utils.serialiseVar(photoInfo))
+        --log:info("PublishTaskImageProcessing.getCommentsFromPublishedCollection - photoInfo:" .. utils.serialiseForLog(photoInfo))
         local thisPubPhoto = photoInfo.publishedPhoto
         local thisLrPhoto = thisPubPhoto:getPhoto()
         -- assume to sync comments for all photos in arrayofphotoids
@@ -1170,7 +1170,7 @@ function PublishTaskImageProcessing.getCommentsFromPublishedCollection(publishSe
             metaData.remoteId = photoInfo.remoteId
             local pwComments = PiwigoAPI.getComments(publishSettings, metaData)
             -- convert pwComments to format required by commentCallback
-            --log:info("PublishTaskImageProcessing.getCommentsFromPublishedCollection - commentList:" .. utils.serialiseVar(pwComments))
+            --log:info("PublishTaskImageProcessing.getCommentsFromPublishedCollection - commentList:" .. utils.serialiseForLog(pwComments))
             local commentList = {}
             if pwComments and #pwComments > 0 then
                 for _, comment in ipairs(pwComments) do
@@ -1187,7 +1187,7 @@ function PublishTaskImageProcessing.getCommentsFromPublishedCollection(publishSe
                     })
                 end
             end
-            --log:info("PublishTaskImageProcessing.getCommentsFromPublishedCollection - commentList:" .. utils.serialiseVar(commentList))
+            --log:info("PublishTaskImageProcessing.getCommentsFromPublishedCollection - commentList:" .. utils.serialiseForLog(commentList))
             commentCallback { publishedPhoto = photoInfo, comments = commentList }
         end
     end

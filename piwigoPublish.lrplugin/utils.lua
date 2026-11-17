@@ -96,6 +96,81 @@ function utils.anonymisePropertyTable(propertyTable)
 end
 
 -- *************************************************
+-- #17 - masking of secrets (password, pwg_token, session cookies) before anything reaches the log.
+-- The log is what users attach to bug reports: request bodies, params and headers must never
+-- carry these values in clear.
+local SECRET_NAMES = {
+    password = true,
+    userpw = true,
+    pwg_token = true,
+    token = true,
+    pwg_id = true,
+    pwg_remember = true,
+    cookie = true,
+    ["set-cookie"] = true,
+    cookies = true,
+    cookieheader = true,
+    sessioncookie = true,
+    authorization = true,
+}
+-- names searched inside free text (urlencoded bodies, URLs, cookie strings, JSON)
+local SECRET_TEXT_NAMES = { "password", "pwg_token", "pwg_id", "pwg_remember" }
+local MASK = "****"
+
+local function isSecretName(name)
+    return type(name) == "string" and SECRET_NAMES[string.lower(name)] == true
+end
+
+function utils.redactString(s)
+    -- mask secret values inside a string: name=value (urlencoded body, URL, cookie) and "name":"value" (JSON)
+    if type(s) ~= "string" then
+        return s
+    end
+    for _, name in ipairs(SECRET_TEXT_NAMES) do
+        s = s:gsub("(" .. name .. "=)[^&;%s\"']*", "%1" .. MASK)
+        s = s:gsub("(\"" .. name .. "\"%s*:%s*\")[^\"]*", "%1" .. MASK)
+    end
+    return s
+end
+
+function utils.redactForLog(value)
+    -- return a copy of value safe to log: secret keys masked, {name=, value=} params and
+    -- {field=, value=} headers with a secret name masked, secrets inside strings masked
+    local visited = {}
+
+    local function redact(v)
+        if type(v) == "string" then
+            return utils.redactString(v)
+        end
+        if type(v) ~= "table" then
+            return v
+        end
+        if visited[v] then
+            return visited[v]
+        end
+        local copy = {}
+        visited[v] = copy
+        local maskValue = isSecretName(v.name) or isSecretName(v.field)
+        for k, item in pairs(v) do
+            if isSecretName(k) or (maskValue and k == "value") then
+                copy[k] = (item ~= nil and item ~= "") and MASK or item
+            else
+                copy[k] = redact(item)
+            end
+        end
+        return copy
+    end
+
+    return redact(value)
+end
+
+function utils.serialiseForLog(value)
+    -- serialiseVar of a redacted copy: use this for anything logged that may hold a request,
+    -- its params, its headers or a raw server response
+    return utils.serialiseVar(utils.redactForLog(value))
+end
+
+-- *************************************************
 function utils.anonymiseRenditionParams(renditionParams)
     -- return copy of renditionParams with sensitive data removed (for logging etc)
     if type(renditionParams) ~= "table" then

@@ -805,7 +805,7 @@ local function syncCurrentAlbumSortNow(service)
     end
     log:info("PWExtraOptions.syncCurrentAlbumSortNow - syncing sort order for category " ..
         tostring(categoryId) .. ", " .. #imageIdSequence .. " photos")
-    log:info("Sort order is " .. utils.serialiseVar(imageIdSequence))
+    log:info("Sort order is " .. utils.serialiseForLog(imageIdSequence))
     local rankStatus = PiwigoAPI.pwImagesSetRank(publishSettings, categoryId, imageIdSequence)
     if not rankStatus.status then
         LrDialogs.message("Unable to sync current album order to Piwigo", rankStatus.statusMsg or "Unknown error",

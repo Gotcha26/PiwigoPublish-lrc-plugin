@@ -38,7 +38,7 @@ local GITHUB_URL = "https://github.com/Gotcha26/PiwigoPublish-lrc-plugin"
 -- *************************************************
 -- Reset plugin preferences (optionally filtered by prefix)
 local function resetPluginPrefs(prefix)
-    log:info("resetPluginPrefs \n" .. utils.serialiseVar(prefs))
+    log:info("resetPluginPrefs \n" .. utils.serialiseForLog(prefs))
     for k, _ in prefs:pairs() do
         if prefix then
             if k:find(prefix, 1, true) == 1 then
